@@ -24,7 +24,6 @@ def journey():
 
     for step in range(1, max_steps + 1):
 
-        # 現在の資本に対応する商品を探す
         item = find_item(capital)
 
         if item is None:
@@ -35,7 +34,6 @@ def journey():
                 "history": history
             })
 
-        # 取引成功判定
         success = random.random() < item["success_rate"]
 
         trade = {
@@ -53,7 +51,6 @@ def journey():
 
             history.append(trade)
 
-            # 目標達成
             if capital >= target:
                 return jsonify({
                     "status": "goal_reached",
