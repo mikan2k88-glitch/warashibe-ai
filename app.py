@@ -1,38 +1,89 @@
 from flask import Flask, jsonify
+import random
 
-from market_engine import choose_random_item, execute_trade
+from market_engine import find_item
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    return "Warashibe AI v0.2"
+    return "Warashibe AI v0.3"
 
 
-@app.route("/start")
-def start():
+@app.route("/journey")
+def journey():
 
     capital = 100
+    start_capital = capital
 
-    # 現在の資本で商品を選ぶ
-    item = choose_random_item(capital)
+    history = []
 
-    if item is None:
-        return jsonify({
-            "success": False,
-            "capital": capital,
-            "message": "購入可能な商品がありません"
-        })
+    max_steps = 20
+    target = 1_000_000
 
-    # 取引を実行
-    result = execute_trade(item)
+    for step in range(1, max_steps + 1):
+
+        # 現在の資本に対応する商品を探す
+        item = find_item(capital)
+
+        if item is None:
+            return jsonify({
+                "status": "stopped",
+                "message": "現在の資本に対応する商品がありません",
+                "capital": capital,
+                "history": history
+            })
+
+        # 取引成功判定
+        success = random.random() < item["success_rate"]
+
+        trade = {
+            "step": step,
+            "capital_before": capital,
+            "item": item["name"],
+            "price": item["price"],
+            "success": success
+        }
+
+        if success:
+
+            capital = item["next_value"]
+            trade["capital_after"] = capital
+
+            history.append(trade)
+
+            # 目標達成
+            if capital >= target:
+                return jsonify({
+                    "status": "goal_reached",
+                    "start_capital": start_capital,
+                    "final_capital": capital,
+                    "steps": step,
+                    "history": history
+                })
+
+        else:
+
+            capital = 0
+            trade["capital_after"] = 0
+
+            history.append(trade)
+
+            return jsonify({
+                "status": "failed",
+                "start_capital": start_capital,
+                "final_capital": 0,
+                "steps": step,
+                "history": history
+            })
 
     return jsonify({
-        "selected": item["name"],
-        "purchase_price": item["price"],
-        "success": result["success"],
-        "capital": result["capital"]
+        "status": "max_steps_reached",
+        "start_capital": start_capital,
+        "final_capital": capital,
+        "steps": max_steps,
+        "history": history
     })
 
 
