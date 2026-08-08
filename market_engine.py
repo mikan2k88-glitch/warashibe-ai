@@ -1,58 +1,75 @@
-import random
+# Warashibe AI v0.3
+# わらしべ長者の仮想市場エンジン
 
-# 仮想市場の商品データ
 MARKET = [
     {
-        "name": "わら",
         "price": 100,
+        "name": "わら",
         "success_rate": 0.80,
         "next_value": 150
     },
     {
-        "name": "石",
-        "price": 100,
-        "success_rate": 0.50,
+        "price": 150,
+        "name": "小物",
+        "success_rate": 0.75,
         "next_value": 300
     },
     {
-        "name": "古本",
-        "price": 100,
-        "success_rate": 0.30,
+        "price": 300,
+        "name": "古本セット",
+        "success_rate": 0.70,
         "next_value": 600
     },
+    {
+        "price": 600,
+        "name": "中古CDセット",
+        "success_rate": 0.65,
+        "next_value": 1200
+    },
+    {
+        "price": 1200,
+        "name": "中古ゲーム",
+        "success_rate": 0.60,
+        "next_value": 3000
+    },
+    {
+        "price": 3000,
+        "name": "電子機器",
+        "success_rate": 0.55,
+        "next_value": 10000
+    },
+    {
+        "price": 10000,
+        "name": "ブランド小物",
+        "success_rate": 0.50,
+        "next_value": 30000
+    },
+    {
+        "price": 30000,
+        "name": "高級中古品",
+        "success_rate": 0.45,
+        "next_value": 100000
+    },
+    {
+        "price": 100000,
+        "name": "高額商品",
+        "success_rate": 0.40,
+        "next_value": 300000
+    },
+    {
+        "price": 300000,
+        "name": "希少商品",
+        "success_rate": 0.35,
+        "next_value": 1000000
+    }
 ]
 
 
-def get_available_items(capital):
-    """現在の資本で購入可能な商品を返す"""
-    return [
-        item for item in MARKET
-        if item["price"] <= capital
-    ]
+def find_item(capital):
+    """現在の資本に対応する商品を探す"""
 
+    for item in MARKET:
+        if item["price"] == capital:
+            return item
 
-def choose_random_item(capital):
-    """現在の資本で購入可能な商品からランダムに選ぶ"""
-    candidates = get_available_items(capital)
-
-    if not candidates:
-        return None
-
-    return random.choice(candidates)
-
-
-def execute_trade(item):
-    """商品の取引結果をシミュレーションする"""
-
-    success = random.random() < item["success_rate"]
-
-    if success:
-        return {
-            "success": True,
-            "capital": item["next_value"]
-        }
-
-    return {
-        "success": False,
-        "capital": 0
-    }
+    return None
