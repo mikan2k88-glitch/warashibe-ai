@@ -1,29 +1,44 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import random
 
-from market_engine import MARKET, find_item
+from market_engine import MARKET, find_items
 
 app = Flask(__name__)
+
+TARGET = 1_000_000
+START_CAPITAL = 100
+MAX_STEPS = 20
+SUCCESSFUL_ROUTES_LIMIT = 100
 
 
 @app.route("/")
 def home():
-    return "Warashibe AI v0.6"
+    return "Warashibe AI v0.7"
+
+
+@app.route("/docs")
+def docs():
+    return """
+    <h1>Warashibe AI v0.7 API</h1>
+    <ul>
+        <li><a href="/journey?strategy=random">/journey?strategy=random</a>：1回の交換</li>
+        <li><a href="/simulate?strategy=random">/simulate?strategy=random</a>：ランダム選択で統計</li>
+        <li><a href="/simulate?strategy=safe">/simulate?strategy=safe</a>：成功率優先で統計</li>
+        <li><a href="/simulate?strategy=aggressive">/simulate?strategy=aggressive</a>：利益優先で統計</li>
+    </ul>
+    <p>strategy: random / safe / aggressive</p>
+    """
 
 
 def build_capital_bands():
-    """MARKET の価格帯から資本帯ラベルを作る"""
-    prices = [item["price"] for item in MARKET]
+    prices = sorted({item["price"] for item in MARKET})
     bands = {}
 
     for index, price in enumerate(prices):
         if index < len(prices) - 1:
-            next_price = prices[index + 1]
-            label = f"{price:,}-{next_price - 1:,}"
+            bands[price] = f"{price:,}-{prices[index + 1] - 1:,}"
         else:
-            label = f"{price:,}+"
-
-        bands[price] = label
+            bands[price] = f"{price:,}+"
 
     return bands
 
@@ -31,89 +46,29 @@ def build_capital_bands():
 CAPITAL_BANDS = build_capital_bands()
 
 
-@app.route("/journey")
-def journey():
-    capital = 100
-    start_capital = capital
-    history = []
+def select_item(items, strategy):
+    """選択戦略に応じて商品を1つ選ぶ"""
 
-    max_steps = 20
-    target = 1_000_000
+    if strategy == "safe":
+        return max(items, key=lambda item: item["success_rate"])
 
-    for step in range(1, max_steps + 1):
-        item = find_item(capital)
+    if strategy == "aggressive":
+        return max(items, key=lambda item: item["next_value"])
 
-        if item is None:
-            return jsonify({
-                "status": "stopped",
-                "start_capital": start_capital,
-                "final_capital": capital,
-                "steps": step - 1,
-                "history": history
-            })
-
-        success = random.random() < item["success_rate"]
-
-        trade = {
-            "step": step,
-            "capital_before": capital,
-            "item": item["name"],
-            "price": item["price"],
-            "success": success
-        }
-
-        if success:
-            capital = item["next_value"]
-            trade["capital_after"] = capital
-            history.append(trade)
-
-            if capital >= target:
-                return jsonify({
-                    "status": "goal_reached",
-                    "start_capital": start_capital,
-                    "final_capital": capital,
-                    "steps": step,
-                    "history": history
-                })
-
-        else:
-            capital = 0
-            trade["capital_after"] = 0
-            history.append(trade)
-
-            return jsonify({
-                "status": "failed",
-                "start_capital": start_capital,
-                "final_capital": 0,
-                "steps": step,
-                "history": history
-            })
-
-    return jsonify({
-        "status": "max_steps_reached",
-        "start_capital": start_capital,
-        "final_capital": capital,
-        "steps": max_steps,
-        "history": history
-    })
+    return random.choice(items)
 
 
-@app.route("/simulate")
-def simulate():
-    simulations = 10_000
-    start_capital = 100
-    target = 1_000_000
-    max_steps = 20
+def get_strategy():
+    strategy = request.args.get("strategy", "random").lower()
 
-    # JSON が大きくなりすぎないよう、返す成功ルートは最大100件にする
-    successful_routes_limit = 100
+    if strategy not in {"random", "safe", "aggressive"}:
+        return None
 
-    goal_reached = 0
-    total_steps = 0
-    total_max_capital = 0
+    return strategy
 
-    # 商品別統計
-    item_stats = {
+
+def create_item_stats():
+    return {
         item["name"]: {
             "attempts": 0,
             "successes": 0,
@@ -122,13 +77,105 @@ def simulate():
         for item in MARKET
     }
 
-    # ステップ別失敗数
+
+@app.route("/journey")
+def journey():
+    strategy = get_strategy()
+
+    if strategy is None:
+        return jsonify({
+            "error": "strategy は random, safe, aggressive のいずれかを指定してください。"
+        }), 400
+
+    capital = START_CAPITAL
+    history = []
+
+    for step in range(1, MAX_STEPS + 1):
+        available_items = find_items(capital)
+
+        if not available_items:
+            return jsonify({
+                "status": "stopped",
+                "strategy": strategy,
+                "final_capital": capital,
+                "steps": step - 1,
+                "history": history
+            })
+
+        item = select_item(available_items, strategy)
+        success = random.random() < item["success_rate"]
+
+        trade = {
+            "step": step,
+            "capital_before": capital,
+            "available_choices": [
+                {
+                    "name": choice["name"],
+                    "success_rate": choice["success_rate"],
+                    "next_value": choice["next_value"]
+                }
+                for choice in available_items
+            ],
+            "selected_item": item["name"],
+            "success": success
+        }
+
+        if success:
+            capital = item["next_value"]
+            trade["capital_after"] = capital
+            history.append(trade)
+
+            if capital >= TARGET:
+                return jsonify({
+                    "status": "goal_reached",
+                    "strategy": strategy,
+                    "final_capital": capital,
+                    "steps": step,
+                    "history": history
+                })
+
+        else:
+            trade["capital_after"] = 0
+            history.append(trade)
+
+            return jsonify({
+                "status": "failed",
+                "strategy": strategy,
+                "final_capital": 0,
+                "steps": step,
+                "history": history
+            })
+
+    return jsonify({
+        "status": "max_steps_reached",
+        "strategy": strategy,
+        "final_capital": capital,
+        "steps": MAX_STEPS,
+        "history": history
+    })
+
+
+@app.route("/simulate")
+def simulate():
+    strategy = get_strategy()
+
+    if strategy is None:
+        return jsonify({
+            "error": "strategy は random, safe, aggressive のいずれかを指定してください。"
+        }), 400
+
+    simulations = 10_000
+    goal_reached = 0
+    total_steps = 0
+    total_max_capital = 0
+
+    item_stats = create_item_stats()
+
     failure_step_stats = {
         str(step): 0
-        for step in range(1, max_steps + 1)
+        for step in range(1, MAX_STEPS + 1)
     }
 
-    # 資本帯別の生存状況
     capital_band_stats = {
         band: {
             "entries": 0,
@@ -139,31 +186,28 @@ def simulate():
     }
 
     successful_routes = []
+    successful_route_summary = {}
 
     for _ in range(simulations):
-        capital = start_capital
+        capital = START_CAPITAL
         max_capital = capital
         steps = 0
         route = []
 
-        for step in range(1, max_steps + 1):
-            item = find_item(capital)
+        for step in range(1, MAX_STEPS + 1):
+            available_items = find_items(capital)
 
-            if item is None:
+            if not available_items:
                 break
 
             steps += 1
+            item = select_item(available_items, strategy)
             item_name = item["name"]
-            capital_band = CAPITAL_BANDS[item["price"]]
+            capital_band = CAPITAL_BANDS[capital]
 
-            # 商品別統計
-            item_stats[item_name]["attempts"] += 1
-
-            # 資本帯別統計
-            capital_band_stats[capital_band]["entries"] += 1
-
-            # 到達ルートに今回の商品を記録
             route.append(item_name)
+            item_stats[item_name]["attempts"] += 1
+            capital_band_stats[capital_band]["entries"] += 1
 
             success = random.random() < item["success_rate"]
 
@@ -174,10 +218,15 @@ def simulate():
                 capital = item["next_value"]
                 max_capital = max(max_capital, capital)
 
-                if capital >= target:
+                if capital >= TARGET:
                     goal_reached += 1
 
-                    if len(successful_routes) < successful_routes_limit:
+                    route_text = " → ".join(route)
+                    successful_route_summary[route_text] = (
+                        successful_route_summary.get(route_text, 0) + 1
+                    )
+
+                    if len(successful_routes) < SUCCESSFUL_ROUTES_LIMIT:
                         successful_routes.append(route)
 
                     break
@@ -186,31 +235,37 @@ def simulate():
                 item_stats[item_name]["failures"] += 1
                 capital_band_stats[capital_band]["failed_trades"] += 1
                 failure_step_stats[str(step)] += 1
-
-                capital = 0
                 break
 
         total_steps += steps
         total_max_capital += max_capital
 
-    # 商品別の実測成功率
     for stats in item_stats.values():
         attempts = stats["attempts"]
         stats["success_rate_percent"] = round(
             stats["successes"] / attempts * 100, 2
         ) if attempts else 0
 
-    # 資本帯ごとの生存率（その資本帯での交換成功率）
     for stats in capital_band_stats.values():
         entries = stats["entries"]
         stats["survival_rate_percent"] = round(
             stats["successful_trades"] / entries * 100, 2
         ) if entries else 0
 
+    sorted_route_summary = dict(
+        sorted(
+            successful_route_summary.items(),
+            key=lambda route: route[1],
+            reverse=True
+        )
+    )
+
     return jsonify({
+        "version": "0.7",
+        "strategy": strategy,
         "simulations": simulations,
-        "start_capital": start_capital,
-        "target": target,
+        "start_capital": START_CAPITAL,
+        "target": TARGET,
         "goal_reached": goal_reached,
         "goal_rate_percent": round(goal_reached / simulations * 100, 2),
         "average_steps": round(total_steps / simulations, 2),
@@ -222,7 +277,8 @@ def simulate():
 
         "successful_routes_count": goal_reached,
         "successful_routes_returned": len(successful_routes),
-        "successful_routes": successful_routes
+        "successful_routes": successful_routes,
+        "successful_route_summary": sorted_route_summary
     })
 
 
