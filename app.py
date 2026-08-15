@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Warashibe AI v0.4"
+    return "Warashibe AI v0.5"
 
 
 @app.route("/journey")
@@ -74,6 +74,14 @@ def journey():
                 "history": history
             })
 
+    return jsonify({
+        "status": "max_steps_reached",
+        "start_capital": start_capital,
+        "final_capital": capital,
+        "steps": max_steps,
+        "history": history
+    })
+
 
 @app.route("/simulate")
 def simulate():
@@ -87,7 +95,8 @@ def simulate():
     total_steps = 0
     total_max_capital = 0
 
-    results = []
+    # 商品ごとの統計
+    item_stats = {}
 
     for _ in range(simulations):
 
@@ -104,9 +113,25 @@ def simulate():
 
             steps += 1
 
+            item_name = item["name"]
+
+            # 初めて登場した商品なら統計を作成
+            if item_name not in item_stats:
+                item_stats[item_name] = {
+                    "attempts": 0,
+                    "successes": 0,
+                    "failures": 0
+                }
+
+            # 挑戦回数
+            item_stats[item_name]["attempts"] += 1
+
             success = random.random() < item["success_rate"]
 
             if success:
+
+                # 成功回数
+                item_stats[item_name]["successes"] += 1
 
                 capital = item["next_value"]
 
@@ -119,19 +144,29 @@ def simulate():
 
             else:
 
+                # 失敗回数
+                item_stats[item_name]["failures"] += 1
+
                 capital = 0
                 break
 
         total_steps += steps
         total_max_capital += max_capital
 
-        results.append({
-            "final_capital": capital,
-            "max_capital": max_capital,
-            "steps": steps
-        })
+    # 商品ごとの成功率を計算
+    for item_name, stats in item_stats.items():
 
-    success_rate = goal_reached / simulations * 100
+        attempts = stats["attempts"]
+
+        if attempts > 0:
+            stats["success_rate_percent"] = round(
+                stats["successes"] / attempts * 100,
+                2
+            )
+        else:
+            stats["success_rate_percent"] = 0
+
+    goal_rate = goal_reached / simulations * 100
     average_steps = total_steps / simulations
     average_max_capital = total_max_capital / simulations
 
@@ -140,9 +175,10 @@ def simulate():
         "start_capital": start_capital,
         "target": target,
         "goal_reached": goal_reached,
-        "goal_rate_percent": round(success_rate, 2),
+        "goal_rate_percent": round(goal_rate, 2),
         "average_steps": round(average_steps, 2),
-        "average_max_capital": round(average_max_capital, 2)
+        "average_max_capital": round(average_max_capital, 2),
+        "item_stats": item_stats
     })
 
 
