@@ -1,9 +1,9 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template_string
 import random
 
 from market_engine import MARKET, find_items
 from policy_engine import POLICY_VERSION, START_CAPITAL, evaluate_trade
-from strategy_engine import create_recommendation
+from strategy_engine import STRATEGY_LABELS, create_recommendation
 
 app = Flask(__name__)
 
@@ -22,10 +22,11 @@ def docs():
     return """
     <h1>Warashibe AI v0.9 API</h1>
     <ul>
+        <li><a href="/strategy/report">戦略レポート</a>：人間向けの結論表示</li>
         <li><a href="/journey?strategy=random">/journey</a>：1回の取引</li>
         <li><a href="/simulate?strategy=random">/simulate</a>：1サイクルの統計</li>
         <li><a href="/campaign/simulate?strategy=random">/campaign/simulate</a>：再挑戦ありの統計</li>
-        <li><a href="/strategy/recommendation">/strategy/recommendation</a>：AI戦略本部の提案</li>
+        <li><a href="/strategy/recommendation">/strategy/recommendation</a>：内部用JSON</li>
     </ul>
     """
 
@@ -150,10 +151,7 @@ def run_cycle(strategy):
 
 
 def run_campaign(strategy, max_cycles):
-    """
-    失敗したら100円から新サイクルを開始する。
-    policy_blocked は同じ条件で再開しても解決しないため、その場で終了する。
-    """
+    """失敗したら100円から再開する、複数サイクルの挑戦"""
     failure_reasons = {}
 
     for cycle_number in range(1, max_cycles + 1):
@@ -176,6 +174,7 @@ def run_campaign(strategy, max_cycles):
         reason = result.get("failure_reason", result["status"])
         failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
 
+        # 同じルールで再開しても解決できないため終了
         if result["status"] == "policy_blocked":
             return {
                 "status": "policy_blocked",
@@ -193,6 +192,7 @@ def run_campaign(strategy, max_cycles):
 
 
 def summarize_campaigns(strategy, campaigns, max_cycles):
+    """指定戦略のキャンペーン結果を集計する"""
     goal_reached = 0
     total_cycles_used = 0
     total_restarts = 0
@@ -250,6 +250,26 @@ def summarize_campaigns(strategy, campaigns, max_cycles):
     }
 
 
+def evaluate_strategies(campaigns, max_cycles):
+    strategy_results = [
+        summarize_campaigns(strategy, campaigns, max_cycles)
+        for strategy in ("random", "safe", "aggressive")
+    ]
+
+    recommendation = create_recommendation(strategy_results)
+
+    ranked_results = sorted(
+        strategy_results,
+        key=lambda result: (
+            -result["campaign_goal_rate_percent"],
+            result["average_cycles_used"],
+            result["total_restarts"]
+        )
+    )
+
+    return strategy_results, ranked_results, recommendation
+
+
 @app.route("/journey")
 def journey():
     strategy = get_strategy()
@@ -277,9 +297,10 @@ def simulate():
         return jsonify({"error": "strategy が不正です。"}), 400
 
     if simulations is None:
-        return jsonify({"error": "simulations は 1〜100000 の整数です。"}), 400
+        return jsonify({"error": "simulations は1〜100000の整数です。"}), 400
 
     goal_reached = 0
+
     item_stats = {
         item["name"]: {
             "attempts": 0,
@@ -306,6 +327,7 @@ def simulate():
 
     for stats in item_stats.values():
         attempts = stats["attempts"]
+
         stats["success_rate_percent"] = round(
             stats["successes"] / attempts * 100, 2
         ) if attempts else 0
@@ -353,10 +375,7 @@ def campaign_simulate():
 
 @app.route("/strategy/recommendation")
 def strategy_recommendation():
-    """
-    AI戦略本部。
-    3戦略を同じ試行回数・再挑戦回数で比較し、人間への提案を返す。
-    """
+    """内部連携向けのJSONデータ"""
     campaigns = get_bounded_int("campaigns", 1_000, 100, 10_000)
     max_cycles = get_bounded_int(
         "max_cycles",
@@ -370,12 +389,10 @@ def strategy_recommendation():
             "error": "campaigns は100〜10000、max_cyclesは1〜100で指定してください。"
         }), 400
 
-    strategy_results = [
-        summarize_campaigns(strategy, campaigns, max_cycles)
-        for strategy in ("random", "safe", "aggressive")
-    ]
-
-    recommendation = create_recommendation(strategy_results)
+    strategy_results, _, recommendation = evaluate_strategies(
+        campaigns,
+        max_cycles
+    )
 
     return jsonify({
         "version": "0.9",
@@ -386,6 +403,122 @@ def strategy_recommendation():
         "strategies": strategy_results,
         "recommendation": recommendation
     })
+
+
+@app.route("/strategy/report")
+def strategy_report():
+    """人間向けの戦略レポート"""
+    campaigns = get_bounded_int("campaigns", 1_000, 100, 10_000)
+    max_cycles = get_bounded_int(
+        "max_cycles",
+        MAX_CAMPAIGN_CYCLES,
+        1,
+        100
+    )
+
+    if campaigns is None or max_cycles is None:
+        return "campaigns または max_cycles の指定が不正です。", 400
+
+    _, ranked_results, recommendation = evaluate_strategies(
+        campaigns,
+        max_cycles
+    )
+
+    return render_template_string("""
+    <!doctype html>
+    <html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <title>Warashibe AI 戦略レポート</title>
+        <style>
+            body {
+                max-width: 760px;
+                margin: 40px auto;
+                padding: 0 20px;
+                font-family: sans-serif;
+                line-height: 1.7;
+                color: #222;
+            }
+            .card {
+                margin: 18px 0;
+                padding: 20px;
+                border-radius: 12px;
+                background: #f5f7fb;
+            }
+            .recommendation {
+                background: #e8f5e9;
+                border-left: 6px solid #2e7d32;
+            }
+            .risk {
+                background: #fff3e0;
+                border-left: 6px solid #ef6c00;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                padding: 10px;
+                border-bottom: 1px solid #ddd;
+                text-align: left;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Warashibe AI 戦略レポート</h1>
+        <p>仮想市場で {{ campaigns }} 回のキャンペーンを比較しました。</p>
+
+        <div class="card recommendation">
+            <h2>今日の結論</h2>
+            <p>
+                <strong>
+                    {{ recommendation.recommended_strategy_label }}戦略
+                </strong>
+                を提案します。
+            </p>
+            <p>{{ recommendation.reason }}</p>
+            <p>
+                代表的な成功ルート：<br>
+                {{ recommendation.dominant_successful_route }}
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>戦略比較</h2>
+            <table>
+                <tr>
+                    <th>順位</th>
+                    <th>戦略</th>
+                    <th>100万円到達率</th>
+                    <th>平均再挑戦回数</th>
+                </tr>
+                {% for result in ranked_results %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ strategy_labels[result.strategy] }}</td>
+                    <td>{{ result.campaign_goal_rate_percent }}%</td>
+                    <td>{{ result.average_restarts }}回</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card risk">
+            <h2>注意点</h2>
+            <p>リスク評価：<strong>{{ recommendation.risk_level }}</strong></p>
+            <p>
+                これは仮想市場での研究結果です。
+                実際の仕入れ・注文は、必ず人間が確認してから行ってください。
+            </p>
+        </div>
+    </body>
+    </html>
+    """,
+        campaigns=campaigns,
+        ranked_results=ranked_results,
+        recommendation=recommendation,
+        strategy_labels=STRATEGY_LABELS
+    )
 
 
 if __name__ == "__main__":
