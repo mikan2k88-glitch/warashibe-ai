@@ -2,29 +2,29 @@ from flask import Flask, jsonify, request
 import random
 
 from market_engine import MARKET, find_items
+from policy_engine import POLICY_VERSION, START_CAPITAL, evaluate_trade
 
 app = Flask(__name__)
 
 TARGET = 1_000_000
-START_CAPITAL = 100
 MAX_STEPS = 20
 SUCCESSFUL_ROUTES_LIMIT = 100
+MAX_CAMPAIGN_CYCLES = 10
 
 
 @app.route("/")
 def home():
-    return "Warashibe AI v0.7"
+    return "Warashibe AI v0.8"
 
 
 @app.route("/docs")
 def docs():
     return """
-    <h1>Warashibe AI v0.7 API</h1>
+    <h1>Warashibe AI v0.8 API</h1>
     <ul>
-        <li><a href="/journey?strategy=random">/journey?strategy=random</a>：1回の交換</li>
-        <li><a href="/simulate?strategy=random">/simulate?strategy=random</a>：ランダム選択で統計</li>
-        <li><a href="/simulate?strategy=safe">/simulate?strategy=safe</a>：成功率優先で統計</li>
-        <li><a href="/simulate?strategy=aggressive">/simulate?strategy=aggressive</a>：利益優先で統計</li>
+        <li><a href="/journey?strategy=random">/journey</a>：1回のわらしべ取引</li>
+        <li><a href="/simulate?strategy=random">/simulate</a>：1サイクルの統計</li>
+        <li><a href="/campaign/simulate?strategy=random">/campaign/simulate</a>：失敗時に100円から再開する統計</li>
     </ul>
     <p>strategy: random / safe / aggressive</p>
     """
@@ -46,18 +46,6 @@ def build_capital_bands():
 CAPITAL_BANDS = build_capital_bands()
 
 
-def select_item(items, strategy):
-    """選択戦略に応じて商品を1つ選ぶ"""
-
-    if strategy == "safe":
-        return max(items, key=lambda item: item["success_rate"])
-
-    if strategy == "aggressive":
-        return max(items, key=lambda item: item["next_value"])
-
-    return random.choice(items)
-
-
 def get_strategy():
     strategy = request.args.get("strategy", "random").lower()
 
@@ -67,40 +55,50 @@ def get_strategy():
     return strategy
 
 
-def create_item_stats():
-    return {
-        item["name"]: {
-            "attempts": 0,
-            "successes": 0,
-            "failures": 0
-        }
-        for item in MARKET
-    }
+def select_item(items, strategy):
+    if strategy == "safe":
+        return max(items, key=lambda item: item["success_rate"])
+
+    if strategy == "aggressive":
+        return max(items, key=lambda item: item["next_value"])
+
+    return random.choice(items)
 
 
-@app.route("/journey")
-def journey():
-    strategy = get_strategy()
+def get_policy_allowed_items(capital):
+    allowed_items = []
+    blocked_items = []
 
-    if strategy is None:
-        return jsonify({
-            "error": "strategy は random, safe, aggressive のいずれかを指定してください。"
-        }), 400
+    for item in find_items(capital):
+        decision = evaluate_trade(capital, item)
 
+        if decision["allowed"]:
+            allowed_items.append(item)
+        else:
+            blocked_items.append({
+                "item": item["name"],
+                "reasons": decision["reasons"]
+            })
+
+    return allowed_items, blocked_items
+
+
+def run_cycle(strategy):
+    """100円から始める、1回分のわらしべサイクル"""
     capital = START_CAPITAL
     history = []
 
     for step in range(1, MAX_STEPS + 1):
-        available_items = find_items(capital)
+        available_items, blocked_items = get_policy_allowed_items(capital)
 
         if not available_items:
-            return jsonify({
-                "status": "stopped",
-                "strategy": strategy,
+            return {
+                "status": "policy_blocked",
                 "final_capital": capital,
                 "steps": step - 1,
-                "history": history
-            })
+                "history": history,
+                "blocked_items": blocked_items
+            }
 
         item = select_item(available_items, strategy)
         success = random.random() < item["success_rate"]
@@ -108,16 +106,12 @@ def journey():
         trade = {
             "step": step,
             "capital_before": capital,
-            "available_choices": [
-                {
-                    "name": choice["name"],
-                    "success_rate": choice["success_rate"],
-                    "next_value": choice["next_value"]
-                }
-                for choice in available_items
-            ],
             "selected_item": item["name"],
-            "success": success
+            "price": item["price"],
+            "next_value": item["next_value"],
+            "success_rate": item["success_rate"],
+            "success": success,
+            "policy": evaluate_trade(capital, item)
         }
 
         if success:
@@ -126,32 +120,49 @@ def journey():
             history.append(trade)
 
             if capital >= TARGET:
-                return jsonify({
+                return {
                     "status": "goal_reached",
-                    "strategy": strategy,
                     "final_capital": capital,
                     "steps": step,
                     "history": history
-                })
+                }
 
         else:
             trade["capital_after"] = 0
+            trade["failure_reason"] = "trade_failed"
             history.append(trade)
 
-            return jsonify({
+            return {
                 "status": "failed",
-                "strategy": strategy,
                 "final_capital": 0,
                 "steps": step,
-                "history": history
-            })
+                "history": history,
+                "failure_reason": "trade_failed"
+            }
 
-    return jsonify({
+    return {
         "status": "max_steps_reached",
-        "strategy": strategy,
         "final_capital": capital,
         "steps": MAX_STEPS,
         "history": history
+    }
+
+
+@app.route("/journey")
+def journey():
+    strategy = get_strategy()
+
+    if strategy is None:
+        return jsonify({"error": "strategy が不正です。"}), 400
+
+    result = run_cycle(strategy)
+
+    return jsonify({
+        "version": "0.8",
+        "policy_version": POLICY_VERSION,
+        "strategy": strategy,
+        "start_capital": START_CAPITAL,
+        **result
     })
 
 
@@ -160,85 +171,40 @@ def simulate():
     strategy = get_strategy()
 
     if strategy is None:
-        return jsonify({
-            "error": "strategy は random, safe, aggressive のいずれかを指定してください。"
-        }), 400
+        return jsonify({"error": "strategy が不正です。"}), 400
 
     simulations = 10_000
     goal_reached = 0
-    total_steps = 0
-    total_max_capital = 0
-
-    item_stats = create_item_stats()
-
-    failure_step_stats = {
-        str(step): 0
-        for step in range(1, MAX_STEPS + 1)
+    failure_step_stats = {str(step): 0 for step in range(1, MAX_STEPS + 1)}
+    item_stats = {
+        item["name"]: {"attempts": 0, "successes": 0, "failures": 0}
+        for item in MARKET
     }
-
-    capital_band_stats = {
-        band: {
-            "entries": 0,
-            "successful_trades": 0,
-            "failed_trades": 0
-        }
-        for band in CAPITAL_BANDS.values()
-    }
-
-    successful_routes = []
     successful_route_summary = {}
 
     for _ in range(simulations):
-        capital = START_CAPITAL
-        max_capital = capital
-        steps = 0
-        route = []
+        result = run_cycle(strategy)
+        history = result["history"]
 
-        for step in range(1, MAX_STEPS + 1):
-            available_items = find_items(capital)
+        for trade in history:
+            stats = item_stats[trade["selected_item"]]
+            stats["attempts"] += 1
 
-            if not available_items:
-                break
-
-            steps += 1
-            item = select_item(available_items, strategy)
-            item_name = item["name"]
-            capital_band = CAPITAL_BANDS[capital]
-
-            route.append(item_name)
-            item_stats[item_name]["attempts"] += 1
-            capital_band_stats[capital_band]["entries"] += 1
-
-            success = random.random() < item["success_rate"]
-
-            if success:
-                item_stats[item_name]["successes"] += 1
-                capital_band_stats[capital_band]["successful_trades"] += 1
-
-                capital = item["next_value"]
-                max_capital = max(max_capital, capital)
-
-                if capital >= TARGET:
-                    goal_reached += 1
-
-                    route_text = " → ".join(route)
-                    successful_route_summary[route_text] = (
-                        successful_route_summary.get(route_text, 0) + 1
-                    )
-
-                    if len(successful_routes) < SUCCESSFUL_ROUTES_LIMIT:
-                        successful_routes.append(route)
-
-                    break
-
+            if trade["success"]:
+                stats["successes"] += 1
             else:
-                item_stats[item_name]["failures"] += 1
-                capital_band_stats[capital_band]["failed_trades"] += 1
-                failure_step_stats[str(step)] += 1
-                break
+                stats["failures"] += 1
+                failure_step_stats[str(trade["step"])] += 1
 
-        total_steps += steps
-        total_max_capital += max_capital
+        if result["status"] == "goal_reached":
+            goal_reached += 1
+            route = " → ".join(
+                trade["selected_item"]
+                for trade in history
+            )
+            successful_route_summary[route] = (
+                successful_route_summary.get(route, 0) + 1
+            )
 
     for stats in item_stats.values():
         attempts = stats["attempts"]
@@ -246,39 +212,93 @@ def simulate():
             stats["successes"] / attempts * 100, 2
         ) if attempts else 0
 
-    for stats in capital_band_stats.values():
-        entries = stats["entries"]
-        stats["survival_rate_percent"] = round(
-            stats["successful_trades"] / entries * 100, 2
-        ) if entries else 0
-
-    sorted_route_summary = dict(
-        sorted(
-            successful_route_summary.items(),
-            key=lambda route: route[1],
-            reverse=True
-        )
-    )
-
     return jsonify({
-        "version": "0.7",
+        "version": "0.8",
+        "policy_version": POLICY_VERSION,
         "strategy": strategy,
         "simulations": simulations,
         "start_capital": START_CAPITAL,
         "target": TARGET,
         "goal_reached": goal_reached,
         "goal_rate_percent": round(goal_reached / simulations * 100, 2),
-        "average_steps": round(total_steps / simulations, 2),
-        "average_max_capital": round(total_max_capital / simulations, 2),
-
         "item_stats": item_stats,
         "failure_step_stats": failure_step_stats,
-        "capital_band_stats": capital_band_stats,
+        "successful_route_summary": dict(
+            sorted(
+                successful_route_summary.items(),
+                key=lambda item: item[1],
+                reverse=True
+            )
+        )
+    })
 
-        "successful_routes_count": goal_reached,
-        "successful_routes_returned": len(successful_routes),
-        "successful_routes": successful_routes,
-        "successful_route_summary": sorted_route_summary
+
+@app.route("/campaign/simulate")
+def campaign_simulate():
+    """
+    失敗したら100円から新しいサイクルを開始する。
+    1キャンペーンにつき最大10サイクル。
+    """
+    strategy = get_strategy()
+
+    if strategy is None:
+        return jsonify({"error": "strategy が不正です。"}), 400
+
+    campaigns = 1_000
+    campaign_goal_reached = 0
+    total_cycles_used = 0
+    total_restarts = 0
+    failure_reasons = {}
+    successful_routes = {}
+
+    for _ in range(campaigns):
+        cycles_used = 0
+        reached_goal = False
+
+        for _ in range(MAX_CAMPAIGN_CYCLES):
+            cycles_used += 1
+            result = run_cycle(strategy)
+
+            if result["status"] == "goal_reached":
+                reached_goal = True
+                campaign_goal_reached += 1
+
+                route = " → ".join(
+                    trade["selected_item"]
+                    for trade in result["history"]
+                )
+                successful_routes[route] = (
+                    successful_routes.get(route, 0) + 1
+                )
+                break
+
+            reason = result.get("failure_reason", result["status"])
+            failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+
+        total_cycles_used += cycles_used
+        total_restarts += max(0, cycles_used - 1)
+
+    return jsonify({
+        "version": "0.8",
+        "policy_version": POLICY_VERSION,
+        "strategy": strategy,
+        "campaigns": campaigns,
+        "max_cycles_per_campaign": MAX_CAMPAIGN_CYCLES,
+        "campaign_goal_reached": campaign_goal_reached,
+        "campaign_goal_rate_percent": round(
+            campaign_goal_reached / campaigns * 100, 2
+        ),
+        "average_cycles_used": round(total_cycles_used / campaigns, 2),
+        "total_restarts": total_restarts,
+        "virtual_restart_contribution": total_restarts * START_CAPITAL,
+        "failure_reasons": failure_reasons,
+        "successful_route_summary": dict(
+            sorted(
+                successful_routes.items(),
+                key=lambda item: item[1],
+                reverse=True
+            )
+        )
     })
 
 
