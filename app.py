@@ -26,12 +26,17 @@ def home():
     return "Warashibe AI v1.0"
 
 
+# ==========================================
+# API一覧
+# ==========================================
+
 @app.route("/docs")
 def docs():
     return """
     <h1>Warashibe AI v1.0 API</h1>
 
     <ul>
+
         <li>
             <a href="/strategy/report">
                 戦略レポート
@@ -73,11 +78,24 @@ def docs():
             </a>
             ：候補商品＋地雷フィルターのテスト
         </li>
+
+        <li>
+            <strong>
+                POST /candidates/evaluate
+            </strong>
+            ：候補商品を1件評価
+        </li>
+
     </ul>
     """
 
 
+# ==========================================
+# 共通関数
+# ==========================================
+
 def get_strategy():
+
     strategy = request.args.get(
         "strategy",
         "random"
@@ -99,6 +117,7 @@ def get_bounded_int(
     minimum,
     maximum
 ):
+
     value = request.args.get(name)
 
     if value is None:
@@ -119,12 +138,14 @@ def get_bounded_int(
 def select_item(items, strategy):
 
     if strategy == "safe":
+
         return max(
             items,
             key=lambda item: item["success_rate"]
         )
 
     if strategy == "aggressive":
+
         return max(
             items,
             key=lambda item: item["next_value"]
@@ -161,11 +182,11 @@ def get_policy_allowed_items(capital):
     return allowed_items, blocked_items
 
 
+# ==========================================
+# 1回のわらしべサイクル
+# ==========================================
+
 def run_cycle(strategy):
-    """
-    100円から開始する、
-    1回分のわらしべサイクル
-    """
 
     capital = START_CAPITAL
     history = []
@@ -251,9 +272,7 @@ def run_cycle(strategy):
                 "final_capital": 0,
                 "steps": step,
                 "history": history,
-                "failure_reason": (
-                    "trade_failed"
-                )
+                "failure_reason": "trade_failed"
             }
 
     return {
@@ -264,14 +283,14 @@ def run_cycle(strategy):
     }
 
 
+# ==========================================
+# 再挑戦ありキャンペーン
+# ==========================================
+
 def run_campaign(
     strategy,
     max_cycles
 ):
-    """
-    失敗したら100円から再開する、
-    複数サイクルの挑戦
-    """
 
     failure_reasons = {}
 
@@ -284,10 +303,7 @@ def run_campaign(
             strategy
         )
 
-        if (
-            result["status"]
-            == "goal_reached"
-        ):
+        if result["status"] == "goal_reached":
 
             route = " → ".join(
                 trade["selected_item"]
@@ -314,12 +330,7 @@ def run_campaign(
             ) + 1
         )
 
-        # 同じルールで再開しても
-        # 解決できないため終了
-        if (
-            result["status"]
-            == "policy_blocked"
-        ):
+        if result["status"] == "policy_blocked":
 
             return {
                 "status": "policy_blocked",
@@ -336,23 +347,21 @@ def run_campaign(
     }
 
 
+# ==========================================
+# キャンペーン統計
+# ==========================================
+
 def summarize_campaigns(
     strategy,
     campaigns,
     max_cycles
 ):
-    """
-    指定戦略のキャンペーン結果を集計する
-    """
 
     goal_reached = 0
-
     total_cycles_used = 0
-
     total_restarts = 0
 
     failure_reasons = {}
-
     successful_route_summary = {}
 
     for _ in range(campaigns):
@@ -371,8 +380,7 @@ def summarize_campaigns(
         )
 
         for reason, count in (
-            result["failure_reasons"]
-            .items()
+            result["failure_reasons"].items()
         ):
 
             failure_reasons[reason] = (
@@ -382,16 +390,13 @@ def summarize_campaigns(
                 ) + count
             )
 
-        if (
-            result["status"]
-            == "goal_reached"
-        ):
+        if result["status"] == "goal_reached":
 
             goal_reached += 1
 
-            route = (
-                result["successful_route"]
-            )
+            route = result[
+                "successful_route"
+            ]
 
             successful_route_summary[
                 route
@@ -417,50 +422,58 @@ def summarize_campaigns(
 
     return {
         "strategy": strategy,
+
         "campaigns": campaigns,
-        "max_cycles_per_campaign": max_cycles,
 
-        "campaign_goal_reached": (
-            goal_reached
-        ),
+        "max_cycles_per_campaign":
+            max_cycles,
 
-        "campaign_goal_rate_percent": round(
-            goal_reached
-            / campaigns
-            * 100,
-            2
-        ),
+        "campaign_goal_reached":
+            goal_reached,
 
-        "average_cycles_used": round(
-            total_cycles_used
-            / campaigns,
-            2
-        ),
+        "campaign_goal_rate_percent":
+            round(
+                goal_reached
+                / campaigns
+                * 100,
+                2
+            ),
 
-        "total_restarts": total_restarts,
+        "average_cycles_used":
+            round(
+                total_cycles_used
+                / campaigns,
+                2
+            ),
 
-        "average_restarts": round(
+        "total_restarts":
+            total_restarts,
+
+        "average_restarts":
+            round(
+                total_restarts
+                / campaigns,
+                2
+            ),
+
+        "virtual_restart_contribution":
             total_restarts
-            / campaigns,
-            2
-        ),
+            * START_CAPITAL,
 
-        "virtual_restart_contribution": (
-            total_restarts
-            * START_CAPITAL
-        ),
+        "failure_reasons":
+            failure_reasons,
 
-        "failure_reasons": failure_reasons,
+        "dominant_successful_route":
+            dominant_route,
 
-        "dominant_successful_route": (
-            dominant_route
-        ),
-
-        "successful_route_summary": (
+        "successful_route_summary":
             sorted_routes
-        )
     }
 
+
+# ==========================================
+# AI戦略比較
+# ==========================================
 
 def evaluate_strategies(
     campaigns,
@@ -514,7 +527,7 @@ def evaluate_strategies(
 
 
 # ==========================================
-# v0.9
+# API
 # 1回のわらしべ挑戦
 # ==========================================
 
@@ -539,20 +552,20 @@ def journey():
         "version": "1.0",
 
         "policy_version":
-        POLICY_VERSION,
+            POLICY_VERSION,
 
         "strategy":
-        strategy,
+            strategy,
 
         "start_capital":
-        START_CAPITAL,
+            START_CAPITAL,
 
         **result
     })
 
 
 # ==========================================
-# v0.9
+# API
 # 単体シミュレーション
 # ==========================================
 
@@ -603,9 +616,7 @@ def simulate():
             strategy
         )
 
-        for trade in (
-            result["history"]
-        ):
+        for trade in result["history"]:
 
             stats = item_stats[
                 trade["selected_item"]
@@ -621,20 +632,13 @@ def simulate():
 
                 stats["failures"] += 1
 
-        if (
-            result["status"]
-            == "goal_reached"
-        ):
+        if result["status"] == "goal_reached":
 
             goal_reached += 1
 
-    for stats in (
-        item_stats.values()
-    ):
+    for stats in item_stats.values():
 
-        attempts = stats[
-            "attempts"
-        ]
+        attempts = stats["attempts"]
 
         stats[
             "success_rate_percent"
@@ -657,32 +661,32 @@ def simulate():
         "version": "1.0",
 
         "policy_version":
-        POLICY_VERSION,
+            POLICY_VERSION,
 
         "strategy":
-        strategy,
+            strategy,
 
         "simulations":
-        simulations,
+            simulations,
 
         "goal_reached":
-        goal_reached,
+            goal_reached,
 
         "goal_rate_percent":
-        round(
-            goal_reached
-            / simulations
-            * 100,
-            2
-        ),
+            round(
+                goal_reached
+                / simulations
+                * 100,
+                2
+            ),
 
         "item_stats":
-        item_stats
+            item_stats
     })
 
 
 # ==========================================
-# v0.9
+# API
 # 再挑戦ありキャンペーン
 # ==========================================
 
@@ -720,7 +724,7 @@ def campaign_simulate():
         return jsonify({
             "error":
             "campaigns は1〜10000、"
-            "max_cyclesは1〜100で指定してください。"
+            "max_cycles は1〜100で指定してください。"
         }), 400
 
     summary = summarize_campaigns(
@@ -734,20 +738,20 @@ def campaign_simulate():
         "version": "1.0",
 
         "policy_version":
-        POLICY_VERSION,
+            POLICY_VERSION,
 
         "start_capital":
-        START_CAPITAL,
+            START_CAPITAL,
 
         "target":
-        TARGET,
+            TARGET,
 
         **summary
     })
 
 
 # ==========================================
-# v0.9
+# API
 # AI戦略本部 内部JSON
 # ==========================================
 
@@ -776,7 +780,7 @@ def strategy_recommendation():
         return jsonify({
             "error":
             "campaigns は100〜10000、"
-            "max_cyclesは1〜100で指定してください。"
+            "max_cycles は1〜100で指定してください。"
         }), 400
 
     strategy_results, _, recommendation = (
@@ -791,27 +795,27 @@ def strategy_recommendation():
         "version": "1.0",
 
         "policy_version":
-        POLICY_VERSION,
+            POLICY_VERSION,
 
         "mode":
-        "virtual_market_only",
+            "virtual_market_only",
 
         "current_capital":
-        START_CAPITAL,
+            START_CAPITAL,
 
         "target":
-        TARGET,
+            TARGET,
 
         "strategies":
-        strategy_results,
+            strategy_results,
 
         "recommendation":
-        recommendation
+            recommendation
     })
 
 
 # ==========================================
-# v0.9
+# API
 # 人間向け戦略レポート
 # ==========================================
 
@@ -957,7 +961,6 @@ def strategy_report():
 
             </div>
 
-
             <div class="card">
 
                 <h2>
@@ -968,21 +971,10 @@ def strategy_report():
 
                     <tr>
 
-                        <th>
-                            順位
-                        </th>
-
-                        <th>
-                            戦略
-                        </th>
-
-                        <th>
-                            100万円到達率
-                        </th>
-
-                        <th>
-                            平均再挑戦回数
-                        </th>
+                        <th>順位</th>
+                        <th>戦略</th>
+                        <th>100万円到達率</th>
+                        <th>平均再挑戦回数</th>
 
                     </tr>
 
@@ -1028,7 +1020,6 @@ def strategy_report():
 
             </div>
 
-
             <div class="card risk">
 
                 <h2>
@@ -1067,18 +1058,15 @@ def strategy_report():
         """,
 
         campaigns=campaigns,
-
         ranked_results=ranked_results,
-
         recommendation=recommendation,
-
         strategy_labels=STRATEGY_LABELS
     )
 
 
 # ==========================================
 # v1.0
-# 候補商品＋AI地雷フィルター テスト
+# 候補商品＋地雷フィルター テスト
 # ==========================================
 
 @app.route("/candidates/test")
@@ -1088,57 +1076,37 @@ def candidates_test():
 
         create_candidate(
             name="安全な中古カメラ",
-
             purchase_price=10000,
-
             expected_sale_price=15000,
-
             source="test",
-
             category="camera",
-
             confidence=0.90
         ),
 
         create_candidate(
             name="利益が低すぎる商品",
-
             purchase_price=10000,
-
             expected_sale_price=10200,
-
             source="test",
-
             category="misc",
-
             confidence=0.90
         ),
 
         create_candidate(
             name="情報不足の商品",
-
             purchase_price=10000,
-
             expected_sale_price=20000,
-
             source="test",
-
             category="misc",
-
             confidence=0.30
         ),
 
         create_candidate(
             name="赤字商品",
-
             purchase_price=10000,
-
             expected_sale_price=8000,
-
             source="test",
-
             category="misc",
-
             confidence=0.90
         )
     ]
@@ -1152,19 +1120,110 @@ def candidates_test():
         "version": "1.0",
 
         "total_candidates":
-        len(candidates),
+            len(candidates),
 
         "allowed_count":
-        len(allowed),
+            len(allowed),
 
         "blocked_count":
-        len(blocked),
+            len(blocked),
 
         "allowed":
-        allowed,
+            allowed,
 
         "blocked":
-        blocked
+            blocked
+    })
+
+
+# ==========================================
+# v1.0
+# 外部から候補商品を1件評価
+# ==========================================
+
+@app.route(
+    "/candidates/evaluate",
+    methods=["POST"]
+)
+def candidates_evaluate():
+
+    data = request.get_json(
+        silent=True
+    )
+
+    if not data:
+
+        return jsonify({
+            "error":
+            "JSONデータを送信してください。"
+        }), 400
+
+    candidate = create_candidate(
+
+        name=data.get(
+            "name"
+        ),
+
+        purchase_price=data.get(
+            "purchase_price",
+            0
+        ),
+
+        expected_sale_price=data.get(
+            "expected_sale_price",
+            0
+        ),
+
+        source=data.get(
+            "source",
+            "unknown"
+        ),
+
+        category=data.get(
+            "category",
+            "unknown"
+        ),
+
+        confidence=data.get(
+            "confidence",
+            0
+        ),
+
+        metadata=data.get(
+            "metadata",
+            {}
+        )
+    )
+
+    allowed, blocked = filter_candidates(
+        [candidate]
+    )
+
+    if allowed:
+
+        return jsonify({
+
+            "version": "1.0",
+
+            "status":
+                "allowed",
+
+            "candidate":
+                allowed[0]
+        })
+
+    return jsonify({
+
+        "version": "1.0",
+
+        "status":
+            "blocked",
+
+        "candidate":
+            candidate,
+
+        "reasons":
+            blocked[0]["reasons"]
     })
 
 
