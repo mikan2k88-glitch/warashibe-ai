@@ -5,14 +5,14 @@ from market_engine import MARKET, find_items
 from policy_engine import POLICY_VERSION, START_CAPITAL, evaluate_trade
 from strategy_engine import STRATEGY_LABELS, create_recommendation
 
-# Warashibe AI v1.0
-# 候補商品共通フォーマット
 from candidate_engine import create_candidate
-
-# Warashibe AI v1.0
-# AI地雷フィルター
 from danger_filter import filter_candidates
 
+
+# ============================================================
+# Warashibe AI v1.0
+# AI戦略本部 + 仮想市場 + 候補商品地雷フィルター
+# ============================================================
 
 app = Flask(__name__)
 
@@ -21,78 +21,159 @@ MAX_STEPS = 20
 MAX_CAMPAIGN_CYCLES = 10
 
 
+# ============================================================
+# HOME
+# ============================================================
+
 @app.route("/")
 def home():
     return "Warashibe AI v1.0"
 
 
-# ==========================================
-# API一覧
-# ==========================================
+# ============================================================
+# DOCS
+# ============================================================
 
 @app.route("/docs")
 def docs():
     return """
-    <h1>Warashibe AI v1.0 API</h1>
+    <!doctype html>
+    <html lang="ja">
 
-    <ul>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport"
+              content="width=device-width, initial-scale=1">
 
-        <li>
-            <a href="/strategy/report">
-                戦略レポート
-            </a>
-            ：人間向けの結論表示
-        </li>
+        <title>Warashibe AI v1.0 API</title>
 
-        <li>
-            <a href="/journey?strategy=random">
-                /journey
-            </a>
-            ：1回の取引
-        </li>
+        <style>
+            body {
+                max-width: 850px;
+                margin: 40px auto;
+                padding: 20px;
+                font-family: sans-serif;
+                line-height: 1.7;
+            }
 
-        <li>
-            <a href="/simulate?strategy=random">
-                /simulate
-            </a>
-            ：1サイクルの統計
-        </li>
+            h1 {
+                margin-bottom: 30px;
+            }
 
-        <li>
-            <a href="/campaign/simulate?strategy=random">
-                /campaign/simulate
-            </a>
-            ：再挑戦ありの統計
-        </li>
+            ul {
+                line-height: 2.2;
+            }
 
-        <li>
-            <a href="/strategy/recommendation">
-                /strategy/recommendation
-            </a>
-            ：内部用JSON
-        </li>
+            a {
+                font-size: 18px;
+            }
 
-        <li>
-            <a href="/candidates/test">
-                /candidates/test
-            </a>
-            ：候補商品＋地雷フィルターのテスト
-        </li>
+            .post {
+                color: #c62828;
+                font-weight: bold;
+            }
 
-        <li>
-            <strong>
-                POST /candidates/evaluate
-            </strong>
-            ：候補商品を1件評価
-        </li>
+            .section {
+                margin-top: 30px;
+                padding: 20px;
+                background: #f5f5f5;
+                border-radius: 10px;
+            }
+        </style>
+    </head>
 
-    </ul>
+    <body>
+
+        <h1>Warashibe AI v1.0 API</h1>
+
+        <ul>
+
+            <li>
+                <a href="/strategy/report">
+                    戦略レポート
+                </a>
+                ：人間向けの結論表示
+            </li>
+
+            <li>
+                <a href="/journey?strategy=random">
+                    /journey
+                </a>
+                ：1回の取引
+            </li>
+
+            <li>
+                <a href="/simulate?strategy=random">
+                    /simulate
+                </a>
+                ：単体シミュレーション
+            </li>
+
+            <li>
+                <a href="/campaign/simulate?strategy=random">
+                    /campaign/simulate
+                </a>
+                ：再挑戦ありの統計
+            </li>
+
+            <li>
+                <a href="/strategy/recommendation">
+                    /strategy/recommendation
+                </a>
+                ：AI戦略本部JSON
+            </li>
+
+            <li>
+                <a href="/candidates/test">
+                    /candidates/test
+                </a>
+                ：候補商品フィルターのテスト
+            </li>
+
+            <li>
+                <a href="/candidate-form">
+                    /candidate-form
+                </a>
+                ：ブラウザから候補商品を評価
+            </li>
+
+            <li>
+                <strong class="post">
+                    POST /candidates/evaluate
+                </strong>
+                ：候補商品を1件評価
+            </li>
+
+        </ul>
+
+        <div class="section">
+
+            <h2>v1.0 の流れ</h2>
+
+            <p>
+                仮想市場
+                ↓
+                戦略シミュレーション
+                ↓
+                AI戦略本部
+                ↓
+                候補商品
+                ↓
+                地雷フィルター
+                ↓
+                採用候補 / 除外
+            </p>
+
+        </div>
+
+    </body>
+    </html>
     """
 
 
-# ==========================================
+# ============================================================
 # 共通関数
-# ==========================================
+# ============================================================
 
 def get_strategy():
 
@@ -125,8 +206,7 @@ def get_bounded_int(
 
     try:
         value = int(value)
-
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
     if minimum <= value <= maximum:
@@ -136,6 +216,9 @@ def get_bounded_int(
 
 
 def select_item(items, strategy):
+
+    if not items:
+        return None
 
     if strategy == "safe":
 
@@ -168,9 +251,7 @@ def get_policy_allowed_items(capital):
 
         if decision["allowed"]:
 
-            allowed_items.append(
-                item
-            )
+            allowed_items.append(item)
 
         else:
 
@@ -182,9 +263,9 @@ def get_policy_allowed_items(capital):
     return allowed_items, blocked_items
 
 
-# ==========================================
-# 1回のわらしべサイクル
-# ==========================================
+# ============================================================
+# 1回のわらしべ挑戦
+# ============================================================
 
 def run_cycle(strategy):
 
@@ -217,6 +298,15 @@ def run_cycle(strategy):
             strategy
         )
 
+        if item is None:
+
+            return {
+                "status": "no_item",
+                "final_capital": capital,
+                "steps": step - 1,
+                "history": history
+            }
+
         success = (
             random.random()
             < item["success_rate"]
@@ -242,9 +332,7 @@ def run_cycle(strategy):
 
             trade["capital_after"] = capital
 
-            history.append(
-                trade
-            )
+            history.append(trade)
 
             if capital >= TARGET:
 
@@ -257,15 +345,15 @@ def run_cycle(strategy):
 
         else:
 
+            capital = 0
+
             trade["capital_after"] = 0
 
             trade["failure_reason"] = (
                 "trade_failed"
             )
 
-            history.append(
-                trade
-            )
+            history.append(trade)
 
             return {
                 "status": "failed",
@@ -283,9 +371,9 @@ def run_cycle(strategy):
     }
 
 
-# ==========================================
+# ============================================================
 # 再挑戦ありキャンペーン
-# ==========================================
+# ============================================================
 
 def run_campaign(
     strategy,
@@ -347,9 +435,9 @@ def run_campaign(
     }
 
 
-# ==========================================
+# ============================================================
 # キャンペーン統計
-# ==========================================
+# ============================================================
 
 def summarize_campaigns(
     strategy,
@@ -422,11 +510,8 @@ def summarize_campaigns(
 
     return {
         "strategy": strategy,
-
         "campaigns": campaigns,
-
-        "max_cycles_per_campaign":
-            max_cycles,
+        "max_cycles_per_campaign": max_cycles,
 
         "campaign_goal_reached":
             goal_reached,
@@ -471,9 +556,9 @@ def summarize_campaigns(
     }
 
 
-# ==========================================
+# ============================================================
 # AI戦略比較
-# ==========================================
+# ============================================================
 
 def evaluate_strategies(
     campaigns,
@@ -526,10 +611,9 @@ def evaluate_strategies(
     )
 
 
-# ==========================================
-# API
-# 1回のわらしべ挑戦
-# ==========================================
+# ============================================================
+# /journey
+# ============================================================
 
 @app.route("/journey")
 def journey():
@@ -560,14 +644,16 @@ def journey():
         "start_capital":
             START_CAPITAL,
 
+        "target":
+            TARGET,
+
         **result
     })
 
 
-# ==========================================
-# API
-# 単体シミュレーション
-# ==========================================
+# ============================================================
+# /simulate
+# ============================================================
 
 @app.route("/simulate")
 def simulate():
@@ -600,11 +686,9 @@ def simulate():
     item_stats = {
 
         item["name"]: {
-
             "attempts": 0,
             "successes": 0,
             "failures": 0
-
         }
 
         for item in MARKET
@@ -640,21 +724,22 @@ def simulate():
 
         attempts = stats["attempts"]
 
-        stats[
-            "success_rate_percent"
-        ] = (
+        if attempts:
 
-            round(
+            stats[
+                "success_rate_percent"
+            ] = round(
                 stats["successes"]
                 / attempts
                 * 100,
                 2
             )
 
-            if attempts
+        else:
 
-            else 0
-        )
+            stats[
+                "success_rate_percent"
+            ] = 0
 
     return jsonify({
 
@@ -685,10 +770,9 @@ def simulate():
     })
 
 
-# ==========================================
-# API
-# 再挑戦ありキャンペーン
-# ==========================================
+# ============================================================
+# /campaign/simulate
+# ============================================================
 
 @app.route("/campaign/simulate")
 def campaign_simulate():
@@ -750,10 +834,9 @@ def campaign_simulate():
     })
 
 
-# ==========================================
-# API
-# AI戦略本部 内部JSON
-# ==========================================
+# ============================================================
+# /strategy/recommendation
+# ============================================================
 
 @app.route("/strategy/recommendation")
 def strategy_recommendation():
@@ -814,10 +897,9 @@ def strategy_recommendation():
     })
 
 
-# ==========================================
-# API
-# 人間向け戦略レポート
-# ==========================================
+# ============================================================
+# /strategy/report
+# ============================================================
 
 @app.route("/strategy/report")
 def strategy_report():
@@ -864,6 +946,9 @@ def strategy_report():
 
             <meta charset="utf-8">
 
+            <meta name="viewport"
+                  content="width=device-width, initial-scale=1">
+
             <title>
                 Warashibe AI 戦略レポート
             </title>
@@ -871,16 +956,15 @@ def strategy_report():
             <style>
 
                 body {
-                    max-width: 760px;
+                    max-width: 800px;
                     margin: 40px auto;
-                    padding: 0 20px;
+                    padding: 20px;
                     font-family: sans-serif;
                     line-height: 1.7;
-                    color: #222;
                 }
 
                 .card {
-                    margin: 18px 0;
+                    margin: 20px 0;
                     padding: 20px;
                     border-radius: 12px;
                     background: #f5f7fb;
@@ -933,11 +1017,9 @@ def strategy_report():
                 <p>
 
                     <strong>
-
                         {{
                         recommendation.recommended_strategy_label
                         }}戦略
-
                     </strong>
 
                     を提案します。
@@ -951,6 +1033,7 @@ def strategy_report():
                 <p>
 
                     代表的な成功ルート：
+
                     <br>
 
                     {{
@@ -970,12 +1053,10 @@ def strategy_report():
                 <table>
 
                     <tr>
-
                         <th>順位</th>
                         <th>戦略</th>
                         <th>100万円到達率</th>
-                        <th>平均再挑戦回数</th>
-
+                        <th>平均再挑戦</th>
                     </tr>
 
                     {% for result in ranked_results %}
@@ -987,29 +1068,23 @@ def strategy_report():
                         </td>
 
                         <td>
-
                             {{
                             strategy_labels[
-                            result.strategy
+                                result.strategy
                             ]
                             }}
-
                         </td>
 
                         <td>
-
                             {{
                             result.campaign_goal_rate_percent
                             }}%
-
                         </td>
 
                         <td>
-
                             {{
                             result.average_restarts
                             }}回
-
                         </td>
 
                     </tr>
@@ -1031,23 +1106,18 @@ def strategy_report():
                     リスク評価：
 
                     <strong>
-
                         {{
                         recommendation.risk_level
                         }}
-
                     </strong>
 
                 </p>
 
                 <p>
-
                     これは仮想市場での研究結果です。
-
                     実際の仕入れ・注文は、
                     必ず人間が確認してから
                     行ってください。
-
                 </p>
 
             </div>
@@ -1064,10 +1134,10 @@ def strategy_report():
     )
 
 
-# ==========================================
-# v1.0
-# 候補商品＋地雷フィルター テスト
-# ==========================================
+# ============================================================
+# /candidates/test
+# 固定テスト4商品
+# ============================================================
 
 @app.route("/candidates/test")
 def candidates_test():
@@ -1136,10 +1206,412 @@ def candidates_test():
     })
 
 
-# ==========================================
-# v1.0
-# 外部から候補商品を1件評価
-# ==========================================
+# ============================================================
+# /candidate-form
+# ブラウザから候補商品を評価
+# ============================================================
+
+@app.route(
+    "/candidate-form",
+    methods=["GET", "POST"]
+)
+def candidate_form():
+
+    result = None
+
+    if request.method == "POST":
+
+        try:
+
+            name = request.form.get(
+                "name",
+                ""
+            ).strip()
+
+            purchase_price = float(
+                request.form.get(
+                    "purchase_price",
+                    0
+                )
+            )
+
+            expected_sale_price = float(
+                request.form.get(
+                    "expected_sale_price",
+                    0
+                )
+            )
+
+            confidence = float(
+                request.form.get(
+                    "confidence",
+                    0
+                )
+            )
+
+            source = request.form.get(
+                "source",
+                "manual"
+            )
+
+            category = request.form.get(
+                "category",
+                "misc"
+            )
+
+            if not name:
+
+                raise ValueError(
+                    "商品名を入力してください。"
+                )
+
+            if purchase_price < 0:
+
+                raise ValueError(
+                    "仕入れ価格は0以上で入力してください。"
+                )
+
+            if expected_sale_price < 0:
+
+                raise ValueError(
+                    "想定売却価格は0以上で入力してください。"
+                )
+
+            if not 0 <= confidence <= 1:
+
+                raise ValueError(
+                    "情報信頼度は0.0〜1.0で入力してください。"
+                )
+
+            candidate = create_candidate(
+
+                name=name,
+
+                purchase_price=
+                    purchase_price,
+
+                expected_sale_price=
+                    expected_sale_price,
+
+                source=source,
+
+                category=category,
+
+                confidence=confidence
+            )
+
+            allowed, blocked = filter_candidates(
+                [candidate]
+            )
+
+            if allowed:
+
+                result = {
+                    "status": "allowed",
+                    "candidate": allowed[0]
+                }
+
+            else:
+
+                result = {
+                    "status": "blocked",
+                    "candidate": candidate,
+                    "reasons":
+                        blocked[0]["reasons"]
+                }
+
+        except (ValueError, TypeError) as e:
+
+            result = {
+                "status": "error",
+                "message":
+                    f"入力値が不正です: {e}"
+            }
+
+    return render_template_string(
+        """
+        <!doctype html>
+
+        <html lang="ja">
+
+        <head>
+
+            <meta charset="utf-8">
+
+            <meta name="viewport"
+                  content="width=device-width, initial-scale=1">
+
+            <title>
+                Warashibe AI 候補商品評価
+            </title>
+
+            <style>
+
+                body {
+                    max-width: 700px;
+                    margin: 30px auto;
+                    padding: 20px;
+                    font-family: sans-serif;
+                    line-height: 1.6;
+                }
+
+                h1 {
+                    margin-bottom: 30px;
+                }
+
+                label {
+                    display: block;
+                    margin-top: 15px;
+                    font-weight: bold;
+                }
+
+                input,
+                select {
+                    width: 100%;
+                    box-sizing: border-box;
+                    padding: 10px;
+                    margin-top: 5px;
+                    font-size: 16px;
+                }
+
+                button {
+                    margin-top: 25px;
+                    padding: 12px 25px;
+                    font-size: 16px;
+                    cursor: pointer;
+                }
+
+                .result {
+                    margin-top: 30px;
+                    padding: 20px;
+                    border-radius: 10px;
+                }
+
+                .allowed {
+                    background: #e8f5e9;
+                    border-left: 6px solid #2e7d32;
+                }
+
+                .blocked {
+                    background: #ffebee;
+                    border-left: 6px solid #c62828;
+                }
+
+                .error {
+                    background: #fff3e0;
+                    border-left: 6px solid #ef6c00;
+                }
+
+                pre {
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    background: #f5f5f5;
+                    padding: 15px;
+                    overflow-x: auto;
+                }
+
+            </style>
+
+        </head>
+
+        <body>
+
+            <h1>
+                Warashibe AI
+                <br>
+                候補商品評価
+            </h1>
+
+            <p>
+                商品情報を入力すると、
+                AI地雷フィルターで評価します。
+            </p>
+
+            <form method="POST">
+
+                <label>
+                    商品名
+                </label>
+
+                <input
+                    type="text"
+                    name="name"
+                    placeholder="例：中古カメラ"
+                    required
+                >
+
+                <label>
+                    仕入れ価格
+                </label>
+
+                <input
+                    type="number"
+                    name="purchase_price"
+                    placeholder="10000"
+                    min="0"
+                    step="1"
+                    required
+                >
+
+                <label>
+                    想定売却価格
+                </label>
+
+                <input
+                    type="number"
+                    name="expected_sale_price"
+                    placeholder="15000"
+                    min="0"
+                    step="1"
+                    required
+                >
+
+                <label>
+                    情報信頼度（0.0〜1.0）
+                </label>
+
+                <input
+                    type="number"
+                    name="confidence"
+                    placeholder="0.9"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    required
+                >
+
+                <label>
+                    カテゴリ
+                </label>
+
+                <select name="category">
+
+                    <option value="camera">
+                        カメラ
+                    </option>
+
+                    <option value="electronics">
+                        電子機器
+                    </option>
+
+                    <option value="brand">
+                        ブランド
+                    </option>
+
+                    <option value="book">
+                        本・古書
+                    </option>
+
+                    <option value="game">
+                        ゲーム
+                    </option>
+
+                    <option value="misc">
+                        その他
+                    </option>
+
+                </select>
+
+                <label>
+                    情報源
+                </label>
+
+                <input
+                    type="text"
+                    name="source"
+                    value="manual"
+                >
+
+                <button type="submit">
+                    商品を評価する
+                </button>
+
+            </form>
+
+            {% if result %}
+
+                {% if result.status == "allowed" %}
+
+                    <div class="result allowed">
+
+                        <h2>
+                            ✅ ALLOWED
+                        </h2>
+
+                        <p>
+                            この候補商品は
+                            地雷フィルターを通過しました。
+                        </p>
+
+                        <pre>{{ result | tojson(indent=2) }}</pre>
+
+                    </div>
+
+                {% elif result.status == "blocked" %}
+
+                    <div class="result blocked">
+
+                        <h2>
+                            ❌ BLOCKED
+                        </h2>
+
+                        <p>
+                            この商品は
+                            地雷フィルターによって
+                            除外されました。
+                        </p>
+
+                        <h3>
+                            除外理由
+                        </h3>
+
+                        <ul>
+
+                            {% for reason in result.reasons %}
+
+                                <li>
+                                    {{ reason }}
+                                </li>
+
+                            {% endfor %}
+
+                        </ul>
+
+                        <pre>{{ result | tojson(indent=2) }}</pre>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="result error">
+
+                        <h2>
+                            ⚠️ ERROR
+                        </h2>
+
+                        <p>
+                            {{ result.message }}
+                        </p>
+
+                    </div>
+
+                {% endif %}
+
+            {% endif %}
+
+        </body>
+
+        </html>
+        """,
+
+        result=result
+    )
+
+
+# ============================================================
+# POST /candidates/evaluate
+# 外部JSONから候補商品を1件評価
+# ============================================================
 
 @app.route(
     "/candidates/evaluate",
@@ -1158,42 +1630,51 @@ def candidates_evaluate():
             "JSONデータを送信してください。"
         }), 400
 
-    candidate = create_candidate(
+    try:
 
-        name=data.get(
-            "name"
-        ),
+        candidate = create_candidate(
 
-        purchase_price=data.get(
-            "purchase_price",
-            0
-        ),
+            name=data.get(
+                "name"
+            ),
 
-        expected_sale_price=data.get(
-            "expected_sale_price",
-            0
-        ),
+            purchase_price=data.get(
+                "purchase_price",
+                0
+            ),
 
-        source=data.get(
-            "source",
-            "unknown"
-        ),
+            expected_sale_price=data.get(
+                "expected_sale_price",
+                0
+            ),
 
-        category=data.get(
-            "category",
-            "unknown"
-        ),
+            source=data.get(
+                "source",
+                "unknown"
+            ),
 
-        confidence=data.get(
-            "confidence",
-            0
-        ),
+            category=data.get(
+                "category",
+                "unknown"
+            ),
 
-        metadata=data.get(
-            "metadata",
-            {}
+            confidence=data.get(
+                "confidence",
+                0
+            ),
+
+            metadata=data.get(
+                "metadata",
+                {}
+            )
         )
-    )
+
+    except (ValueError, TypeError) as e:
+
+        return jsonify({
+            "error":
+                f"候補商品のデータが不正です: {e}"
+        }), 400
 
     allowed, blocked = filter_candidates(
         [candidate]
@@ -1227,5 +1708,14 @@ def candidates_evaluate():
     })
 
 
+# ============================================================
+# START
+# ============================================================
+
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    app.run(
+        host="0.0.0.0",
+        port=10000,
+        debug=True
+    )
