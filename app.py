@@ -1,54 +1,28 @@
-from flask import (
-    Flask,
-    jsonify,
-    request,
-    render_template_string
-)
+from flask import Flask, jsonify, request, render_template_string
 
-from routes.simulation_routes import simulation_bp
-
-from policy_engine import (
-    POLICY_VERSION,
-    START_CAPITAL
-)
+from policy_engine import POLICY_VERSION, START_CAPITAL
+from strategy_engine import STRATEGY_LABELS, create_recommendation
 
 from simulation_engine import (
+    TARGET,
+    MAX_CAMPAIGN_CYCLES,
+    run_cycle,
     summarize_campaigns
 )
 
-from strategy_engine import (
-    STRATEGY_LABELS,
-    create_recommendation
-)
-
-from candidate_engine import (
-    create_candidate
-)
-
-from danger_filter import (
-    filter_candidates
-)
+from candidate_engine import create_candidate
+from danger_filter import filter_candidates
 
 
 # ============================================================
 # Warashibe AI v1.0
 # AI戦略本部 + 仮想市場 + 候補商品地雷フィルター
+#
+# app.py
+# Flask / API / 画面表示専用
 # ============================================================
 
 app = Flask(__name__)
-
-
-# ============================================================
-# Blueprint 登録
-# ============================================================
-
-app.register_blueprint(
-    simulation_bp
-)
-
-
-TARGET = 1_000_000
-MAX_CAMPAIGN_CYCLES = 10
 
 
 # ============================================================
@@ -57,7 +31,6 @@ MAX_CAMPAIGN_CYCLES = 10
 
 @app.route("/")
 def home():
-
     return "Warashibe AI v1.0"
 
 
@@ -77,12 +50,12 @@ def docs():
 
         <meta charset="utf-8">
 
-        <meta name="viewport"
-              content="width=device-width, initial-scale=1">
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1"
+        >
 
-        <title>
-            Warashibe AI v1.0 API
-        </title>
+        <title>Warashibe AI v1.0 API</title>
 
         <style>
 
@@ -124,59 +97,78 @@ def docs():
 
     <body>
 
-        <h1>
-            Warashibe AI v1.0 API
-        </h1>
+        <h1>Warashibe AI v1.0 API</h1>
 
         <ul>
 
             <li>
+
                 <a href="/strategy/report">
                     戦略レポート
                 </a>
+
                 ：人間向けの結論表示
+
             </li>
 
             <li>
+
                 <a href="/journey?strategy=random">
                     /journey
                 </a>
+
                 ：1回の取引
+
             </li>
 
             <li>
+
                 <a href="/simulate?strategy=random">
                     /simulate
                 </a>
+
                 ：単体シミュレーション
+
             </li>
 
             <li>
+
                 <a href="/campaign/simulate?strategy=random">
                     /campaign/simulate
                 </a>
+
                 ：再挑戦ありの統計
+
             </li>
 
             <li>
+
                 <a href="/strategy/recommendation">
                     /strategy/recommendation
                 </a>
+
                 ：AI戦略本部JSON
+
             </li>
 
             <li>
+
                 <a href="/candidates/test">
                     /candidates/test
                 </a>
+
                 ：候補商品フィルターのテスト
+
             </li>
 
             <li>
+
                 <a href="/candidate-form">
                     /candidate-form
                 </a>
+
                 ：ブラウザから候補商品を評価
+
             </li>
 
             <li>
@@ -193,15 +185,13 @@ def docs():
 
         <div class="section">
 
-            <h2>
-                v1.0 の流れ
-            </h2>
+            <h2>v1.0 の流れ</h2>
 
             <p>
 
                 仮想市場
                 ↓
-                戦略シミュレーション
+                シミュレーションエンジン
                 ↓
                 AI戦略本部
                 ↓
@@ -225,6 +215,23 @@ def docs():
 # 共通関数
 # ============================================================
 
+def get_strategy():
+
+    strategy = request.args.get(
+        "strategy",
+        "random"
+    ).lower()
+
+    if strategy not in {
+        "random",
+        "safe",
+        "aggressive"
+    }:
+        return None
+
+    return strategy
+
+
 def get_bounded_int(
     name,
     default,
@@ -235,7 +242,6 @@ def get_bounded_int(
     value = request.args.get(name)
 
     if value is None:
-
         return default
 
     try:
@@ -314,6 +320,253 @@ def evaluate_strategies(
 
 
 # ============================================================
+# /journey
+# ============================================================
+
+@app.route("/journey")
+def journey():
+
+    strategy = get_strategy()
+
+    if strategy is None:
+
+        return jsonify({
+            "error":
+                "strategy が不正です。"
+        }), 400
+
+    result = run_cycle(
+        strategy
+    )
+
+    return jsonify({
+
+        "version":
+            "1.0",
+
+        "policy_version":
+            POLICY_VERSION,
+
+        "strategy":
+            strategy,
+
+        "start_capital":
+            START_CAPITAL,
+
+        "target":
+            TARGET,
+
+        **result
+    })
+
+
+# ============================================================
+# /simulate
+# ============================================================
+
+@app.route("/simulate")
+def simulate():
+
+    strategy = get_strategy()
+
+    simulations = get_bounded_int(
+        "simulations",
+        10_000,
+        1,
+        100_000
+    )
+
+    if strategy is None:
+
+        return jsonify({
+            "error":
+                "strategy が不正です。"
+        }), 400
+
+    if simulations is None:
+
+        return jsonify({
+            "error":
+                "simulations は1〜100000の整数です。"
+        }), 400
+
+    goal_reached = 0
+
+    item_stats = {}
+
+    for _ in range(simulations):
+
+        result = run_cycle(
+            strategy
+        )
+
+        for trade in result["history"]:
+
+            item_name = trade[
+                "selected_item"
+            ]
+
+            if item_name not in item_stats:
+
+                item_stats[item_name] = {
+
+                    "attempts":
+                        0,
+
+                    "successes":
+                        0,
+
+                    "failures":
+                        0
+                }
+
+            stats = item_stats[
+                item_name
+            ]
+
+            stats["attempts"] += 1
+
+            if trade["success"]:
+
+                stats[
+                    "successes"
+                ] += 1
+
+            else:
+
+                stats[
+                    "failures"
+                ] += 1
+
+        if result["status"] == "goal_reached":
+
+            goal_reached += 1
+
+    for stats in item_stats.values():
+
+        attempts = stats[
+            "attempts"
+        ]
+
+        if attempts:
+
+            stats[
+                "success_rate_percent"
+            ] = round(
+
+                stats[
+                    "successes"
+                ]
+                / attempts
+                * 100,
+
+                2
+            )
+
+        else:
+
+            stats[
+                "success_rate_percent"
+            ] = 0
+
+    return jsonify({
+
+        "version":
+            "1.0",
+
+        "policy_version":
+            POLICY_VERSION,
+
+        "strategy":
+            strategy,
+
+        "simulations":
+            simulations,
+
+        "goal_reached":
+            goal_reached,
+
+        "goal_rate_percent":
+            round(
+
+                goal_reached
+                / simulations
+                * 100,
+
+                2
+            ),
+
+        "item_stats":
+            item_stats
+    })
+
+
+# ============================================================
+# /campaign/simulate
+# ============================================================
+
+@app.route("/campaign/simulate")
+def campaign_simulate():
+
+    strategy = get_strategy()
+
+    campaigns = get_bounded_int(
+        "campaigns",
+        1_000,
+        1,
+        10_000
+    )
+
+    max_cycles = get_bounded_int(
+        "max_cycles",
+        MAX_CAMPAIGN_CYCLES,
+        1,
+        100
+    )
+
+    if strategy is None:
+
+        return jsonify({
+            "error":
+                "strategy が不正です。"
+        }), 400
+
+    if (
+        campaigns is None
+        or max_cycles is None
+    ):
+
+        return jsonify({
+            "error":
+                "campaigns は1〜10000、"
+                "max_cycles は1〜100で指定してください。"
+        }), 400
+
+    summary = summarize_campaigns(
+        strategy,
+        campaigns,
+        max_cycles
+    )
+
+    return jsonify({
+
+        "version":
+            "1.0",
+
+        "policy_version":
+            POLICY_VERSION,
+
+        "start_capital":
+            START_CAPITAL,
+
+        "target":
+            TARGET,
+
+        **summary
+    })
+
+
+# ============================================================
 # /strategy/recommendation
 # ============================================================
 
@@ -340,11 +593,9 @@ def strategy_recommendation():
     ):
 
         return jsonify({
-
             "error":
                 "campaigns は100〜10000、"
                 "max_cycles は1〜100で指定してください。"
-
         }), 400
 
     strategy_results, _, recommendation = (
@@ -356,7 +607,8 @@ def strategy_recommendation():
 
     return jsonify({
 
-        "version": "1.0",
+        "version":
+            "1.0",
 
         "policy_version":
             POLICY_VERSION,
@@ -419,7 +671,6 @@ def strategy_report():
 
     return render_template_string(
         """
-
         <!doctype html>
 
         <html lang="ja">
@@ -428,8 +679,10 @@ def strategy_report():
 
             <meta charset="utf-8">
 
-            <meta name="viewport"
-                  content="width=device-width, initial-scale=1">
+            <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1"
+            >
 
             <title>
                 Warashibe AI 戦略レポート
@@ -454,12 +707,14 @@ def strategy_report():
 
                 .recommendation {
                     background: #e8f5e9;
-                    border-left: 6px solid #2e7d32;
+                    border-left:
+                        6px solid #2e7d32;
                 }
 
                 .risk {
                     background: #fff3e0;
-                    border-left: 6px solid #ef6c00;
+                    border-left:
+                        6px solid #ef6c00;
                 }
 
                 table {
@@ -470,7 +725,8 @@ def strategy_report():
                 th,
                 td {
                     padding: 10px;
-                    border-bottom: 1px solid #ddd;
+                    border-bottom:
+                        1px solid #ddd;
                     text-align: left;
                 }
 
@@ -485,9 +741,11 @@ def strategy_report():
             </h1>
 
             <p>
+
                 仮想市場で
                 {{ campaigns }}
                 回のキャンペーンを比較しました。
+
             </p>
 
             <div class="card recommendation">
@@ -499,9 +757,11 @@ def strategy_report():
                 <p>
 
                     <strong>
+
                         {{
                         recommendation.recommended_strategy_label
                         }}戦略
+
                     </strong>
 
                     を提案します。
@@ -535,10 +795,12 @@ def strategy_report():
                 <table>
 
                     <tr>
+
                         <th>順位</th>
                         <th>戦略</th>
                         <th>100万円到達率</th>
                         <th>平均再挑戦</th>
+
                     </tr>
 
                     {% for result in ranked_results %}
@@ -550,23 +812,29 @@ def strategy_report():
                         </td>
 
                         <td>
+
                             {{
                             strategy_labels[
                                 result.strategy
                             ]
                             }}
+
                         </td>
 
                         <td>
+
                             {{
                             result.campaign_goal_rate_percent
                             }}%
+
                         </td>
 
                         <td>
+
                             {{
                             result.average_restarts
                             }}回
+
                         </td>
 
                     </tr>
@@ -588,9 +856,11 @@ def strategy_report():
                     リスク評価：
 
                     <strong>
+
                         {{
                         recommendation.risk_level
                         }}
+
                     </strong>
 
                 </p>
@@ -620,6 +890,7 @@ def strategy_report():
 
 # ============================================================
 # /candidates/test
+# 固定テスト4商品
 # ============================================================
 
 @app.route("/candidates/test")
@@ -694,7 +965,8 @@ def candidates_test():
 
     return jsonify({
 
-        "version": "1.0",
+        "version":
+            "1.0",
 
         "total_candidates":
             len(candidates),
@@ -715,11 +987,15 @@ def candidates_test():
 
 # ============================================================
 # /candidate-form
+# ブラウザから候補商品を評価
 # ============================================================
 
 @app.route(
     "/candidate-form",
-    methods=["GET", "POST"]
+    methods=[
+        "GET",
+        "POST"
+    ]
 )
 def candidate_form():
 
@@ -735,6 +1011,7 @@ def candidate_form():
             ).strip()
 
             purchase_price = float(
+
                 request.form.get(
                     "purchase_price",
                     0
@@ -742,6 +1019,7 @@ def candidate_form():
             )
 
             expected_sale_price = float(
+
                 request.form.get(
                     "expected_sale_price",
                     0
@@ -749,6 +1027,7 @@ def candidate_form():
             )
 
             confidence = float(
+
                 request.form.get(
                     "confidence",
                     0
@@ -849,7 +1128,6 @@ def candidate_form():
 
     return render_template_string(
         """
-
         <!doctype html>
 
         <html lang="ja">
@@ -858,8 +1136,10 @@ def candidate_form():
 
             <meta charset="utf-8">
 
-            <meta name="viewport"
-                  content="width=device-width, initial-scale=1">
+            <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1"
+            >
 
             <title>
                 Warashibe AI 候補商品評価
@@ -909,17 +1189,20 @@ def candidate_form():
 
                 .allowed {
                     background: #e8f5e9;
-                    border-left: 6px solid #2e7d32;
+                    border-left:
+                        6px solid #2e7d32;
                 }
 
                 .blocked {
                     background: #ffebee;
-                    border-left: 6px solid #c62828;
+                    border-left:
+                        6px solid #c62828;
                 }
 
                 .error {
                     background: #fff3e0;
-                    border-left: 6px solid #ef6c00;
+                    border-left:
+                        6px solid #ef6c00;
                 }
 
                 pre {
@@ -937,14 +1220,20 @@ def candidate_form():
         <body>
 
             <h1>
+
                 Warashibe AI
+
                 <br>
+
                 候補商品評価
+
             </h1>
 
             <p>
+
                 商品情報を入力すると、
                 AI地雷フィルターで評価します。
+
             </p>
 
             <form method="POST">
@@ -1059,11 +1348,15 @@ def candidate_form():
                         </h2>
 
                         <p>
+
                             この候補商品は
                             地雷フィルターを通過しました。
+
                         </p>
 
-                        <pre>{{ result | tojson(indent=2) }}</pre>
+                        <pre>
+{{ result | tojson(indent=2) }}
+                        </pre>
 
                     </div>
 
@@ -1076,9 +1369,11 @@ def candidate_form():
                         </h2>
 
                         <p>
+
                             この商品は
                             地雷フィルターによって
                             除外されました。
+
                         </p>
 
                         <h3>
@@ -1097,7 +1392,9 @@ def candidate_form():
 
                         </ul>
 
-                        <pre>{{ result | tojson(indent=2) }}</pre>
+                        <pre>
+{{ result | tojson(indent=2) }}
+                        </pre>
 
                     </div>
 
@@ -1130,6 +1427,7 @@ def candidate_form():
 
 # ============================================================
 # POST /candidates/evaluate
+# 外部JSONから候補商品を1件評価
 # ============================================================
 
 @app.route(
@@ -1145,10 +1443,8 @@ def candidates_evaluate():
     if not data:
 
         return jsonify({
-
             "error":
                 "JSONデータを送信してください。"
-
         }), 400
 
     try:
@@ -1196,10 +1492,8 @@ def candidates_evaluate():
     ) as e:
 
         return jsonify({
-
             "error":
                 f"候補商品のデータが不正です: {e}"
-
         }), 400
 
     allowed, blocked = filter_candidates(
@@ -1210,7 +1504,8 @@ def candidates_evaluate():
 
         return jsonify({
 
-            "version": "1.0",
+            "version":
+                "1.0",
 
             "status":
                 "allowed",
@@ -1221,7 +1516,8 @@ def candidates_evaluate():
 
     return jsonify({
 
-        "version": "1.0",
+        "version":
+            "1.0",
 
         "status":
             "blocked",
@@ -1241,7 +1537,10 @@ def candidates_evaluate():
 if __name__ == "__main__":
 
     app.run(
+
         host="0.0.0.0",
+
         port=10000,
+
         debug=True
     )
