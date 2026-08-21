@@ -5,27 +5,50 @@ from flask import (
     render_template_string
 )
 
-from candidate_engine import create_candidate
-from danger_filter import filter_candidates
+from routes.simulation_routes import simulation_bp
 
-from strategy_api import strategy_bp
+from policy_engine import (
+    POLICY_VERSION,
+    START_CAPITAL
+)
+
+from simulation_engine import (
+    summarize_campaigns
+)
+
+from strategy_engine import (
+    STRATEGY_LABELS,
+    create_recommendation
+)
+
+from candidate_engine import (
+    create_candidate
+)
+
+from danger_filter import (
+    filter_candidates
+)
 
 
 # ============================================================
-# Warashibe AI v1.1
-# Flask本体 + 候補商品評価
-#
-# 戦略・シミュレーションAPIは strategy_api.py に分離
+# Warashibe AI v1.0
+# AI戦略本部 + 仮想市場 + 候補商品地雷フィルター
 # ============================================================
 
 app = Flask(__name__)
 
 
 # ============================================================
-# Blueprint登録
+# Blueprint 登録
 # ============================================================
 
-app.register_blueprint(strategy_bp)
+app.register_blueprint(
+    simulation_bp
+)
+
+
+TARGET = 1_000_000
+MAX_CAMPAIGN_CYCLES = 10
 
 
 # ============================================================
@@ -34,7 +57,8 @@ app.register_blueprint(strategy_bp)
 
 @app.route("/")
 def home():
-    return "Warashibe AI v1.1"
+
+    return "Warashibe AI v1.0"
 
 
 # ============================================================
@@ -43,17 +67,22 @@ def home():
 
 @app.route("/docs")
 def docs():
+
     return """
     <!doctype html>
+
     <html lang="ja">
 
     <head>
+
         <meta charset="utf-8">
 
         <meta name="viewport"
               content="width=device-width, initial-scale=1">
 
-        <title>Warashibe AI v1.1 API</title>
+        <title>
+            Warashibe AI v1.0 API
+        </title>
 
         <style>
 
@@ -90,11 +119,14 @@ def docs():
             }
 
         </style>
+
     </head>
 
     <body>
 
-        <h1>Warashibe AI v1.1 API</h1>
+        <h1>
+            Warashibe AI v1.0 API
+        </h1>
 
         <ul>
 
@@ -148,24 +180,28 @@ def docs():
             </li>
 
             <li>
+
                 <strong class="post">
                     POST /candidates/evaluate
                 </strong>
+
                 ：候補商品を1件評価
+
             </li>
 
         </ul>
 
         <div class="section">
 
-            <h2>v1.1 の構成</h2>
+            <h2>
+                v1.0 の流れ
+            </h2>
 
             <p>
+
                 仮想市場
                 ↓
-                simulation_engine.py
-                ↓
-                strategy_api.py
+                戦略シミュレーション
                 ↓
                 AI戦略本部
                 ↓
@@ -174,18 +210,416 @@ def docs():
                 地雷フィルター
                 ↓
                 採用候補 / 除外
+
             </p>
 
         </div>
 
     </body>
+
     </html>
     """
 
 
 # ============================================================
+# 共通関数
+# ============================================================
+
+def get_bounded_int(
+    name,
+    default,
+    minimum,
+    maximum
+):
+
+    value = request.args.get(name)
+
+    if value is None:
+
+        return default
+
+    try:
+
+        value = int(value)
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        return None
+
+    if minimum <= value <= maximum:
+
+        return value
+
+    return None
+
+
+# ============================================================
+# AI戦略比較
+# ============================================================
+
+def evaluate_strategies(
+    campaigns,
+    max_cycles
+):
+
+    strategy_results = [
+
+        summarize_campaigns(
+            strategy,
+            campaigns,
+            max_cycles
+        )
+
+        for strategy in (
+            "random",
+            "safe",
+            "aggressive"
+        )
+    ]
+
+    recommendation = (
+        create_recommendation(
+            strategy_results
+        )
+    )
+
+    ranked_results = sorted(
+
+        strategy_results,
+
+        key=lambda result: (
+
+            -result[
+                "campaign_goal_rate_percent"
+            ],
+
+            result[
+                "average_cycles_used"
+            ],
+
+            result[
+                "total_restarts"
+            ]
+        )
+    )
+
+    return (
+        strategy_results,
+        ranked_results,
+        recommendation
+    )
+
+
+# ============================================================
+# /strategy/recommendation
+# ============================================================
+
+@app.route("/strategy/recommendation")
+def strategy_recommendation():
+
+    campaigns = get_bounded_int(
+        "campaigns",
+        1_000,
+        100,
+        10_000
+    )
+
+    max_cycles = get_bounded_int(
+        "max_cycles",
+        MAX_CAMPAIGN_CYCLES,
+        1,
+        100
+    )
+
+    if (
+        campaigns is None
+        or max_cycles is None
+    ):
+
+        return jsonify({
+
+            "error":
+                "campaigns は100〜10000、"
+                "max_cycles は1〜100で指定してください。"
+
+        }), 400
+
+    strategy_results, _, recommendation = (
+        evaluate_strategies(
+            campaigns,
+            max_cycles
+        )
+    )
+
+    return jsonify({
+
+        "version": "1.0",
+
+        "policy_version":
+            POLICY_VERSION,
+
+        "mode":
+            "virtual_market_only",
+
+        "current_capital":
+            START_CAPITAL,
+
+        "target":
+            TARGET,
+
+        "strategies":
+            strategy_results,
+
+        "recommendation":
+            recommendation
+    })
+
+
+# ============================================================
+# /strategy/report
+# ============================================================
+
+@app.route("/strategy/report")
+def strategy_report():
+
+    campaigns = get_bounded_int(
+        "campaigns",
+        1_000,
+        100,
+        10_000
+    )
+
+    max_cycles = get_bounded_int(
+        "max_cycles",
+        MAX_CAMPAIGN_CYCLES,
+        1,
+        100
+    )
+
+    if (
+        campaigns is None
+        or max_cycles is None
+    ):
+
+        return (
+            "campaigns または "
+            "max_cycles の指定が不正です。",
+            400
+        )
+
+    _, ranked_results, recommendation = (
+        evaluate_strategies(
+            campaigns,
+            max_cycles
+        )
+    )
+
+    return render_template_string(
+        """
+
+        <!doctype html>
+
+        <html lang="ja">
+
+        <head>
+
+            <meta charset="utf-8">
+
+            <meta name="viewport"
+                  content="width=device-width, initial-scale=1">
+
+            <title>
+                Warashibe AI 戦略レポート
+            </title>
+
+            <style>
+
+                body {
+                    max-width: 800px;
+                    margin: 40px auto;
+                    padding: 20px;
+                    font-family: sans-serif;
+                    line-height: 1.7;
+                }
+
+                .card {
+                    margin: 20px 0;
+                    padding: 20px;
+                    border-radius: 12px;
+                    background: #f5f7fb;
+                }
+
+                .recommendation {
+                    background: #e8f5e9;
+                    border-left: 6px solid #2e7d32;
+                }
+
+                .risk {
+                    background: #fff3e0;
+                    border-left: 6px solid #ef6c00;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+
+                th,
+                td {
+                    padding: 10px;
+                    border-bottom: 1px solid #ddd;
+                    text-align: left;
+                }
+
+            </style>
+
+        </head>
+
+        <body>
+
+            <h1>
+                Warashibe AI 戦略レポート
+            </h1>
+
+            <p>
+                仮想市場で
+                {{ campaigns }}
+                回のキャンペーンを比較しました。
+            </p>
+
+            <div class="card recommendation">
+
+                <h2>
+                    今日の結論
+                </h2>
+
+                <p>
+
+                    <strong>
+                        {{
+                        recommendation.recommended_strategy_label
+                        }}戦略
+                    </strong>
+
+                    を提案します。
+
+                </p>
+
+                <p>
+                    {{ recommendation.reason }}
+                </p>
+
+                <p>
+
+                    代表的な成功ルート：
+
+                    <br>
+
+                    {{
+                    recommendation.dominant_successful_route
+                    }}
+
+                </p>
+
+            </div>
+
+            <div class="card">
+
+                <h2>
+                    戦略比較
+                </h2>
+
+                <table>
+
+                    <tr>
+                        <th>順位</th>
+                        <th>戦略</th>
+                        <th>100万円到達率</th>
+                        <th>平均再挑戦</th>
+                    </tr>
+
+                    {% for result in ranked_results %}
+
+                    <tr>
+
+                        <td>
+                            {{ loop.index }}
+                        </td>
+
+                        <td>
+                            {{
+                            strategy_labels[
+                                result.strategy
+                            ]
+                            }}
+                        </td>
+
+                        <td>
+                            {{
+                            result.campaign_goal_rate_percent
+                            }}%
+                        </td>
+
+                        <td>
+                            {{
+                            result.average_restarts
+                            }}回
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </table>
+
+            </div>
+
+            <div class="card risk">
+
+                <h2>
+                    注意点
+                </h2>
+
+                <p>
+
+                    リスク評価：
+
+                    <strong>
+                        {{
+                        recommendation.risk_level
+                        }}
+                    </strong>
+
+                </p>
+
+                <p>
+
+                    これは仮想市場での研究結果です。
+                    実際の仕入れ・注文は、
+                    必ず人間が確認してから
+                    行ってください。
+
+                </p>
+
+            </div>
+
+        </body>
+
+        </html>
+        """,
+
+        campaigns=campaigns,
+        ranked_results=ranked_results,
+        recommendation=recommendation,
+        strategy_labels=STRATEGY_LABELS
+    )
+
+
+# ============================================================
 # /candidates/test
-# 固定テスト4商品
 # ============================================================
 
 @app.route("/candidates/test")
@@ -194,38 +628,62 @@ def candidates_test():
     candidates = [
 
         create_candidate(
+
             name="安全な中古カメラ",
+
             purchase_price=10000,
+
             expected_sale_price=15000,
+
             source="test",
+
             category="camera",
+
             confidence=0.90
         ),
 
         create_candidate(
+
             name="利益が低すぎる商品",
+
             purchase_price=10000,
+
             expected_sale_price=10200,
+
             source="test",
+
             category="misc",
+
             confidence=0.90
         ),
 
         create_candidate(
+
             name="情報不足の商品",
+
             purchase_price=10000,
+
             expected_sale_price=20000,
+
             source="test",
+
             category="misc",
+
             confidence=0.30
         ),
 
         create_candidate(
+
             name="赤字商品",
+
             purchase_price=10000,
+
             expected_sale_price=8000,
+
             source="test",
+
             category="misc",
+
             confidence=0.90
         )
     ]
@@ -236,7 +694,7 @@ def candidates_test():
 
     return jsonify({
 
-        "version": "1.1",
+        "version": "1.0",
 
         "total_candidates":
             len(candidates),
@@ -257,7 +715,6 @@ def candidates_test():
 
 # ============================================================
 # /candidate-form
-# ブラウザから候補商品を評価
 # ============================================================
 
 @app.route(
@@ -336,11 +793,9 @@ def candidate_form():
 
                 name=name,
 
-                purchase_price=
-                    purchase_price,
+                purchase_price=purchase_price,
 
-                expected_sale_price=
-                    expected_sale_price,
+                expected_sale_price=expected_sale_price,
 
                 source=source,
 
@@ -356,29 +811,45 @@ def candidate_form():
             if allowed:
 
                 result = {
-                    "status": "allowed",
-                    "candidate": allowed[0]
+
+                    "status":
+                        "allowed",
+
+                    "candidate":
+                        allowed[0]
                 }
 
             else:
 
                 result = {
-                    "status": "blocked",
-                    "candidate": candidate,
+
+                    "status":
+                        "blocked",
+
+                    "candidate":
+                        candidate,
+
                     "reasons":
                         blocked[0]["reasons"]
                 }
 
-        except (ValueError, TypeError) as e:
+        except (
+            ValueError,
+            TypeError
+        ) as e:
 
             result = {
-                "status": "error",
+
+                "status":
+                    "error",
+
                 "message":
                     f"入力値が不正です: {e}"
             }
 
     return render_template_string(
         """
+
         <!doctype html>
 
         <html lang="ja">
@@ -659,7 +1130,6 @@ def candidate_form():
 
 # ============================================================
 # POST /candidates/evaluate
-# 外部JSONから候補商品を1件評価
 # ============================================================
 
 @app.route(
@@ -675,8 +1145,10 @@ def candidates_evaluate():
     if not data:
 
         return jsonify({
+
             "error":
-            "JSONデータを送信してください。"
+                "JSONデータを送信してください。"
+
         }), 400
 
     try:
@@ -718,11 +1190,16 @@ def candidates_evaluate():
             )
         )
 
-    except (ValueError, TypeError) as e:
+    except (
+        ValueError,
+        TypeError
+    ) as e:
 
         return jsonify({
+
             "error":
                 f"候補商品のデータが不正です: {e}"
+
         }), 400
 
     allowed, blocked = filter_candidates(
@@ -733,7 +1210,7 @@ def candidates_evaluate():
 
         return jsonify({
 
-            "version": "1.1",
+            "version": "1.0",
 
             "status":
                 "allowed",
@@ -744,7 +1221,7 @@ def candidates_evaluate():
 
     return jsonify({
 
-        "version": "1.1",
+        "version": "1.0",
 
         "status":
             "blocked",
