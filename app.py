@@ -174,6 +174,13 @@ def docs():
 
             </li>
 
+<li>
+    <a href="/capital-filter/test">
+        /capital-filter/test
+    </a>
+    ：現在資本に適合する候補商品を確認
+</li>
+
             <li>
 
                 <a href="/candidate-form">
