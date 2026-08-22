@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request, render_template_string
 
+from market_engine import MARKET
 from policy_engine import POLICY_VERSION, START_CAPITAL
 from strategy_engine import STRATEGY_LABELS, create_recommendation
 
@@ -12,14 +13,19 @@ from simulation_engine import (
 
 from candidate_engine import create_candidate
 from danger_filter import filter_candidates
+from candidate_ranker import (
+    rank_candidates,
+    get_best_candidate
+)
 
 
 # ============================================================
-# Warashibe AI v1.0
-# AI戦略本部 + 仮想市場 + 候補商品地雷フィルター
+# Warashibe AI v1.1
 #
-# app.py
-# Flask / API / 画面表示専用
+# AI戦略本部
+# 仮想市場
+# 候補商品地雷フィルター
+# 候補商品ランキング
 # ============================================================
 
 app = Flask(__name__)
@@ -31,7 +37,8 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Warashibe AI v1.0"
+
+    return "Warashibe AI v1.1"
 
 
 # ============================================================
@@ -55,7 +62,9 @@ def docs():
             content="width=device-width, initial-scale=1"
         >
 
-        <title>Warashibe AI v1.0 API</title>
+        <title>
+            Warashibe AI v1.1 API
+        </title>
 
         <style>
 
@@ -97,7 +106,9 @@ def docs():
 
     <body>
 
-        <h1>Warashibe AI v1.0 API</h1>
+        <h1>
+            Warashibe AI v1.1 API
+        </h1>
 
         <ul>
 
@@ -157,7 +168,7 @@ def docs():
                     /candidates/test
                 </a>
 
-                ：候補商品フィルターのテスト
+                ：候補商品フィルター＋ランキングテスト
 
             </li>
 
@@ -174,7 +185,9 @@ def docs():
             <li>
 
                 <strong class="post">
+
                     POST /candidates/evaluate
+
                 </strong>
 
                 ：候補商品を1件評価
@@ -183,23 +196,44 @@ def docs():
 
         </ul>
 
+
         <div class="section">
 
-            <h2>v1.0 の流れ</h2>
+            <h2>
+                v1.1 の流れ
+            </h2>
 
             <p>
 
                 仮想市場
+
                 ↓
-                シミュレーションエンジン
+
+                戦略シミュレーション
+
                 ↓
+
                 AI戦略本部
+
                 ↓
+
                 候補商品
+
                 ↓
+
                 地雷フィルター
+
                 ↓
-                採用候補 / 除外
+
+                採用候補
+
+                ↓
+
+                候補商品ランキング
+
+                ↓
+
+                最有力候補
 
             </p>
 
@@ -227,6 +261,7 @@ def get_strategy():
         "safe",
         "aggressive"
     }:
+
         return None
 
     return strategy
@@ -242,16 +277,14 @@ def get_bounded_int(
     value = request.args.get(name)
 
     if value is None:
+
         return default
 
     try:
 
         value = int(value)
 
-    except (
-        ValueError,
-        TypeError
-    ):
+    except (ValueError, TypeError):
 
         return None
 
@@ -286,10 +319,8 @@ def evaluate_strategies(
         )
     ]
 
-    recommendation = (
-        create_recommendation(
-            strategy_results
-        )
+    recommendation = create_recommendation(
+        strategy_results
     )
 
     ranked_results = sorted(
@@ -331,8 +362,10 @@ def journey():
     if strategy is None:
 
         return jsonify({
+
             "error":
                 "strategy が不正です。"
+
         }), 400
 
     result = run_cycle(
@@ -342,7 +375,7 @@ def journey():
     return jsonify({
 
         "version":
-            "1.0",
+            "1.1",
 
         "policy_version":
             POLICY_VERSION,
@@ -370,6 +403,7 @@ def simulate():
     strategy = get_strategy()
 
     simulations = get_bounded_int(
+
         "simulations",
         10_000,
         1,
@@ -379,20 +413,36 @@ def simulate():
     if strategy is None:
 
         return jsonify({
+
             "error":
                 "strategy が不正です。"
+
         }), 400
 
     if simulations is None:
 
         return jsonify({
+
             "error":
                 "simulations は1〜100000の整数です。"
+
         }), 400
 
     goal_reached = 0
 
-    item_stats = {}
+    item_stats = {
+
+        item["name"]: {
+
+            "attempts": 0,
+            "successes": 0,
+            "failures": 0
+
+        }
+
+        for item in MARKET
+    }
+
 
     for _ in range(simulations):
 
@@ -402,51 +452,29 @@ def simulate():
 
         for trade in result["history"]:
 
-            item_name = trade[
-                "selected_item"
-            ]
-
-            if item_name not in item_stats:
-
-                item_stats[item_name] = {
-
-                    "attempts":
-                        0,
-
-                    "successes":
-                        0,
-
-                    "failures":
-                        0
-                }
-
             stats = item_stats[
-                item_name
+                trade["selected_item"]
             ]
 
             stats["attempts"] += 1
 
             if trade["success"]:
 
-                stats[
-                    "successes"
-                ] += 1
+                stats["successes"] += 1
 
             else:
 
-                stats[
-                    "failures"
-                ] += 1
+                stats["failures"] += 1
+
 
         if result["status"] == "goal_reached":
 
             goal_reached += 1
 
+
     for stats in item_stats.values():
 
-        attempts = stats[
-            "attempts"
-        ]
+        attempts = stats["attempts"]
 
         if attempts:
 
@@ -454,9 +482,7 @@ def simulate():
                 "success_rate_percent"
             ] = round(
 
-                stats[
-                    "successes"
-                ]
+                stats["successes"]
                 / attempts
                 * 100,
 
@@ -469,10 +495,11 @@ def simulate():
                 "success_rate_percent"
             ] = 0
 
+
     return jsonify({
 
         "version":
-            "1.0",
+            "1.1",
 
         "policy_version":
             POLICY_VERSION,
@@ -487,6 +514,7 @@ def simulate():
             goal_reached,
 
         "goal_rate_percent":
+
             round(
 
                 goal_reached
@@ -511,6 +539,7 @@ def campaign_simulate():
     strategy = get_strategy()
 
     campaigns = get_bounded_int(
+
         "campaigns",
         1_000,
         1,
@@ -518,6 +547,7 @@ def campaign_simulate():
     )
 
     max_cycles = get_bounded_int(
+
         "max_cycles",
         MAX_CAMPAIGN_CYCLES,
         1,
@@ -527,31 +557,42 @@ def campaign_simulate():
     if strategy is None:
 
         return jsonify({
+
             "error":
                 "strategy が不正です。"
+
         }), 400
 
+
     if (
+
         campaigns is None
         or max_cycles is None
+
     ):
 
         return jsonify({
+
             "error":
+
                 "campaigns は1〜10000、"
                 "max_cycles は1〜100で指定してください。"
+
         }), 400
 
+
     summary = summarize_campaigns(
+
         strategy,
         campaigns,
         max_cycles
     )
 
+
     return jsonify({
 
         "version":
-            "1.0",
+            "1.1",
 
         "policy_version":
             POLICY_VERSION,
@@ -574,6 +615,7 @@ def campaign_simulate():
 def strategy_recommendation():
 
     campaigns = get_bounded_int(
+
         "campaigns",
         1_000,
         100,
@@ -581,34 +623,45 @@ def strategy_recommendation():
     )
 
     max_cycles = get_bounded_int(
+
         "max_cycles",
         MAX_CAMPAIGN_CYCLES,
         1,
         100
     )
 
+
     if (
+
         campaigns is None
         or max_cycles is None
+
     ):
 
         return jsonify({
+
             "error":
+
                 "campaigns は100〜10000、"
                 "max_cycles は1〜100で指定してください。"
+
         }), 400
 
+
     strategy_results, _, recommendation = (
+
         evaluate_strategies(
+
             campaigns,
             max_cycles
         )
     )
 
+
     return jsonify({
 
         "version":
-            "1.0",
+            "1.1",
 
         "policy_version":
             POLICY_VERSION,
@@ -638,6 +691,7 @@ def strategy_recommendation():
 def strategy_report():
 
     campaigns = get_bounded_int(
+
         "campaigns",
         1_000,
         100,
@@ -645,32 +699,44 @@ def strategy_report():
     )
 
     max_cycles = get_bounded_int(
+
         "max_cycles",
         MAX_CAMPAIGN_CYCLES,
         1,
         100
     )
 
+
     if (
+
         campaigns is None
         or max_cycles is None
+
     ):
 
         return (
+
             "campaigns または "
             "max_cycles の指定が不正です。",
+
             400
         )
 
+
     _, ranked_results, recommendation = (
+
         evaluate_strategies(
+
             campaigns,
             max_cycles
         )
     )
 
+
     return render_template_string(
+
         """
+
         <!doctype html>
 
         <html lang="ja">
@@ -737,22 +803,28 @@ def strategy_report():
         <body>
 
             <h1>
-                Warashibe AI 戦略レポート
+                Warashibe AI
+                戦略レポート
             </h1>
+
 
             <p>
 
                 仮想市場で
+
                 {{ campaigns }}
+
                 回のキャンペーンを比較しました。
 
             </p>
+
 
             <div class="card recommendation">
 
                 <h2>
                     今日の結論
                 </h2>
+
 
                 <p>
 
@@ -768,9 +840,15 @@ def strategy_report():
 
                 </p>
 
+
                 <p>
-                    {{ recommendation.reason }}
+
+                    {{
+                    recommendation.reason
+                    }}
+
                 </p>
+
 
                 <p>
 
@@ -786,22 +864,36 @@ def strategy_report():
 
             </div>
 
+
             <div class="card">
 
                 <h2>
                     戦略比較
                 </h2>
 
+
                 <table>
 
                     <tr>
 
-                        <th>順位</th>
-                        <th>戦略</th>
-                        <th>100万円到達率</th>
-                        <th>平均再挑戦</th>
+                        <th>
+                            順位
+                        </th>
+
+                        <th>
+                            戦略
+                        </th>
+
+                        <th>
+                            100万円到達率
+                        </th>
+
+                        <th>
+                            平均再挑戦
+                        </th>
 
                     </tr>
+
 
                     {% for result in ranked_results %}
 
@@ -845,11 +937,13 @@ def strategy_report():
 
             </div>
 
+
             <div class="card risk">
 
                 <h2>
                     注意点
                 </h2>
+
 
                 <p>
 
@@ -865,11 +959,15 @@ def strategy_report():
 
                 </p>
 
+
                 <p>
 
                     これは仮想市場での研究結果です。
+
                     実際の仕入れ・注文は、
+
                     必ず人間が確認してから
+
                     行ってください。
 
                 </p>
@@ -879,18 +977,25 @@ def strategy_report():
         </body>
 
         </html>
+
         """,
 
         campaigns=campaigns,
+
         ranked_results=ranked_results,
+
         recommendation=recommendation,
+
         strategy_labels=STRATEGY_LABELS
     )
 
 
 # ============================================================
 # /candidates/test
-# 固定テスト4商品
+#
+# 固定テスト商品
+# 地雷フィルター
+# 候補ランキング
 # ============================================================
 
 @app.route("/candidates/test")
@@ -913,6 +1018,7 @@ def candidates_test():
             confidence=0.90
         ),
 
+
         create_candidate(
 
             name="利益が低すぎる商品",
@@ -928,6 +1034,7 @@ def candidates_test():
             confidence=0.90
         ),
 
+
         create_candidate(
 
             name="情報不足の商品",
@@ -942,6 +1049,7 @@ def candidates_test():
 
             confidence=0.30
         ),
+
 
         create_candidate(
 
@@ -959,14 +1067,34 @@ def candidates_test():
         )
     ]
 
+
+    # --------------------------------------------------------
+    # 地雷フィルター
+    # --------------------------------------------------------
+
     allowed, blocked = filter_candidates(
         candidates
     )
 
+
+    # --------------------------------------------------------
+    # 候補商品ランキング
+    # --------------------------------------------------------
+
+    ranked_candidates = rank_candidates(
+        allowed
+    )
+
+
+    best_candidate = get_best_candidate(
+        allowed
+    )
+
+
     return jsonify({
 
         "version":
-            "1.0",
+            "1.1",
 
         "total_candidates":
             len(candidates),
@@ -981,25 +1109,30 @@ def candidates_test():
             allowed,
 
         "blocked":
-            blocked
+            blocked,
+
+        "ranked_candidates":
+            ranked_candidates,
+
+        "best_candidate":
+            best_candidate
     })
 
 
 # ============================================================
 # /candidate-form
+#
 # ブラウザから候補商品を評価
 # ============================================================
 
 @app.route(
     "/candidate-form",
-    methods=[
-        "GET",
-        "POST"
-    ]
+    methods=["GET", "POST"]
 )
 def candidate_form():
 
     result = None
+
 
     if request.method == "POST":
 
@@ -1010,6 +1143,7 @@ def candidate_form():
                 ""
             ).strip()
 
+
             purchase_price = float(
 
                 request.form.get(
@@ -1017,6 +1151,7 @@ def candidate_form():
                     0
                 )
             )
+
 
             expected_sale_price = float(
 
@@ -1026,6 +1161,7 @@ def candidate_form():
                 )
             )
 
+
             confidence = float(
 
                 request.form.get(
@@ -1034,15 +1170,18 @@ def candidate_form():
                 )
             )
 
+
             source = request.form.get(
                 "source",
                 "manual"
             )
 
+
             category = request.form.get(
                 "category",
                 "misc"
             )
+
 
             if not name:
 
@@ -1050,11 +1189,13 @@ def candidate_form():
                     "商品名を入力してください。"
                 )
 
+
             if purchase_price < 0:
 
                 raise ValueError(
                     "仕入れ価格は0以上で入力してください。"
                 )
+
 
             if expected_sale_price < 0:
 
@@ -1062,11 +1203,13 @@ def candidate_form():
                     "想定売却価格は0以上で入力してください。"
                 )
 
+
             if not 0 <= confidence <= 1:
 
                 raise ValueError(
                     "情報信頼度は0.0〜1.0で入力してください。"
                 )
+
 
             candidate = create_candidate(
 
@@ -1074,7 +1217,8 @@ def candidate_form():
 
                 purchase_price=purchase_price,
 
-                expected_sale_price=expected_sale_price,
+                expected_sale_price=
+                    expected_sale_price,
 
                 source=source,
 
@@ -1083,11 +1227,21 @@ def candidate_form():
                 confidence=confidence
             )
 
+
             allowed, blocked = filter_candidates(
                 [candidate]
             )
 
+
             if allowed:
+
+                ranked_candidates = rank_candidates(
+                    allowed
+                )
+
+                best_candidate = get_best_candidate(
+                    allowed
+                )
 
                 result = {
 
@@ -1095,7 +1249,13 @@ def candidate_form():
                         "allowed",
 
                     "candidate":
-                        allowed[0]
+                        allowed[0],
+
+                    "ranked_candidates":
+                        ranked_candidates,
+
+                    "best_candidate":
+                        best_candidate
                 }
 
             else:
@@ -1112,10 +1272,8 @@ def candidate_form():
                         blocked[0]["reasons"]
                 }
 
-        except (
-            ValueError,
-            TypeError
-        ) as e:
+
+        except (ValueError, TypeError) as e:
 
             result = {
 
@@ -1126,8 +1284,11 @@ def candidate_form():
                     f"入力値が不正です: {e}"
             }
 
+
     return render_template_string(
+
         """
+
         <!doctype html>
 
         <html lang="ja">
@@ -1142,8 +1303,10 @@ def candidate_form():
             >
 
             <title>
-                Warashibe AI 候補商品評価
+                Warashibe AI
+                候補商品評価
             </title>
+
 
             <style>
 
@@ -1217,6 +1380,7 @@ def candidate_form():
 
         </head>
 
+
         <body>
 
             <h1>
@@ -1229,65 +1393,98 @@ def candidate_form():
 
             </h1>
 
+
             <p>
 
                 商品情報を入力すると、
-                AI地雷フィルターで評価します。
+
+                地雷フィルターと
+
+                ランキングエンジンで評価します。
 
             </p>
 
+
             <form method="POST">
+
 
                 <label>
                     商品名
                 </label>
 
                 <input
+
                     type="text"
+
                     name="name"
+
                     placeholder="例：中古カメラ"
+
                     required
                 >
+
 
                 <label>
                     仕入れ価格
                 </label>
 
                 <input
+
                     type="number"
+
                     name="purchase_price"
+
                     placeholder="10000"
+
                     min="0"
+
                     step="1"
+
                     required
                 >
+
 
                 <label>
                     想定売却価格
                 </label>
 
                 <input
+
                     type="number"
+
                     name="expected_sale_price"
+
                     placeholder="15000"
+
                     min="0"
+
                     step="1"
+
                     required
                 >
+
 
                 <label>
                     情報信頼度（0.0〜1.0）
                 </label>
 
                 <input
+
                     type="number"
+
                     name="confidence"
+
                     placeholder="0.9"
+
                     min="0"
+
                     max="1"
+
                     step="0.01"
+
                     required
                 >
+
 
                 <label>
                     カテゴリ
@@ -1321,23 +1518,32 @@ def candidate_form():
 
                 </select>
 
+
                 <label>
                     情報源
                 </label>
 
                 <input
+
                     type="text"
+
                     name="source"
+
                     value="manual"
                 >
 
+
                 <button type="submit">
+
                     商品を評価する
+
                 </button>
 
             </form>
 
+
             {% if result %}
+
 
                 {% if result.status == "allowed" %}
 
@@ -1350,15 +1556,44 @@ def candidate_form():
                         <p>
 
                             この候補商品は
+
                             地雷フィルターを通過しました。
 
                         </p>
+
+
+                        <h3>
+                            ランキング結果
+                        </h3>
+
+                        <p>
+
+                            順位：
+
+                            {{
+                            result.best_candidate.rank
+                            }}位
+
+                        </p>
+
+
+                        <p>
+
+                            総合スコア：
+
+                            {{
+                            result.best_candidate.score
+                            }}
+
+                        </p>
+
 
                         <pre>
 {{ result | tojson(indent=2) }}
                         </pre>
 
                     </div>
+
 
                 {% elif result.status == "blocked" %}
 
@@ -1371,32 +1606,40 @@ def candidate_form():
                         <p>
 
                             この商品は
+
                             地雷フィルターによって
+
                             除外されました。
 
                         </p>
 
+
                         <h3>
                             除外理由
                         </h3>
+
 
                         <ul>
 
                             {% for reason in result.reasons %}
 
                                 <li>
+
                                     {{ reason }}
+
                                 </li>
 
                             {% endfor %}
 
                         </ul>
 
+
                         <pre>
 {{ result | tojson(indent=2) }}
                         </pre>
 
                     </div>
+
 
                 {% else %}
 
@@ -1407,18 +1650,22 @@ def candidate_form():
                         </h2>
 
                         <p>
+
                             {{ result.message }}
+
                         </p>
 
                     </div>
 
                 {% endif %}
 
+
             {% endif %}
 
         </body>
 
         </html>
+
         """,
 
         result=result
@@ -1427,6 +1674,7 @@ def candidate_form():
 
 # ============================================================
 # POST /candidates/evaluate
+#
 # 外部JSONから候補商品を1件評価
 # ============================================================
 
@@ -1440,12 +1688,16 @@ def candidates_evaluate():
         silent=True
     )
 
+
     if not data:
 
         return jsonify({
+
             "error":
                 "JSONデータを送信してください。"
+
         }), 400
+
 
     try:
 
@@ -1486,38 +1738,57 @@ def candidates_evaluate():
             )
         )
 
-    except (
-        ValueError,
-        TypeError
-    ) as e:
+
+    except (ValueError, TypeError) as e:
 
         return jsonify({
+
             "error":
+
                 f"候補商品のデータが不正です: {e}"
+
         }), 400
+
 
     allowed, blocked = filter_candidates(
         [candidate]
     )
 
+
     if allowed:
+
+        ranked_candidates = rank_candidates(
+            allowed
+        )
+
+        best_candidate = get_best_candidate(
+            allowed
+        )
+
 
         return jsonify({
 
             "version":
-                "1.0",
+                "1.1",
 
             "status":
                 "allowed",
 
             "candidate":
-                allowed[0]
+                allowed[0],
+
+            "ranked_candidates":
+                ranked_candidates,
+
+            "best_candidate":
+                best_candidate
         })
+
 
     return jsonify({
 
         "version":
-            "1.0",
+            "1.1",
 
         "status":
             "blocked",
