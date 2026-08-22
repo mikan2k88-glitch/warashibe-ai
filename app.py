@@ -1120,6 +1120,83 @@ def candidates_test():
             best_candidate
     })
 
+# ============================================================
+# /capital-filter/test
+# 現在資本で購入可能な候補商品を確認
+# ============================================================
+
+@app.route("/capital-filter/test")
+def capital_filter_test():
+
+    current_capital = 10_000
+
+    candidates = [
+
+        create_candidate(
+            name="資本内の商品",
+            purchase_price=8_000,
+            expected_sale_price=12_000,
+            source="test",
+            category="camera",
+            confidence=0.90
+        ),
+
+        create_candidate(
+            name="資本ぴったりの商品",
+            purchase_price=10_000,
+            expected_sale_price=15_000,
+            source="test",
+            category="electronics",
+            confidence=0.90
+        ),
+
+        create_candidate(
+            name="資本オーバーの商品",
+            purchase_price=15_000,
+            expected_sale_price=25_000,
+            source="test",
+            category="brand",
+            confidence=0.90
+        ),
+
+        create_candidate(
+            name="高額すぎる商品",
+            purchase_price=100_000,
+            expected_sale_price=150_000,
+            source="test",
+            category="misc",
+            confidence=0.90
+        )
+    ]
+
+    allowed, blocked = filter_by_capital(
+        candidates,
+        current_capital
+    )
+
+    return jsonify({
+
+        "version": "1.1",
+
+        "current_capital":
+            current_capital,
+
+        "total_candidates":
+            len(candidates),
+
+        "allowed_count":
+            len(allowed),
+
+        "blocked_count":
+            len(blocked),
+
+        "allowed":
+            allowed,
+
+        "blocked":
+            blocked
+    })
+
 
 # ============================================================
 # /candidate-form
