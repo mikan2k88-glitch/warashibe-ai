@@ -1,0 +1,68 @@
+# ============================================================
+# /capital-filter/test
+# v1.2 資本適合フィルター テスト
+# ============================================================
+
+@app.route("/capital-filter/test")
+def capital_filter_test():
+
+    current_capital = 10000
+
+    candidates = [
+
+        create_candidate(
+            name="資本に一致する中古カメラ",
+            purchase_price=10000,
+            expected_sale_price=15000,
+            source="test",
+            category="camera",
+            confidence=0.90
+        ),
+
+        create_candidate(
+            name="安すぎる商品",
+            purchase_price=5000,
+            expected_sale_price=8000,
+            source="test",
+            category="misc",
+            confidence=0.90
+        ),
+
+        create_candidate(
+            name="高すぎる商品",
+            purchase_price=30000,
+            expected_sale_price=50000,
+            source="test",
+            category="misc",
+            confidence=0.90
+        )
+
+    ]
+
+    allowed, blocked = filter_by_capital(
+        candidates,
+        current_capital
+    )
+
+    return jsonify({
+
+        "version": "1.2",
+
+        "current_capital":
+            current_capital,
+
+        "total_candidates":
+            len(candidates),
+
+        "capital_matched_count":
+            len(allowed),
+
+        "capital_blocked_count":
+            len(blocked),
+
+        "capital_matched":
+            allowed,
+
+        "capital_blocked":
+            blocked
+    })
