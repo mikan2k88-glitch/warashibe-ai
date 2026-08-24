@@ -15,11 +15,19 @@ def evaluate_capital_fit(
     - 仕入れ価格が現在資本を超えていたら除外
     - 仕入れ価格が0以下なら除外
     - 資本の範囲内なら購入可能
+
+    データ形式：
+    - purchase_price を優先
+    - 旧market_engine形式の price にも対応
     """
+
+    # --------------------------------------------------------
+    # 仕入れ価格取得
+    # --------------------------------------------------------
 
     purchase_price = candidate.get(
         "purchase_price",
-        0
+        candidate.get("price", 0)
     )
 
     reasons = []
