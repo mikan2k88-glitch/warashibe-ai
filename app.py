@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, request, render_template_string
-import random
 
 from market_engine import MARKET
 from policy_engine import POLICY_VERSION, START_CAPITAL
@@ -38,6 +37,12 @@ from candidate_pipeline import evaluate_candidates
 #     → danger_filter.py
 #     → capital_filter.py
 #     → ranking_engine.py
+#
+# 対応戦略
+#     → random
+#     → safe
+#     → balanced
+#     → aggressive
 # ============================================================
 
 app = Flask(__name__)
@@ -50,6 +55,20 @@ app = Flask(__name__)
 TARGET = 1_000_000
 MAX_STEPS = 20
 MAX_CAMPAIGN_CYCLES = 10
+
+
+# ============================================================
+# 戦略一覧
+#
+# ここをシステム全体の基準にする
+# ============================================================
+
+VALID_STRATEGIES = {
+    "random",
+    "safe",
+    "balanced",
+    "aggressive"
+}
 
 
 # ============================================================
@@ -160,6 +179,12 @@ def docs():
             </li>
 
             <li>
+                <a href="/campaign/simulate?strategy=balanced">
+                    balanced キャンペーン
+                </a>
+            </li>
+
+            <li>
                 <a href="/strategy/recommendation">
                     /strategy/recommendation
                 </a>
@@ -248,11 +273,7 @@ def get_strategy():
         "random"
     ).lower()
 
-    if strategy not in {
-        "random",
-        "safe",
-        "aggressive"
-    }:
+    if strategy not in VALID_STRATEGIES:
 
         return None
 
@@ -302,7 +323,9 @@ def journey():
 
         return jsonify({
             "error":
-                "strategy が不正です。"
+                "strategy が不正です。",
+            "valid_strategies":
+                sorted(VALID_STRATEGIES)
         }), 400
 
     result = run_cycle(
@@ -352,7 +375,9 @@ def simulate():
 
         return jsonify({
             "error":
-                "strategy が不正です。"
+                "strategy が不正です。",
+            "valid_strategies":
+                sorted(VALID_STRATEGIES)
         }), 400
 
     if simulations is None:
@@ -496,7 +521,9 @@ def campaign_simulate():
 
         return jsonify({
             "error":
-                "strategy が不正です。"
+                "strategy が不正です。",
+            "valid_strategies":
+                sorted(VALID_STRATEGIES)
         }), 400
 
     if (
@@ -536,6 +563,8 @@ def campaign_simulate():
 
 # ============================================================
 # /strategy/recommendation
+#
+# 4戦略比較
 # ============================================================
 
 @app.route("/strategy/recommendation")
@@ -571,6 +600,7 @@ def strategy_recommendation():
     for strategy in (
         "random",
         "safe",
+        "balanced",
         "aggressive"
     ):
 
@@ -656,6 +686,7 @@ def strategy_report():
         for strategy in (
             "random",
             "safe",
+            "balanced",
             "aggressive"
         )
     ]
