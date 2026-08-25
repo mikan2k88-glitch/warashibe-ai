@@ -1,22 +1,239 @@
+# ============================================================
+# Warashibe AI v1.1
+# Simulation Engine
+#
+# 役割：
+# ・1回のわらしべ挑戦
+# ・複数回の再挑戦
+# ・複数キャンペーンの統計
+# ・戦略別の商品選択
+# ・商品別成功率の集計
+# ・成功ルートの集計
+#
+# 戦略：
+# ・random
+# ・safe
+# ・balanced
+# ・aggressive
+#
+# Web / API処理は app.py に置く
+# ============================================================
+
 import random
 
 from market_engine import find_items
 from policy_engine import START_CAPITAL, evaluate_trade
 
 
+# ============================================================
+# 基本設定
+# ============================================================
+
 TARGET = 1_000_000
+
 MAX_STEPS = 20
+
 MAX_CAMPAIGN_CYCLES = 10
 
 
-def select_item(items, strategy):
-    """戦略に応じて候補商品を1つ選ぶ"""
+# ============================================================
+# 対応戦略
+# ============================================================
+
+SUPPORTED_STRATEGIES = {
+    "random",
+    "safe",
+    "balanced",
+    "aggressive",
+}
+
+
+# ============================================================
+# 戦略名の正規化
+# ============================================================
+
+def normalize_strategy(strategy):
+    """
+    戦略名を正規化する。
+
+    例：
+        "balanced"
+        " BALANCED "
+        "Balanced"
+
+    → "balanced"
+    """
+
+    if not isinstance(strategy, str):
+
+        return None
+
+    normalized = strategy.strip().lower()
+
+    if normalized not in SUPPORTED_STRATEGIES:
+
+        return None
+
+    return normalized
+
+
+# ============================================================
+# 商品の安全な数値取得
+# ============================================================
+
+def get_success_rate(item):
+    """
+    商品の成功率を安全に取得する。
+    """
+
+    value = item.get(
+        "success_rate",
+        0
+    )
+
+    try:
+
+        return float(value)
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return 0.0
+
+
+def get_next_value(item):
+    """
+    商品の次価値を安全に取得する。
+    """
+
+    value = item.get(
+        "next_value",
+        0
+    )
+
+    try:
+
+        return float(value)
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return 0.0
+
+
+# ============================================================
+# Balanced スコア
+# ============================================================
+
+def calculate_balanced_score(item):
+    """
+    balanced戦略用スコア。
+
+    成功率と次の価値を両方評価する。
+
+    基本思想：
+
+    ・成功率が高い商品
+    ・次の価値が高い商品
+
+    の両方を評価する。
+
+    次価値は商品価格帯によって桁が大きくなるため、
+    単純加算ではなく相対的な比率を利用する。
+    """
+
+    success_rate = get_success_rate(
+        item
+    )
+
+    next_value = get_next_value(
+        item
+    )
+
+    # --------------------------------------------------------
+    # 成功率
+    # --------------------------------------------------------
+
+    success_component = (
+        success_rate * 100
+    )
+
+    # --------------------------------------------------------
+    # 次価値
+    #
+    # 大きすぎる数字の影響を抑えるため、
+    # 100円を基準に対数的に評価する。
+    # --------------------------------------------------------
+
+    if next_value > 0:
+
+        value_component = (
+            next_value ** 0.5
+        )
+
+    else:
+
+        value_component = 0
+
+    # --------------------------------------------------------
+    # バランス評価
+    #
+    # 成功率をやや重視しつつ、
+    # 次価値も評価する。
+    # --------------------------------------------------------
+
+    score = (
+        success_component * 0.6
+        + value_component * 0.4
+    )
+
+    return round(
+        score,
+        6
+    )
+
+
+# ============================================================
+# 商品選択
+# ============================================================
+
+def select_item(
+    items,
+    strategy
+):
+    """
+    戦略に応じて候補商品を1つ選ぶ。
+    """
 
     if not items:
+
+        return None
+
+    strategy = normalize_strategy(
+        strategy
+    )
+
+    if strategy is None:
+
         return None
 
     # --------------------------------------------------------
+    # random
+    # --------------------------------------------------------
+
+    if strategy == "random":
+
+        return random.choice(
+            items
+        )
+
+    # --------------------------------------------------------
     # safe
+    #
     # 成功率を最優先
     # --------------------------------------------------------
 
@@ -24,75 +241,69 @@ def select_item(items, strategy):
 
         return max(
             items,
-            key=lambda item: item["success_rate"]
+            key=lambda item: (
+                get_success_rate(item),
+                get_next_value(item)
+            )
         )
 
     # --------------------------------------------------------
     # aggressive
-    # 成功した場合の次資本を最優先
+    #
+    # 次価値を最優先
     # --------------------------------------------------------
 
     if strategy == "aggressive":
 
         return max(
             items,
-            key=lambda item: item["next_value"]
+            key=lambda item: (
+                get_next_value(item),
+                get_success_rate(item)
+            )
         )
 
     # --------------------------------------------------------
     # balanced
-    # 成功率と資本成長を50:50で評価
+    #
+    # 成功率と次価値を両方評価
     # --------------------------------------------------------
 
     if strategy == "balanced":
 
-        max_next_value = max(
-            item["next_value"]
-            for item in items
-        )
-
-        if max_next_value <= 0:
-
-            return max(
-                items,
-                key=lambda item: item["success_rate"]
-            )
-
-        def balanced_score(item):
-
-            success_score = (
-                item["success_rate"]
-            )
-
-            growth_score = (
-                item["next_value"]
-                / max_next_value
-            )
-
-            return (
-                success_score * 0.5
-                + growth_score * 0.5
-            )
-
         return max(
             items,
-            key=balanced_score
+            key=lambda item: (
+                calculate_balanced_score(item),
+                get_success_rate(item),
+                get_next_value(item)
+            )
         )
 
-    # --------------------------------------------------------
-    # random
-    # --------------------------------------------------------
-
-    return random.choice(items)
+    return None
 
 
-def get_policy_allowed_items(capital):
-    """ポリシー上、現在の資本で選択可能な商品を取得"""
+# ============================================================
+# Policyによる選択可能商品取得
+# ============================================================
+
+def get_policy_allowed_items(
+    capital
+):
+    """
+    ポリシー上、現在の資本で
+    選択可能な商品を取得する。
+    """
 
     allowed_items = []
+
     blocked_items = []
 
-    for item in find_items(capital):
+    items = find_items(
+        capital
+    )
+
+    for item in items:
 
         decision = evaluate_trade(
             capital,
@@ -101,26 +312,48 @@ def get_policy_allowed_items(capital):
 
         if decision["allowed"]:
 
-            allowed_items.append(item)
+            allowed_items.append(
+                item
+            )
 
         else:
 
             blocked_items.append({
-                "item": item["name"],
-                "reasons": decision["reasons"]
+                "item": item.get(
+                    "name",
+                    "unknown"
+                ),
+                "reasons": decision.get(
+                    "reasons",
+                    []
+                )
             })
 
-    return allowed_items, blocked_items
+    return (
+        allowed_items,
+        blocked_items
+    )
 
 
-def create_item_stats(items):
-    """商品別統計の初期値を作成"""
+# ============================================================
+# 商品統計 初期化
+# ============================================================
+
+def create_item_stats(
+    items
+):
+    """
+    商品別統計の初期値を作成する。
+    """
 
     stats = {}
 
     for item in items:
 
-        name = item["name"]
+        name = item.get(
+            "name",
+            "unknown"
+        )
 
         if name not in stats:
 
@@ -134,12 +367,18 @@ def create_item_stats(items):
     return stats
 
 
+# ============================================================
+# 商品統計 更新
+# ============================================================
+
 def update_item_stats(
     item_stats,
     item_name,
     success
 ):
-    """商品別統計を1回分更新"""
+    """
+    商品別統計を1回分更新する。
+    """
 
     if item_name not in item_stats:
 
@@ -150,7 +389,9 @@ def update_item_stats(
             "success_rate_percent": 0
         }
 
-    stats = item_stats[item_name]
+    stats = item_stats[
+        item_name
+    ]
 
     stats["attempts"] += 1
 
@@ -162,21 +403,33 @@ def update_item_stats(
 
         stats["failures"] += 1
 
-    stats["success_rate_percent"] = round(
-        stats["successes"]
-        / stats["attempts"]
-        * 100,
-        2
-    )
+    if stats["attempts"] > 0:
 
+        stats["success_rate_percent"] = round(
+            stats["successes"]
+            / stats["attempts"]
+            * 100,
+            2
+        )
+
+
+# ============================================================
+# 商品統計 合算
+# ============================================================
 
 def merge_item_stats(
     total_stats,
     cycle_stats
 ):
-    """複数回のシミュレーション結果を商品別に合算"""
+    """
+    複数回のシミュレーション結果を
+    商品別に合算する。
+    """
 
-    for item_name, stats in cycle_stats.items():
+    for (
+        item_name,
+        stats
+    ) in cycle_stats.items():
 
         if item_name not in total_stats:
 
@@ -187,46 +440,115 @@ def merge_item_stats(
                 "success_rate_percent": 0
             }
 
-        total = total_stats[item_name]
+        total = total_stats[
+            item_name
+        ]
 
-        total["attempts"] += stats["attempts"]
-        total["failures"] += stats["failures"]
-        total["successes"] += stats["successes"]
+        total["attempts"] += (
+            stats.get(
+                "attempts",
+                0
+            )
+        )
+
+        total["failures"] += (
+            stats.get(
+                "failures",
+                0
+            )
+        )
+
+        total["successes"] += (
+            stats.get(
+                "successes",
+                0
+            )
+        )
+
+    # --------------------------------------------------------
+    # 成功率再計算
+    # --------------------------------------------------------
 
     for stats in total_stats.values():
 
-        if stats["attempts"] > 0:
+        attempts = stats[
+            "attempts"
+        ]
 
-            stats["success_rate_percent"] = round(
+        if attempts > 0:
+
+            stats[
+                "success_rate_percent"
+            ] = round(
                 stats["successes"]
-                / stats["attempts"]
+                / attempts
                 * 100,
                 2
             )
 
         else:
 
-            stats["success_rate_percent"] = 0
+            stats[
+                "success_rate_percent"
+            ] = 0
 
+
+# ============================================================
+# 1回のわらしべ挑戦
+# ============================================================
 
 def run_cycle(
     strategy,
     item_stats=None
 ):
-    """1回のわらしべ挑戦を実行"""
+    """
+    1回のわらしべ挑戦を実行する。
+
+    START_CAPITALから開始し、
+    最大MAX_STEPS回まで取引する。
+    """
+
+    strategy = normalize_strategy(
+        strategy
+    )
+
+    if strategy is None:
+
+        return {
+            "status": "invalid_strategy",
+            "final_capital": START_CAPITAL,
+            "steps": 0,
+            "history": [],
+            "item_stats": {},
+            "failure_reason": "invalid_strategy"
+        }
 
     capital = START_CAPITAL
+
     history = []
 
     if item_stats is None:
 
         item_stats = {}
 
-    for step in range(1, MAX_STEPS + 1):
+    # ========================================================
+    # 最大ステップまで挑戦
+    # ========================================================
+
+    for step in range(
+        1,
+        MAX_STEPS + 1
+    ):
 
         available_items, blocked_items = (
-            get_policy_allowed_items(capital)
+            get_policy_allowed_items(
+                capital
+            )
         )
+
+        # ----------------------------------------------------
+        # Policyによって全商品がブロック
+        # ----------------------------------------------------
 
         if not available_items:
 
@@ -238,6 +560,10 @@ def run_cycle(
                 "blocked_items": blocked_items,
                 "item_stats": item_stats
             }
+
+        # ----------------------------------------------------
+        # 商品選択
+        # ----------------------------------------------------
 
         item = select_item(
             available_items,
@@ -251,45 +577,100 @@ def run_cycle(
                 "final_capital": capital,
                 "steps": step - 1,
                 "history": history,
-                "item_stats": item_stats
+                "item_stats": item_stats,
+                "failure_reason": "no_item"
             }
+
+        # ----------------------------------------------------
+        # 成功判定
+        # ----------------------------------------------------
+
+        success_rate = get_success_rate(
+            item
+        )
 
         success = (
             random.random()
-            < item["success_rate"]
+            < success_rate
         )
 
-        # --------------------------------------------
-        # 商品統計を記録
-        # --------------------------------------------
+        # ----------------------------------------------------
+        # 商品統計
+        # ----------------------------------------------------
 
         update_item_stats(
             item_stats,
-            item["name"],
+            item.get(
+                "name",
+                "unknown"
+            ),
             success
         )
+
+        # ----------------------------------------------------
+        # Policy判定
+        # ----------------------------------------------------
+
+        policy = evaluate_trade(
+            capital,
+            item
+        )
+
+        # ----------------------------------------------------
+        # 取引記録
+        # ----------------------------------------------------
 
         trade = {
             "step": step,
             "capital_before": capital,
-            "selected_item": item["name"],
-            "price": item["price"],
-            "next_value": item["next_value"],
-            "success_rate": item["success_rate"],
+            "selected_item": item.get(
+                "name",
+                "unknown"
+            ),
+            "price": item.get(
+                "price",
+                0
+            ),
+            "next_value": item.get(
+                "next_value",
+                0
+            ),
+            "success_rate": success_rate,
             "success": success,
-            "policy": evaluate_trade(
-                capital,
+            "strategy": strategy,
+            "policy": policy
+        }
+
+        # balancedの場合は参考値として記録
+        if strategy == "balanced":
+
+            trade[
+                "balanced_score"
+            ] = calculate_balanced_score(
                 item
             )
-        }
+
+        # ----------------------------------------------------
+        # 成功
+        # ----------------------------------------------------
 
         if success:
 
-            capital = item["next_value"]
+            capital = get_next_value(
+                item
+            )
 
-            trade["capital_after"] = capital
+            trade[
+                "capital_after"
+            ] = capital
 
-            history.append(trade)
+            history.append(
+                trade
+            )
+
+            # ------------------------------------------------
+            # ゴール到達
+            # ------------------------------------------------
 
             if capital >= TARGET:
 
@@ -301,15 +682,25 @@ def run_cycle(
                     "item_stats": item_stats
                 }
 
+        # ----------------------------------------------------
+        # 失敗
+        # ----------------------------------------------------
+
         else:
 
             capital = 0
 
-            trade["capital_after"] = 0
+            trade[
+                "capital_after"
+            ] = 0
 
-            trade["failure_reason"] = "trade_failed"
+            trade[
+                "failure_reason"
+            ] = "trade_failed"
 
-            history.append(trade)
+            history.append(
+                trade
+            )
 
             return {
                 "status": "failed",
@@ -320,6 +711,10 @@ def run_cycle(
                 "item_stats": item_stats
             }
 
+    # ========================================================
+    # 最大ステップ到達
+    # ========================================================
+
     return {
         "status": "max_steps_reached",
         "final_capital": capital,
@@ -329,15 +724,66 @@ def run_cycle(
     }
 
 
+# ============================================================
+# 1キャンペーン
+# ============================================================
+
 def run_campaign(
     strategy,
     max_cycles
 ):
-    """失敗したらSTART_CAPITALから再挑戦する"""
+    """
+    失敗したらSTART_CAPITALから再挑戦する。
+
+    1キャンペーンにつき、
+    最大max_cycles回まで挑戦する。
+    """
+
+    strategy = normalize_strategy(
+        strategy
+    )
+
+    if strategy is None:
+
+        return {
+            "status": "invalid_strategy",
+            "cycles_used": 0,
+            "restarts": 0,
+            "failure_reasons": {
+                "invalid_strategy": 1
+            },
+            "successful_route": None,
+            "item_stats": {}
+        }
+
+    # --------------------------------------------------------
+    # max_cyclesの安全化
+    # --------------------------------------------------------
+
+    try:
+
+        max_cycles = int(
+            max_cycles
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        max_cycles = MAX_CAMPAIGN_CYCLES
+
+    if max_cycles < 1:
+
+        max_cycles = 1
 
     failure_reasons = {}
 
     total_item_stats = {}
+
+    # ========================================================
+    # 再挑戦
+    # ========================================================
 
     for cycle_number in range(
         1,
@@ -356,11 +802,22 @@ def run_campaign(
             cycle_item_stats
         )
 
-        if result["status"] == "goal_reached":
+        # ----------------------------------------------------
+        # ゴール到達
+        # ----------------------------------------------------
+
+        if result[
+            "status"
+        ] == "goal_reached":
 
             route = " → ".join(
-                trade["selected_item"]
-                for trade in result["history"]
+                trade[
+                    "selected_item"
+                ]
+                for trade
+                in result[
+                    "history"
+                ]
             )
 
             return {
@@ -372,16 +829,38 @@ def run_campaign(
                 "item_stats": total_item_stats
             }
 
+        # ----------------------------------------------------
+        # 失敗理由
+        # ----------------------------------------------------
+
         reason = result.get(
             "failure_reason",
-            result["status"]
+            result.get(
+                "status",
+                "unknown"
+            )
         )
 
-        failure_reasons[reason] = (
-            failure_reasons.get(reason, 0) + 1
+        failure_reasons[
+            reason
+        ] = (
+            failure_reasons.get(
+                reason,
+                0
+            )
+            + 1
         )
 
-        if result["status"] == "policy_blocked":
+        # ----------------------------------------------------
+        # Policyで完全停止
+        #
+        # これは再スタートしても同じ条件なので、
+        # 無駄な再試行を行わない。
+        # ----------------------------------------------------
+
+        if result[
+            "status"
+        ] == "policy_blocked":
 
             return {
                 "status": "policy_blocked",
@@ -390,6 +869,10 @@ def run_campaign(
                 "failure_reasons": failure_reasons,
                 "item_stats": total_item_stats
             }
+
+    # ========================================================
+    # 最大サイクル到達
+    # ========================================================
 
     return {
         "status": "max_cycles_reached",
@@ -400,16 +883,79 @@ def run_campaign(
     }
 
 
+# ============================================================
+# 複数キャンペーン
+# ============================================================
+
 def summarize_campaigns(
     strategy,
     campaigns,
     max_cycles
 ):
-    """複数キャンペーンの統計を作成"""
+    """
+    複数キャンペーンの統計を作成する。
+    """
+
+    strategy = normalize_strategy(
+        strategy
+    )
+
+    if strategy is None:
+
+        return {
+            "error": "strategy が不正です。"
+        }
+
+    # --------------------------------------------------------
+    # campaignsの安全化
+    # --------------------------------------------------------
+
+    try:
+
+        campaigns = int(
+            campaigns
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        campaigns = 1
+
+    if campaigns < 1:
+
+        campaigns = 1
+
+    # --------------------------------------------------------
+    # max_cyclesの安全化
+    # --------------------------------------------------------
+
+    try:
+
+        max_cycles = int(
+            max_cycles
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        max_cycles = MAX_CAMPAIGN_CYCLES
+
+    if max_cycles < 1:
+
+        max_cycles = 1
+
+    # ========================================================
+    # 集計変数
+    # ========================================================
 
     goal_reached = 0
 
     total_cycles_used = 0
+
     total_restarts = 0
 
     failure_reasons = {}
@@ -418,37 +964,63 @@ def summarize_campaigns(
 
     total_item_stats = {}
 
-    for _ in range(campaigns):
+    # ========================================================
+    # キャンペーン実行
+    # ========================================================
+
+    for _ in range(
+        campaigns
+    ):
 
         result = run_campaign(
             strategy,
             max_cycles
         )
 
+        # ----------------------------------------------------
+        # サイクル数
+        # ----------------------------------------------------
+
         total_cycles_used += (
-            result["cycles_used"]
+            result[
+                "cycles_used"
+            ]
         )
+
+        # ----------------------------------------------------
+        # 再スタート数
+        # ----------------------------------------------------
 
         total_restarts += (
-            result["restarts"]
+            result[
+                "restarts"
+            ]
         )
 
-        # --------------------------------------------
-        # failure reasons
-        # --------------------------------------------
+        # ----------------------------------------------------
+        # 失敗理由
+        # ----------------------------------------------------
 
-        for reason, count in (
-            result["failure_reasons"].items()
-        ):
+        for (
+            reason,
+            count
+        ) in result[
+            "failure_reasons"
+        ].items():
 
-            failure_reasons[reason] = (
-                failure_reasons.get(reason, 0)
+            failure_reasons[
+                reason
+            ] = (
+                failure_reasons.get(
+                    reason,
+                    0
+                )
                 + count
             )
 
-        # --------------------------------------------
+        # ----------------------------------------------------
         # 商品統計
-        # --------------------------------------------
+        # ----------------------------------------------------
 
         merge_item_stats(
             total_item_stats,
@@ -458,28 +1030,35 @@ def summarize_campaigns(
             )
         )
 
-        # --------------------------------------------
+        # ----------------------------------------------------
         # ゴール到達
-        # --------------------------------------------
+        # ----------------------------------------------------
 
-        if result["status"] == "goal_reached":
+        if result[
+            "status"
+        ] == "goal_reached":
 
             goal_reached += 1
 
-            route = result[
+            route = result.get(
                 "successful_route"
-            ]
-
-            successful_route_summary[route] = (
-                successful_route_summary.get(
-                    route,
-                    0
-                ) + 1
             )
 
-    # --------------------------------------------
+            if route:
+
+                successful_route_summary[
+                    route
+                ] = (
+                    successful_route_summary.get(
+                        route,
+                        0
+                    )
+                    + 1
+                )
+
+    # ========================================================
     # 成功ルートを頻度順に並べる
-    # --------------------------------------------
+    # ========================================================
 
     sorted_routes = dict(
         sorted(
@@ -494,17 +1073,23 @@ def summarize_campaigns(
         None
     )
 
-    # --------------------------------------------
-    # 最終的な商品別成功率を再計算
-    # --------------------------------------------
+    # ========================================================
+    # 商品別成功率を再計算
+    # ========================================================
 
-    for stats in total_item_stats.values():
+    for stats in (
+        total_item_stats.values()
+    ):
 
-        attempts = stats["attempts"]
+        attempts = stats[
+            "attempts"
+        ]
 
         if attempts > 0:
 
-            stats["success_rate_percent"] = round(
+            stats[
+                "success_rate_percent"
+            ] = round(
                 stats["successes"]
                 / attempts
                 * 100,
@@ -513,12 +1098,26 @@ def summarize_campaigns(
 
         else:
 
-            stats["success_rate_percent"] = 0
+            stats[
+                "success_rate_percent"
+            ] = 0
+
+    # ========================================================
+    # 最終結果
+    # ========================================================
 
     return {
+        "version": "1.1",
+
         "strategy": strategy,
+
         "campaigns": campaigns,
+
         "max_cycles_per_campaign": max_cycles,
+
+        "start_capital": START_CAPITAL,
+
+        "target": TARGET,
 
         "campaign_goal_reached":
             goal_reached,
