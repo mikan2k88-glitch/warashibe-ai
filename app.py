@@ -1,33 +1,14 @@
-from flask import Flask, jsonify, request, render_template_string
-
-from market_engine import MARKET
-from policy_engine import POLICY_VERSION, START_CAPITAL
-
-from strategy_engine import (
-    STRATEGY_LABELS,
-    create_recommendation
-)
-
-from simulation_engine import (
-    run_cycle,
-    run_campaign,
-    summarize_campaigns
-)
-
-from candidate_engine import create_candidate
-from danger_filter import filter_candidates
-from capital_filter import filter_by_capital
-from ranking_engine import rank_candidates
-from candidate_pipeline import evaluate_candidates
-
-
 # ============================================================
 # Warashibe AI v1.1
+# app.py
 #
 # Flask API / Web UI
 #
 # シミュレーション本体
 #     → simulation_engine.py
+#
+# 戦略エンジン
+#     → strategy_engine.py
 #
 # 候補商品パイプライン
 #     → candidate_pipeline.py
@@ -43,6 +24,58 @@ from candidate_pipeline import evaluate_candidates
 #     → safe
 #     → balanced
 #     → aggressive
+#
+# ============================================================
+
+from flask import (
+    Flask,
+    jsonify,
+    request,
+    render_template_string
+)
+
+from market_engine import MARKET
+
+from policy_engine import (
+    POLICY_VERSION,
+    START_CAPITAL
+)
+
+from strategy_engine import (
+    STRATEGY_LABELS,
+    SUPPORTED_STRATEGIES,
+    create_recommendation
+)
+
+from simulation_engine import (
+    run_cycle,
+    run_campaign,
+    summarize_campaigns
+)
+
+from candidate_engine import (
+    create_candidate
+)
+
+from danger_filter import (
+    filter_candidates
+)
+
+from capital_filter import (
+    filter_by_capital
+)
+
+from ranking_engine import (
+    rank_candidates
+)
+
+from candidate_pipeline import (
+    evaluate_candidates
+)
+
+
+# ============================================================
+# Flask
 # ============================================================
 
 app = Flask(__name__)
@@ -53,22 +86,21 @@ app = Flask(__name__)
 # ============================================================
 
 TARGET = 1_000_000
+
 MAX_STEPS = 20
+
 MAX_CAMPAIGN_CYCLES = 10
 
 
 # ============================================================
 # 戦略一覧
 #
-# ここをシステム全体の基準にする
+# strategy_engine.py の定義を利用
 # ============================================================
 
-VALID_STRATEGIES = {
-    "random",
-    "safe",
-    "balanced",
-    "aggressive"
-}
+AVAILABLE_STRATEGIES = tuple(
+    SUPPORTED_STRATEGIES
+)
 
 
 # ============================================================
@@ -138,6 +170,12 @@ def docs():
                 border-radius: 10px;
             }
 
+            code {
+                background: #eeeeee;
+                padding: 3px 6px;
+                border-radius: 4px;
+            }
+
         </style>
 
     </head>
@@ -151,6 +189,13 @@ def docs():
         <ul>
 
             <li>
+                <a href="/">
+                    /
+                </a>
+                ：トップ
+            </li>
+
+            <li>
                 <a href="/strategy/report">
                     戦略レポート
                 </a>
@@ -159,9 +204,28 @@ def docs():
 
             <li>
                 <a href="/journey?strategy=random">
-                    /journey
+                    /journey?strategy=random
                 </a>
                 ：1回のわらしべ挑戦
+            </li>
+
+            <li>
+                <a href="/journey?strategy=safe">
+                    /journey?strategy=safe
+                </a>
+            </li>
+
+            <li>
+                <a href="/journey?strategy=balanced">
+                    /journey?strategy=balanced
+                </a>
+                ：バランス戦略
+            </li>
+
+            <li>
+                <a href="/journey?strategy=aggressive">
+                    /journey?strategy=aggressive
+                </a>
             </li>
 
             <li>
@@ -179,8 +243,8 @@ def docs():
             </li>
 
             <li>
-                <a href="/campaign/simulate?strategy=balanced">
-                    balanced キャンペーン
+                <a href="/campaign/simulate?strategy=balanced&campaigns=1000&max_cycles=10">
+                    balanced 1000回テスト
                 </a>
             </li>
 
@@ -231,6 +295,34 @@ def docs():
         <div class="section">
 
             <h2>
+                対応戦略
+            </h2>
+
+            <ul>
+
+                <li>
+                    random ：ランダム
+                </li>
+
+                <li>
+                    safe ：セーフ
+                </li>
+
+                <li>
+                    balanced ：バランス
+                </li>
+
+                <li>
+                    aggressive ：アグレッシブ
+                </li>
+
+            </ul>
+
+        </div>
+
+        <div class="section">
+
+            <h2>
                 v1.1 の流れ
             </h2>
 
@@ -273,12 +365,16 @@ def get_strategy():
         "random"
     ).lower()
 
-    if strategy not in VALID_STRATEGIES:
+    if strategy not in AVAILABLE_STRATEGIES:
 
         return None
 
     return strategy
 
+
+# ============================================================
+# 整数パラメータ取得
+# ============================================================
 
 def get_bounded_int(
     name,
@@ -287,7 +383,9 @@ def get_bounded_int(
     maximum
 ):
 
-    value = request.args.get(name)
+    value = request.args.get(
+        name
+    )
 
     if value is None:
 
@@ -295,9 +393,14 @@ def get_bounded_int(
 
     try:
 
-        value = int(value)
+        value = int(
+            value
+        )
 
-    except (ValueError, TypeError):
+    except (
+        ValueError,
+        TypeError
+    ):
 
         return None
 
@@ -306,6 +409,23 @@ def get_bounded_int(
         return value
 
     return None
+
+
+# ============================================================
+# strategy エラーレスポンス
+# ============================================================
+
+def strategy_error_response():
+
+    return jsonify({
+
+        "error":
+            "strategy が不正です。",
+
+        "allowed_strategies":
+            list(AVAILABLE_STRATEGIES)
+
+    }), 400
 
 
 # ============================================================
@@ -321,12 +441,7 @@ def journey():
 
     if strategy is None:
 
-        return jsonify({
-            "error":
-                "strategy が不正です。",
-            "valid_strategies":
-                sorted(VALID_STRATEGIES)
-        }), 400
+        return strategy_error_response()
 
     result = run_cycle(
         strategy
@@ -343,6 +458,12 @@ def journey():
         "strategy":
             strategy,
 
+        "strategy_label":
+            STRATEGY_LABELS.get(
+                strategy,
+                strategy
+            ),
+
         "start_capital":
             START_CAPITAL,
 
@@ -350,6 +471,7 @@ def journey():
             TARGET,
 
         **result
+
     })
 
 
@@ -373,18 +495,15 @@ def simulate():
 
     if strategy is None:
 
-        return jsonify({
-            "error":
-                "strategy が不正です。",
-            "valid_strategies":
-                sorted(VALID_STRATEGIES)
-        }), 400
+        return strategy_error_response()
 
     if simulations is None:
 
         return jsonify({
+
             "error":
                 "simulations は1〜100000の整数です。"
+
         }), 400
 
     goal_reached = 0
@@ -392,15 +511,25 @@ def simulate():
     item_stats = {
 
         item["name"]: {
-            "attempts": 0,
-            "successes": 0,
-            "failures": 0
+
+            "attempts":
+                0,
+
+            "successes":
+                0,
+
+            "failures":
+                0
+
         }
 
         for item in MARKET
+
     }
 
-    for _ in range(simulations):
+    for _ in range(
+        simulations
+    ):
 
         result = run_cycle(
             strategy
@@ -417,42 +546,67 @@ def simulate():
 
             if item_name not in item_stats:
 
-                item_stats[item_name] = {
-                    "attempts": 0,
-                    "successes": 0,
-                    "failures": 0
+                item_stats[
+                    item_name
+                ] = {
+
+                    "attempts":
+                        0,
+
+                    "successes":
+                        0,
+
+                    "failures":
+                        0
                 }
 
             stats = item_stats[
                 item_name
             ]
 
-            stats["attempts"] += 1
+            stats[
+                "attempts"
+            ] += 1
 
-            if trade["success"]:
+            if trade.get(
+                "success",
+                False
+            ):
 
-                stats["successes"] += 1
+                stats[
+                    "successes"
+                ] += 1
 
             else:
 
-                stats["failures"] += 1
+                stats[
+                    "failures"
+                ] += 1
 
-        if result["status"] == "goal_reached":
+        if result.get(
+            "status"
+        ) == "goal_reached":
 
             goal_reached += 1
 
     for stats in item_stats.values():
 
-        attempts = stats["attempts"]
+        attempts = stats[
+            "attempts"
+        ]
 
         if attempts:
 
             stats[
                 "success_rate_percent"
             ] = round(
-                stats["successes"]
+
+                stats[
+                    "successes"
+                ]
                 / attempts
                 * 100,
+
                 2
             )
 
@@ -473,6 +627,12 @@ def simulate():
         "strategy":
             strategy,
 
+        "strategy_label":
+            STRATEGY_LABELS.get(
+                strategy,
+                strategy
+            ),
+
         "simulations":
             simulations,
 
@@ -481,9 +641,11 @@ def simulate():
 
         "goal_rate_percent":
             round(
+
                 goal_reached
                 / simulations
                 * 100,
+
                 2
             ),
 
@@ -519,12 +681,7 @@ def campaign_simulate():
 
     if strategy is None:
 
-        return jsonify({
-            "error":
-                "strategy が不正です。",
-            "valid_strategies":
-                sorted(VALID_STRATEGIES)
-        }), 400
+        return strategy_error_response()
 
     if (
         campaigns is None
@@ -532,15 +689,21 @@ def campaign_simulate():
     ):
 
         return jsonify({
+
             "error":
                 "campaigns は1〜10000、"
                 "max_cycles は1〜100で指定してください。"
+
         }), 400
 
     summary = summarize_campaigns(
+
         strategy,
+
         campaigns,
+
         max_cycles
+
     )
 
     return jsonify({
@@ -558,13 +721,14 @@ def campaign_simulate():
             TARGET,
 
         **summary
+
     })
 
 
 # ============================================================
 # /strategy/recommendation
 #
-# 4戦略比較
+# 4戦略を比較
 # ============================================================
 
 @app.route("/strategy/recommendation")
@@ -590,32 +754,32 @@ def strategy_recommendation():
     ):
 
         return jsonify({
+
             "error":
                 "campaigns は100〜10000、"
                 "max_cycles は1〜100で指定してください。"
+
         }), 400
 
     strategy_results = []
 
-    for strategy in (
-        "random",
-        "safe",
-        "balanced",
-        "aggressive"
-    ):
+    for strategy in AVAILABLE_STRATEGIES:
 
         strategy_results.append(
+
             summarize_campaigns(
+
                 strategy,
+
                 campaigns,
+
                 max_cycles
+
             )
         )
 
-    recommendation = (
-        create_recommendation(
-            strategy_results
-        )
+    recommendation = create_recommendation(
+        strategy_results
     )
 
     return jsonify({
@@ -645,6 +809,8 @@ def strategy_recommendation():
 
 # ============================================================
 # /strategy/report
+#
+# 4戦略を比較して人間向けレポートを表示
 # ============================================================
 
 @app.route("/strategy/report")
@@ -670,31 +836,36 @@ def strategy_report():
     ):
 
         return (
+
             "campaigns または "
             "max_cycles の指定が不正です。",
+
             400
+
         )
 
     strategy_results = [
 
         summarize_campaigns(
+
             strategy,
+
             campaigns,
+
             max_cycles
+
         )
 
-        for strategy in (
-            "random",
-            "safe",
-            "balanced",
-            "aggressive"
-        )
+        for strategy in AVAILABLE_STRATEGIES
+
     ]
 
     ranked_results = sorted(
+
         strategy_results,
 
         key=lambda result: (
+
             -result[
                 "campaign_goal_rate_percent"
             ],
@@ -706,16 +877,17 @@ def strategy_report():
             result[
                 "total_restarts"
             ]
+
         )
+
     )
 
-    recommendation = (
-        create_recommendation(
-            strategy_results
-        )
+    recommendation = create_recommendation(
+        strategy_results
     )
 
     return render_template_string(
+
         """
         <!doctype html>
 
@@ -832,10 +1004,27 @@ def strategy_report():
                 <table>
 
                     <tr>
-                        <th>順位</th>
-                        <th>戦略</th>
-                        <th>100万円到達率</th>
-                        <th>平均再挑戦</th>
+
+                        <th>
+                            順位
+                        </th>
+
+                        <th>
+                            戦略
+                        </th>
+
+                        <th>
+                            100万円到達率
+                        </th>
+
+                        <th>
+                            平均サイクル
+                        </th>
+
+                        <th>
+                            平均再挑戦
+                        </th>
+
                     </tr>
 
                     {% for result in ranked_results %}
@@ -847,23 +1036,37 @@ def strategy_report():
                         </td>
 
                         <td>
+
                             {{
                             strategy_labels[
                                 result.strategy
                             ]
                             }}
+
                         </td>
 
                         <td>
+
                             {{
                             result.campaign_goal_rate_percent
                             }}%
+
                         </td>
 
                         <td>
+
+                            {{
+                            result.average_cycles_used
+                            }}
+
+                        </td>
+
+                        <td>
+
                             {{
                             result.average_restarts
                             }}回
+
                         </td>
 
                     </tr>
@@ -871,6 +1074,37 @@ def strategy_report():
                     {% endfor %}
 
                 </table>
+
+            </div>
+
+            <div class="card">
+
+                <h2>
+                    成功ルート
+                </h2>
+
+                {% for result in ranked_results %}
+
+                    <h3>
+
+                        {{
+                        strategy_labels[
+                            result.strategy
+                        ]
+                        }}
+
+                    </h3>
+
+                    <p>
+
+                        {{
+                        result.dominant_successful_route
+                        or "成功ルートなし"
+                        }}
+
+                    </p>
+
+                {% endfor %}
 
             </div>
 
@@ -885,18 +1119,22 @@ def strategy_report():
                     リスク評価：
 
                     <strong>
+
                         {{
                         recommendation.risk_level
                         }}
+
                     </strong>
 
                 </p>
 
                 <p>
+
                     これは仮想市場での研究結果です。
                     実際の仕入れ・注文は、
                     必ず人間が確認してから
                     行ってください。
+
                 </p>
 
             </div>
@@ -913,6 +1151,7 @@ def strategy_report():
         recommendation=recommendation,
 
         strategy_labels=STRATEGY_LABELS
+
     )
 
 
@@ -928,40 +1167,69 @@ def candidates_test():
     candidates = [
 
         create_candidate(
+
             name="安全な中古カメラ",
+
             purchase_price=10000,
+
             expected_sale_price=15000,
+
             source="test",
+
             category="camera",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="利益が低すぎる商品",
+
             purchase_price=10000,
+
             expected_sale_price=10200,
+
             source="test",
+
             category="misc",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="情報不足の商品",
+
             purchase_price=10000,
+
             expected_sale_price=20000,
+
             source="test",
+
             category="misc",
+
             confidence=0.30
+
         ),
 
         create_candidate(
+
             name="赤字商品",
+
             purchase_price=10000,
+
             expected_sale_price=8000,
+
             source="test",
+
             category="misc",
+
             confidence=0.90
+
         )
+
     ]
 
     allowed, blocked = filter_candidates(
@@ -976,9 +1244,7 @@ def candidates_test():
 
     if ranked_candidates:
 
-        best_candidate = (
-            ranked_candidates[0]
-        )
+        best_candidate = ranked_candidates[0]
 
     return jsonify({
 
@@ -1005,6 +1271,7 @@ def candidates_test():
 
         "best_candidate":
             best_candidate
+
     })
 
 
@@ -1022,45 +1289,77 @@ def capital_filter_test():
     candidates = [
 
         create_candidate(
+
             name="資本内の商品",
+
             purchase_price=8_000,
+
             expected_sale_price=12_000,
+
             source="test",
+
             category="camera",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="資本ぴったりの商品",
+
             purchase_price=10_000,
+
             expected_sale_price=15_000,
+
             source="test",
+
             category="electronics",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="資本オーバーの商品",
+
             purchase_price=15_000,
+
             expected_sale_price=25_000,
+
             source="test",
+
             category="brand",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="高額すぎる商品",
+
             purchase_price=100_000,
+
             expected_sale_price=150_000,
+
             source="test",
+
             category="misc",
+
             confidence=0.90
+
         )
+
     ]
 
     allowed, blocked = filter_by_capital(
+
         candidates,
+
         current_capital
+
     )
 
     return jsonify({
@@ -1085,6 +1384,7 @@ def capital_filter_test():
 
         "blocked":
             blocked
+
     })
 
 
@@ -1108,45 +1408,77 @@ def candidates_pipeline_test():
     candidates = [
 
         create_candidate(
+
             name="安全な中古カメラ",
+
             purchase_price=8_000,
+
             expected_sale_price=12_000,
+
             source="test",
+
             category="camera",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="資本オーバー高利益商品",
+
             purchase_price=15_000,
+
             expected_sale_price=30_000,
+
             source="test",
+
             category="brand",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="低利益商品",
+
             purchase_price=8_000,
+
             expected_sale_price=8_200,
+
             source="test",
+
             category="misc",
+
             confidence=0.90
+
         ),
 
         create_candidate(
+
             name="情報不足商品",
+
             purchase_price=8_000,
+
             expected_sale_price=16_000,
+
             source="test",
+
             category="misc",
+
             confidence=0.30
+
         )
+
     ]
 
     result = evaluate_candidates(
+
         candidates,
+
         current_capital
+
     )
 
     return jsonify({
@@ -1160,6 +1492,7 @@ def candidates_pipeline_test():
             "ranking_engine",
 
         **result
+
     })
 
 
@@ -1256,25 +1589,31 @@ def candidate_form():
                 category=category,
 
                 confidence=confidence
+
             )
 
             allowed, blocked = filter_candidates(
+
                 [candidate]
+
             )
 
             if allowed:
 
                 result = {
+
                     "status":
                         "allowed",
 
                     "candidate":
                         allowed[0]
+
                 }
 
             else:
 
                 result = {
+
                     "status":
                         "blocked",
 
@@ -1283,6 +1622,7 @@ def candidate_form():
 
                     "reasons":
                         blocked[0]["reasons"]
+
                 }
 
         except (
@@ -1297,9 +1637,11 @@ def candidate_form():
 
                 "message":
                     f"入力値が不正です: {e}"
+
             }
 
     return render_template_string(
+
         """
         <!doctype html>
 
@@ -1580,6 +1922,7 @@ def candidate_form():
         """,
 
         result=result
+
     )
 
 
@@ -1604,8 +1947,10 @@ def candidates_evaluate():
     if not data:
 
         return jsonify({
+
             "error":
                 "JSONデータを送信してください。"
+
         }), 400
 
     try:
@@ -1645,6 +1990,7 @@ def candidates_evaluate():
                 "metadata",
                 {}
             )
+
         )
 
     except (
@@ -1660,7 +2006,9 @@ def candidates_evaluate():
         }), 400
 
     allowed, blocked = filter_candidates(
+
         [candidate]
+
     )
 
     if allowed:
@@ -1675,6 +2023,7 @@ def candidates_evaluate():
 
             "candidate":
                 allowed[0]
+
         })
 
     return jsonify({
@@ -1690,6 +2039,7 @@ def candidates_evaluate():
 
         "reasons":
             blocked[0]["reasons"]
+
     })
 
 
@@ -1700,7 +2050,11 @@ def candidates_evaluate():
 if __name__ == "__main__":
 
     app.run(
+
         host="0.0.0.0",
+
         port=10000,
+
         debug=True
+
     )
