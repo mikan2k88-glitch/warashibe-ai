@@ -1,55 +1,31 @@
-# ============================================================
+```python
 # Warashibe AI v1.1
-# strategy_engine.py
+# 戦略エンジン
 #
 # 役割：
-# ・戦略名の管理
-# ・戦略比較
-# ・AI戦略本部の推薦判断
+# ・各戦略の名称を管理
+# ・仮想市場のシミュレーション結果を比較
+# ・最も有望な戦略をAI戦略本部として推薦
 #
-# シミュレーション本体：
-#     simulation_engine.py
+# シミュレーション本体
+#     → simulation_engine.py
 #
-# 注意：
-#     商品選択そのものは simulation_engine.py
-#     または market_engine / policy_engine 側で行う。
-# ============================================================
+# 戦略エンジン
+#     → strategy_engine.py
+#
+# app.py から利用する
 
 
 # ============================================================
-# 戦略ラベル
+# 戦略名
 # ============================================================
 
 STRATEGY_LABELS = {
-
-    "random":
-        "ランダム",
-
-    "safe":
-        "セーフ",
-
-    "balanced":
-        "バランス",
-
-    "aggressive":
-        "アグレッシブ"
+    "random": "ランダム",
+    "safe": "セーフ",
+    "balanced": "バランス",
+    "aggressive": "アグレッシブ"
 }
-
-
-# ============================================================
-# 対応戦略
-# ============================================================
-
-SUPPORTED_STRATEGIES = (
-
-    "random",
-
-    "safe",
-
-    "balanced",
-
-    "aggressive"
-)
 
 
 # ============================================================
@@ -58,65 +34,43 @@ SUPPORTED_STRATEGIES = (
 
 def risk_level(goal_rate_percent):
     """
-    キャンペーン成功率から
-    人間向けのリスク表現を返す。
+    キャンペーンで100万円に到達する確率を基準に
+    リスク表現を決定する。
 
-    10%以上
-        → 中
-
-    5%以上10%未満
-        → 高
-
-    5%未満
-        → 非常に高
+    到達率が高いほどリスクを低く評価する。
     """
 
     if goal_rate_percent >= 10:
-
         return "中"
 
     if goal_rate_percent >= 5:
-
         return "高"
 
     return "非常に高"
 
 
 # ============================================================
-# 戦略比較キー
+# 戦略比較
 # ============================================================
 
-def _ranking_key(result):
+def _rank_strategy_results(strategy_results):
     """
-    戦略比較用のソートキー。
+    戦略シミュレーション結果を順位付けする。
 
     優先順位：
 
-    1. campaign_goal_rate_percent
-       → 高いほど良い
-
-    2. average_cycles_used
-       → 少ないほど良い
-
-    3. total_restarts
-       → 少ないほど良い
+    1. 100万円到達率が高い
+    2. 平均使用サイクル数が少ない
+    3. 総再挑戦回数が少ない
     """
 
-    return (
+    return sorted(
+        strategy_results,
 
-        -result.get(
-            "campaign_goal_rate_percent",
-            0
-        ),
-
-        result.get(
-            "average_cycles_used",
-            float("inf")
-        ),
-
-        result.get(
-            "total_restarts",
-            float("inf")
+        key=lambda result: (
+            -result["campaign_goal_rate_percent"],
+            result["average_cycles_used"],
+            result["total_restarts"]
         )
     )
 
@@ -127,136 +81,56 @@ def _ranking_key(result):
 
 def create_recommendation(strategy_results):
     """
-    仮想市場の戦略結果から
-    推奨戦略を決定する。
+    仮想市場の戦略比較結果から
+    最も有望な戦略を推薦する。
 
-    到達率を最優先。
+    balanced を含む全戦略に対応する。
 
-    同率の場合：
+    期待される入力：
 
-        平均サイクル数
-            ↓
-        総再挑戦数
+        [
+            {
+                "strategy": "random",
+                ...
+            },
+            {
+                "strategy": "safe",
+                ...
+            },
+            {
+                "strategy": "balanced",
+                ...
+            },
+            {
+                "strategy": "aggressive",
+                ...
+            }
+        ]
 
-    の順で比較する。
-
-    Parameters
-    ----------
-    strategy_results : list
-        summarize_campaigns() の結果一覧
-
-    Returns
-    -------
-    dict
-        AI戦略本部の推薦結果
+    戦略の数は固定しない。
     """
 
     if not strategy_results:
+        raise ValueError(
+            "strategy_results が空です。"
+        )
 
-        return {
-
-            "recommended_strategy":
-                None,
-
-            "recommended_strategy_label":
-                None,
-
-            "campaign_goal_rate_percent":
-                0,
-
-            "risk_level":
-                "非常に高",
-
-            "dominant_successful_route":
-                None,
-
-            "reason":
-                "比較可能な戦略結果がありません。",
-
-            "human_action":
-                (
-                    "仮想市場の結果がありません。"
-                    "実際の仕入れ・注文は実行しないでください。"
-                )
-        }
-
-
-    ranked = sorted(
-
-        strategy_results,
-
-        key=_ranking_key
+    ranked = _rank_strategy_results(
+        strategy_results
     )
-
 
     best = ranked[0]
 
+    strategy = best["strategy"]
 
-    strategy = best.get(
-        "strategy"
-    )
+    if strategy not in STRATEGY_LABELS:
+        raise ValueError(
+            f"未知のstrategyです: {strategy}"
+        )
 
-
-    label = STRATEGY_LABELS.get(
-        strategy,
-        strategy
-    )
-
-
-    goal_rate = best.get(
-        "campaign_goal_rate_percent",
-        0
-    )
-
-
-    dominant_route = best.get(
-        "dominant_successful_route"
-    )
-
-
-    average_cycles = best.get(
-        "average_cycles_used"
-    )
-
-
-    average_restarts = best.get(
-        "average_restarts"
-    )
-
-
-    # ========================================================
-    # 推薦理由
-    # ========================================================
-
-    reason = (
-
-        f"{label}戦略は、"
-
-        f"100万円到達率 "
-        f"{goal_rate}% "
-        f"で比較対象中トップです。"
-
-    )
-
-
-    # ========================================================
-    # 人間向け注意事項
-    # ========================================================
-
-    human_action = (
-
-        "これは仮想市場でのシミュレーション結果です。"
-
-        "実際の仕入れ・注文を自動実行せず、"
-
-        "候補商品・価格・市場情報を人間が確認してから"
-        "実行してください。"
-
-    )
-
+    label = STRATEGY_LABELS[strategy]
 
     return {
-
         "recommended_strategy":
             strategy,
 
@@ -264,25 +138,104 @@ def create_recommendation(strategy_results):
             label,
 
         "campaign_goal_rate_percent":
-            goal_rate,
+            best[
+                "campaign_goal_rate_percent"
+            ],
 
         "risk_level":
             risk_level(
-                goal_rate
+                best[
+                    "campaign_goal_rate_percent"
+                ]
             ),
 
         "dominant_successful_route":
-            dominant_route,
+            best[
+                "dominant_successful_route"
+            ],
 
-        "average_cycles_used":
-            average_cycles,
+        "reason": (
+            f"{label}戦略は、"
+            f"到達率 "
+            f"{best['campaign_goal_rate_percent']}%"
+            f" で最上位です。"
+        ),
 
-        "average_restarts":
-            average_restarts,
-
-        "reason":
-            reason,
-
-        "human_action":
-            human_action
+        "human_action": (
+            "これは仮想市場での提案です。"
+            "実際の仕入れ・注文は人間が確認してから"
+            "実行してください。"
+        )
     }
+
+
+# ============================================================
+# 戦略比較結果の簡易サマリー
+# ============================================================
+
+def compare_strategies(strategy_results):
+    """
+    戦略比較結果を順位順に返す。
+
+    AI戦略本部やAPIから
+    比較結果を扱いやすくするための関数。
+    """
+
+    if not strategy_results:
+        return []
+
+    ranked = _rank_strategy_results(
+        strategy_results
+    )
+
+    comparison = []
+
+    for index, result in enumerate(
+        ranked,
+        start=1
+    ):
+
+        strategy = result["strategy"]
+
+        comparison.append({
+
+            "rank":
+                index,
+
+            "strategy":
+                strategy,
+
+            "strategy_label":
+                STRATEGY_LABELS.get(
+                    strategy,
+                    strategy
+                ),
+
+            "campaign_goal_rate_percent":
+                result[
+                    "campaign_goal_rate_percent"
+                ],
+
+            "average_cycles_used":
+                result[
+                    "average_cycles_used"
+                ],
+
+            "average_restarts":
+                result[
+                    "average_restarts"
+                ],
+
+            "total_restarts":
+                result[
+                    "total_restarts"
+                ],
+
+            "dominant_successful_route":
+                result[
+                    "dominant_successful_route"
+                ]
+        })
+
+    return comparison
+```
