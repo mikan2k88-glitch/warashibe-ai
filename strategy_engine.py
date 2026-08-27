@@ -1,4 +1,4 @@
-```python
+
 # Warashibe AI v1.1
 # 戦略エンジン
 #
@@ -238,4 +238,3 @@ def compare_strategies(strategy_results):
         })
 
     return comparison
-```
