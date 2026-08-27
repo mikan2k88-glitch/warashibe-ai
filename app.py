@@ -1,4 +1,4 @@
-```python
+
 from flask import Flask, jsonify, request, render_template_string
 
 from market_engine import MARKET
@@ -1762,4 +1762,3 @@ if __name__ == "__main__":
         port=10000,
         debug=True
     )
-```
