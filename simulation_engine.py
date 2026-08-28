@@ -1,4 +1,3 @@
-
 # ============================================================
 # Warashibe AI v1.1
 # simulation_engine.py
@@ -69,7 +68,7 @@ def _item_name(item):
 
 def _item_price(item):
     """
-    商品データから価格を取得する。
+    商品データから購入価格を取得する。
 
     market_engine 側の構造差に対応するため、
     purchase_price / price の両方を見る。
@@ -104,35 +103,84 @@ def _success_rate(item):
         return 0.0
 
 
+def _next_value(item):
+    """
+    取引成功時の次の資本を取得する。
+
+    現在の market_engine.py では
+    next_value を正式な次資本として使用する。
+
+    互換性のため、
+    sale_price / expected_sale_price / sell_price
+    もフォールバックとして確認する。
+    """
+
+    if "next_value" in item:
+        try:
+            return float(
+                item["next_value"]
+            )
+        except (
+            ValueError,
+            TypeError
+        ):
+            pass
+
+    if "sale_price" in item:
+        try:
+            return float(
+                item["sale_price"]
+            )
+        except (
+            ValueError,
+            TypeError
+        ):
+            pass
+
+    if "expected_sale_price" in item:
+        try:
+            return float(
+                item["expected_sale_price"]
+            )
+        except (
+            ValueError,
+            TypeError
+        ):
+            pass
+
+    if "sell_price" in item:
+        try:
+            return float(
+                item["sell_price"]
+            )
+        except (
+            ValueError,
+            TypeError
+        ):
+            pass
+
+    return 0.0
+
+
 def _expected_value(item):
     """
     商品の期待値を計算する。
 
-    success_rate × sale_price を基本とする。
+    success_rate × next_value
+    を基本とする。
 
-    sale_price がない場合は price を使用。
+    現在の market_engine.py は
+    next_value を持っているため、
+    それを優先して使用する。
     """
 
-    price = item.get(
-        "sale_price",
-        item.get(
-            "expected_sale_price",
-            _item_price(item)
-        )
+    next_value = _next_value(
+        item
     )
-
-    try:
-        price = float(price)
-
-    except (
-        ValueError,
-        TypeError
-    ):
-        price = 0.0
 
     return (
         _success_rate(item)
-        * price
+        * next_value
     )
 
 
@@ -157,7 +205,7 @@ def select_item(
         成功率と期待値のバランス
 
     aggressive
-        期待値・価格上昇を優先
+        期待値・次資本を優先
     """
 
     validate_strategy(
@@ -187,6 +235,7 @@ def select_item(
             items,
             key=lambda item: (
                 _success_rate(item),
+                _next_value(item),
                 -_item_price(item)
             )
         )
@@ -207,16 +256,14 @@ def select_item(
                 item
             )
 
-            price = _item_price(
+            next_value = _next_value(
                 item
             )
 
-            # 成功率を重視しつつ、
-            # 期待値と価格上昇も評価する。
             return (
                 success * 0.50
                 + expected * 0.35
-                + price * 0.15
+                + next_value * 0.15
             )
 
         return max(
@@ -236,7 +283,7 @@ def select_item(
                 item
             )
 
-            price = _item_price(
+            next_value = _next_value(
                 item
             )
 
@@ -246,7 +293,7 @@ def select_item(
 
             return (
                 expected * 0.55
-                + price * 0.30
+                + next_value * 0.30
                 + success * 0.15
             )
 
@@ -292,6 +339,111 @@ def get_candidates(
 
 
 # ============================================================
+# policy結果の成功判定
+# ============================================================
+
+def _evaluate_trade(
+    selected,
+    capital
+):
+    """
+    policy_engine.evaluate_trade() を呼び出し、
+    戻り値を
+
+        (success, policy_capital)
+
+    に統一する。
+
+    policy_engine の実装差に対応する。
+    """
+
+    trade_result = None
+
+    try:
+
+        trade_result = evaluate_trade(
+            selected,
+            capital
+        )
+
+    except TypeError:
+
+        try:
+
+            trade_result = evaluate_trade(
+                selected
+            )
+
+        except TypeError:
+
+            trade_result = None
+
+    success = False
+    policy_capital = 0
+
+    # --------------------------------------------------------
+    # dict
+    # --------------------------------------------------------
+
+    if isinstance(
+        trade_result,
+        dict
+    ):
+
+        success = bool(
+            trade_result.get(
+                "success",
+                False
+            )
+        )
+
+        policy_capital = trade_result.get(
+            "capital",
+            trade_result.get(
+                "new_capital",
+                0
+            )
+        )
+
+    # --------------------------------------------------------
+    # tuple / list
+    # --------------------------------------------------------
+
+    elif isinstance(
+        trade_result,
+        (tuple, list)
+    ):
+
+        if len(trade_result) >= 1:
+
+            success = bool(
+                trade_result[0]
+            )
+
+        if len(trade_result) >= 2:
+
+            policy_capital = (
+                trade_result[1]
+            )
+
+    # --------------------------------------------------------
+    # bool
+    # --------------------------------------------------------
+
+    elif isinstance(
+        trade_result,
+        bool
+    ):
+
+        success = trade_result
+
+    return (
+        success,
+        policy_capital
+    )
+
+
+# ============================================================
 # 1サイクル
 # ============================================================
 
@@ -316,9 +468,26 @@ def run_cycle(
         strategy
     )
 
+    max_steps = int(
+        max_steps
+    )
+
+    if max_steps < 1:
+        raise ValueError(
+            "max_steps は1以上で指定してください。"
+        )
+
+    # --------------------------------------------------------
+    # 初期資本
+    # --------------------------------------------------------
+
     capital = START_CAPITAL
 
     history = []
+
+    # --------------------------------------------------------
+    # ステップ実行
+    # --------------------------------------------------------
 
     for step in range(
         1,
@@ -339,7 +508,7 @@ def run_cycle(
             }
 
         # ----------------------------------------------------
-        # 市場候補取得
+        # 現在資本で候補商品取得
         # ----------------------------------------------------
 
         items = get_candidates(
@@ -381,114 +550,69 @@ def run_cycle(
             selected
         )
 
+        capital_before = capital
+
         # ----------------------------------------------------
         # policyによる取引判定
         # ----------------------------------------------------
 
-        try:
-
-            trade_result = evaluate_trade(
-                selected,
-                capital
-            )
-
-        except TypeError:
-
-            try:
-
-                trade_result = evaluate_trade(
-                    selected
-                )
-
-            except TypeError:
-
-                trade_result = None
+        (
+            success,
+            policy_capital
+        ) = _evaluate_trade(
+            selected,
+            capital
+        )
 
         # ----------------------------------------------------
-        # evaluate_trade の戻り値を統一
-        # ----------------------------------------------------
-
-        success = False
-        new_capital = 0
-
-        if isinstance(
-            trade_result,
-            dict
-        ):
-
-            success = bool(
-                trade_result.get(
-                    "success",
-                    False
-                )
-            )
-
-            new_capital = trade_result.get(
-                "capital",
-                trade_result.get(
-                    "new_capital",
-                    0
-                )
-            )
-
-        elif isinstance(
-            trade_result,
-            tuple
-        ):
-
-            if len(trade_result) >= 1:
-                success = bool(
-                    trade_result[0]
-                )
-
-            if len(trade_result) >= 2:
-                new_capital = (
-                    trade_result[1]
-                )
-
-        elif isinstance(
-            trade_result,
-            bool
-        ):
-
-            success = trade_result
-
-        # ----------------------------------------------------
-        # policy_engine が capital を返さない場合
+        # 成功時の次資本
         #
-        # 市場商品の sale_price / expected_sale_price
-        # を利用して成功後の資本を計算する。
+        # 重要：
+        # market_engine.py の next_value を最優先する。
+        #
+        # これにより、
+        #
+        # 100円 → わら → 150円
+        #
+        # のように市場定義通りに資本が進む。
         # ----------------------------------------------------
+
+        new_capital = 0
 
         if success:
 
-            if not new_capital:
+            market_next_value = _next_value(
+                selected
+            )
 
-                sale_price = selected.get(
-                    "sale_price",
-                    selected.get(
-                        "expected_sale_price",
-                        selected.get(
-                            "sell_price",
-                            0
-                        )
-                    )
+            if market_next_value > 0:
+
+                new_capital = (
+                    market_next_value
                 )
 
+            else:
+
                 try:
+
                     new_capital = float(
-                        sale_price
+                        policy_capital
                     )
 
                 except (
                     ValueError,
                     TypeError
                 ):
-                    new_capital = (
-                        capital
-                    )
 
-            capital = new_capital
+                    new_capital = 0
+
+        # ----------------------------------------------------
+        # 成功だが次資本が不正
+        # ----------------------------------------------------
+
+        if success and new_capital <= 0:
+
+            success = False
 
         # ----------------------------------------------------
         # 取引履歴
@@ -506,30 +630,16 @@ def run_cycle(
                 purchase_price,
 
             "capital_before":
-                capital
-                if not success
-                else (
-                    capital
-                    if new_capital == capital
-                    else 0
-                ),
+                capital_before,
 
             "success":
                 success,
 
             "capital_after":
-                capital
+                new_capital
                 if success
                 else 0
         }
-
-        # capital_before を正確に保持するため、
-        # 成功判定前の資本を再計算できない場合に備える。
-        if success:
-
-            trade_record[
-                "capital_after"
-            ] = capital
 
         history.append(
             trade_record
@@ -547,6 +657,12 @@ def run_cycle(
                 "steps": step,
                 "history": history
             }
+
+        # ----------------------------------------------------
+        # 成功したので資本更新
+        # ----------------------------------------------------
+
+        capital = new_capital
 
         # ----------------------------------------------------
         # 目標到達
@@ -594,6 +710,16 @@ def run_campaign(
         strategy
     )
 
+    max_cycles = int(
+        max_cycles
+    )
+
+    if max_cycles < 1:
+
+        raise ValueError(
+            "max_cycles は1以上で指定してください。"
+        )
+
     campaign_history = []
 
     restarts = 0
@@ -604,7 +730,8 @@ def run_campaign(
     ):
 
         result = run_cycle(
-            strategy
+            strategy,
+            DEFAULT_MAX_STEPS
         )
 
         campaign_history.append(
@@ -630,7 +757,10 @@ def run_campaign(
                     cycle
             }
 
+        # ----------------------------------------------------
         # 失敗なら仮想リスタート
+        # ----------------------------------------------------
+
         restarts += 1
 
     return {
@@ -713,11 +843,13 @@ def summarize_campaigns(
     )
 
     if campaigns < 1:
+
         raise ValueError(
             "campaigns は1以上で指定してください。"
         )
 
     if max_cycles < 1:
+
         raise ValueError(
             "max_cycles は1以上で指定してください。"
         )
@@ -779,11 +911,13 @@ def summarize_campaigns(
                 ]
             )
 
-            successful_cycle = campaign[
-                "history"
-            ][
-                successful_cycle_number - 1
-            ]
+            successful_cycle = (
+                campaign[
+                    "history"
+                ][
+                    successful_cycle_number - 1
+                ]
+            )
 
             route = build_route(
                 successful_cycle
