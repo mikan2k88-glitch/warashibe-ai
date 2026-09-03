@@ -1,43 +1,59 @@
-
 # Warashibe AI v1.1
-# 戦略エンジン
+# 戦略比較・推薦エンジン
 #
 # 役割：
-# ・各戦略の名称を管理
-# ・仮想市場のシミュレーション結果を比較
-# ・最も有望な戦略をAI戦略本部として推薦
+# ・random / safe / balanced / aggressive の比較結果を受け取る
+# ・目標到達率を最優先して順位付けする
+# ・同率の場合は平均サイクル数、再起動数を比較
+# ・人間向けの推奨結果を返す
 #
-# シミュレーション本体
-#     → simulation_engine.py
-#
-# 戦略エンジン
-#     → strategy_engine.py
-#
-# app.py から利用する
+# Web/API処理は app.py に置かない
 
-
-# ============================================================
-# 戦略名
-# ============================================================
 
 STRATEGY_LABELS = {
     "random": "ランダム",
     "safe": "セーフ",
     "balanced": "バランス",
-    "aggressive": "アグレッシブ"
+    "aggressive": "アグレッシブ",
 }
 
 
-# ============================================================
-# リスク評価
-# ============================================================
+def get_goal_rate(result):
+    """現在の出力形式と旧形式の両方から到達率を取得する。"""
+    if "campaign_goal_rate_percent" in result:
+        return float(result["campaign_goal_rate_percent"])
+
+    if "goal_rate_percent" in result:
+        return float(result["goal_rate_percent"])
+
+    return 0.0
+
+
+def get_average_cycles(result):
+    """平均サイクル数を取得。存在しない場合は無限大。"""
+    value = result.get("average_cycles_used")
+
+    if value is None:
+        return float("inf")
+
+    return float(value)
+
+
+def get_total_restarts(result):
+    """総再起動数を取得。存在しない場合は無限大。"""
+    value = result.get("total_restarts")
+
+    if value is None:
+        return float("inf")
+
+    return int(value)
+
 
 def risk_level(goal_rate_percent):
     """
-    キャンペーンで100万円に到達する確率を基準に
-    リスク表現を決定する。
+    目標到達率からリスクを表現する。
 
-    到達率が高いほどリスクを低く評価する。
+    到達率が高いほどリスクは低い。
     """
 
     if goal_rate_percent >= 10:
@@ -49,192 +65,92 @@ def risk_level(goal_rate_percent):
     return "非常に高"
 
 
-# ============================================================
-# 戦略比較
-# ============================================================
-
-def _rank_strategy_results(strategy_results):
+def strategy_sort_key(result):
     """
-    戦略シミュレーション結果を順位付けする。
+    戦略の順位付け。
 
     優先順位：
-
-    1. 100万円到達率が高い
-    2. 平均使用サイクル数が少ない
-    3. 総再挑戦回数が少ない
+    1. 目標到達率が高い
+    2. 平均サイクル数が少ない
+    3. 総再起動数が少ない
     """
 
-    return sorted(
-        strategy_results,
-
-        key=lambda result: (
-            -result["campaign_goal_rate_percent"],
-            result["average_cycles_used"],
-            result["total_restarts"]
-        )
+    return (
+        -get_goal_rate(result),
+        get_average_cycles(result),
+        get_total_restarts(result),
     )
 
 
-# ============================================================
-# 推薦作成
-# ============================================================
-
 def create_recommendation(strategy_results):
     """
-    仮想市場の戦略比較結果から
-    最も有望な戦略を推薦する。
+    複数戦略の比較結果から推奨戦略を決定する。
 
-    balanced を含む全戦略に対応する。
-
-    期待される入力：
-
-        [
-            {
-                "strategy": "random",
-                ...
-            },
-            {
-                "strategy": "safe",
-                ...
-            },
-            {
-                "strategy": "balanced",
-                ...
-            },
-            {
-                "strategy": "aggressive",
-                ...
-            }
-        ]
-
-    戦略の数は固定しない。
+    現在のシミュレーション出力では
+    goal_rate_percent を最優先する。
     """
 
     if not strategy_results:
-        raise ValueError(
-            "strategy_results が空です。"
-        )
+        raise ValueError("strategy_results が空です。")
 
-    ranked = _rank_strategy_results(
-        strategy_results
+    ranked = sorted(
+        strategy_results,
+        key=strategy_sort_key,
     )
 
     best = ranked[0]
 
-    strategy = best["strategy"]
+    strategy = best.get("strategy", "unknown")
+    label = STRATEGY_LABELS.get(strategy, strategy)
 
-    if strategy not in STRATEGY_LABELS:
-        raise ValueError(
-            f"未知のstrategyです: {strategy}"
-        )
+    goal_rate = get_goal_rate(best)
 
-    label = STRATEGY_LABELS[strategy]
-
-    return {
-        "recommended_strategy":
-            strategy,
-
-        "recommended_strategy_label":
-            label,
-
-        "campaign_goal_rate_percent":
-            best[
-                "campaign_goal_rate_percent"
-            ],
-
-        "risk_level":
-            risk_level(
-                best[
-                    "campaign_goal_rate_percent"
-                ]
-            ),
-
-        "dominant_successful_route":
-            best[
-                "dominant_successful_route"
-            ],
-
-        "reason": (
-            f"{label}戦略は、"
-            f"到達率 "
-            f"{best['campaign_goal_rate_percent']}%"
-            f" で最上位です。"
-        ),
-
-        "human_action": (
-            "これは仮想市場での提案です。"
-            "実際の仕入れ・注文は人間が確認してから"
-            "実行してください。"
-        )
-    }
-
-
-# ============================================================
-# 戦略比較結果の簡易サマリー
-# ============================================================
-
-def compare_strategies(strategy_results):
-    """
-    戦略比較結果を順位順に返す。
-
-    AI戦略本部やAPIから
-    比較結果を扱いやすくするための関数。
-    """
-
-    if not strategy_results:
-        return []
-
-    ranked = _rank_strategy_results(
-        strategy_results
+    dominant_route = best.get(
+        "dominant_successful_route",
+        "",
     )
 
-    comparison = []
+    if not dominant_route:
+        dominant_route = best.get(
+            "successful_route",
+            "",
+        )
 
-    for index, result in enumerate(
-        ranked,
-        start=1
-    ):
-
-        strategy = result["strategy"]
-
-        comparison.append({
-
-            "rank":
-                index,
-
-            "strategy":
-                strategy,
-
-            "strategy_label":
-                STRATEGY_LABELS.get(
-                    strategy,
-                    strategy
+    return {
+        "recommended_strategy": strategy,
+        "recommended_strategy_label": label,
+        "campaign_goal_rate_percent": goal_rate,
+        "risk_level": risk_level(goal_rate),
+        "dominant_successful_route": dominant_route,
+        "reason": (
+            f"{label}戦略は、"
+            f"目標到達率 {goal_rate}% で"
+            f"比較対象の中で最上位です。"
+        ),
+        "human_action": (
+            "これは仮想市場による戦略提案です。"
+            "実際の仕入れ・注文は人間が確認してから"
+            "実行してください。"
+        ),
+        "ranking": [
+            {
+                "strategy": item.get("strategy"),
+                "strategy_label": STRATEGY_LABELS.get(
+                    item.get("strategy"),
+                    item.get("strategy"),
                 ),
-
-            "campaign_goal_rate_percent":
-                result[
-                    "campaign_goal_rate_percent"
-                ],
-
-            "average_cycles_used":
-                result[
-                    "average_cycles_used"
-                ],
-
-            "average_restarts":
-                result[
-                    "average_restarts"
-                ],
-
-            "total_restarts":
-                result[
-                    "total_restarts"
-                ],
-
-            "dominant_successful_route":
-                result[
-                    "dominant_successful_route"
-                ]
-        })
-
-    return comparison
+                "campaign_goal_rate_percent": get_goal_rate(item),
+                "average_cycles_used": (
+                    None
+                    if get_average_cycles(item) == float("inf")
+                    else get_average_cycles(item)
+                ),
+                "total_restarts": (
+                    None
+                    if get_total_restarts(item) == float("inf")
+                    else get_total_restarts(item)
+                ),
+            }
+            for item in ranked
+        ],
+    }
