@@ -1,4 +1,4 @@
-```python
+
 # ============================================================
 # Warashibe AI v0.6
 # simulation_engine.py
@@ -1111,4 +1111,3 @@ def _get_policy_version():
 
     except ImportError:
         return "unknown"
-```
