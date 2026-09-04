@@ -1,156 +1,201 @@
-# Warashibe AI v1.1
-# 戦略比較・推薦エンジン
+# ============================================================
+# Warashibe AI v0.6
+# strategy_engine.py
 #
 # 役割：
-# ・random / safe / balanced / aggressive の比較結果を受け取る
-# ・目標到達率を最優先して順位付けする
-# ・同率の場合は平均サイクル数、再起動数を比較
-# ・人間向けの推奨結果を返す
+# ・戦略名の正規化
+# ・商品の成功率 / 次価値取得
+# ・Balancedスコア計算
+# ・戦略に応じた商品選択
 #
-# Web/API処理は app.py に置かない
+# simulation_engine.py から戦略処理を分離する。
+# ============================================================
+
+import random
 
 
-STRATEGY_LABELS = {
-    "random": "ランダム",
-    "safe": "セーフ",
-    "balanced": "バランス",
-    "aggressive": "アグレッシブ",
+# ============================================================
+# 対応戦略
+# ============================================================
+
+SUPPORTED_STRATEGIES = {
+    "random",
+    "safe",
+    "balanced",
+    "aggressive",
 }
 
 
-def get_goal_rate(result):
-    """現在の出力形式と旧形式の両方から到達率を取得する。"""
-    if "campaign_goal_rate_percent" in result:
-        return float(result["campaign_goal_rate_percent"])
+# ============================================================
+# 戦略名の正規化
+# ============================================================
 
-    if "goal_rate_percent" in result:
-        return float(result["goal_rate_percent"])
-
-    return 0.0
-
-
-def get_average_cycles(result):
-    """平均サイクル数を取得。存在しない場合は無限大。"""
-    value = result.get("average_cycles_used")
-
-    if value is None:
-        return float("inf")
-
-    return float(value)
-
-
-def get_total_restarts(result):
-    """総再起動数を取得。存在しない場合は無限大。"""
-    value = result.get("total_restarts")
-
-    if value is None:
-        return float("inf")
-
-    return int(value)
-
-
-def risk_level(goal_rate_percent):
+def normalize_strategy(strategy):
     """
-    目標到達率からリスクを表現する。
+    戦略名を正規化する。
 
-    到達率が高いほどリスクは低い。
+    例：
+        "balanced"
+        " BALANCED "
+        "Balanced"
+
+    → "balanced"
     """
 
-    if goal_rate_percent >= 10:
-        return "中"
+    if not isinstance(strategy, str):
+        return None
 
-    if goal_rate_percent >= 5:
-        return "高"
+    normalized = strategy.strip().lower()
 
-    return "非常に高"
+    if normalized not in SUPPORTED_STRATEGIES:
+        return None
+
+    return normalized
 
 
-def strategy_sort_key(result):
+# ============================================================
+# 商品成功率取得
+# ============================================================
+
+def get_success_rate(item):
     """
-    戦略の順位付け。
-
-    優先順位：
-    1. 目標到達率が高い
-    2. 平均サイクル数が少ない
-    3. 総再起動数が少ない
+    商品の成功率を0.0〜1.0に正規化する。
     """
 
-    return (
-        -get_goal_rate(result),
-        get_average_cycles(result),
-        get_total_restarts(result),
+    try:
+        value = float(
+            item.get(
+                "success_rate",
+                0.0
+            )
+        )
+    except (
+        TypeError,
+        ValueError
+    ):
+        return 0.0
+
+    return max(
+        0.0,
+        min(1.0, value)
     )
 
 
-def create_recommendation(strategy_results):
+# ============================================================
+# 商品の次価値取得
+# ============================================================
+
+def get_next_value(item):
     """
-    複数戦略の比較結果から推奨戦略を決定する。
-
-    現在のシミュレーション出力では
-    goal_rate_percent を最優先する。
+    成功時の次の資本価値を取得する。
     """
 
-    if not strategy_results:
-        raise ValueError("strategy_results が空です。")
+    try:
+        value = float(
+            item.get(
+                "next_value",
+                0
+            )
+        )
+    except (
+        TypeError,
+        ValueError
+    ):
+        return 0.0
 
-    ranked = sorted(
-        strategy_results,
-        key=strategy_sort_key,
+    return max(
+        0.0,
+        value
     )
 
-    best = ranked[0]
 
-    strategy = best.get("strategy", "unknown")
-    label = STRATEGY_LABELS.get(strategy, strategy)
+# ============================================================
+# Balancedスコア
+# ============================================================
 
-    goal_rate = get_goal_rate(best)
+def calculate_balanced_score(item):
+    """
+    balanced戦略用スコア。
 
-    dominant_route = best.get(
-        "dominant_successful_route",
-        "",
+    成功率60%
+    次価値40%
+
+    次価値は桁が大きくなるため、
+    平方根を使って影響を抑える。
+    """
+
+    success_rate = get_success_rate(item)
+    next_value = get_next_value(item)
+
+    success_component = (
+        success_rate * 100
     )
 
-    if not dominant_route:
-        dominant_route = best.get(
-            "successful_route",
-            "",
+    value_component = (
+        next_value ** 0.5
+        if next_value > 0
+        else 0.0
+    )
+
+    score = (
+        success_component * 0.6
+        + value_component * 0.4
+    )
+
+    return round(
+        score,
+        6
+    )
+
+
+# ============================================================
+# 商品選択
+# ============================================================
+
+def select_item(items, strategy):
+    """
+    戦略に応じて候補商品から1つ選択する。
+    """
+
+    if not items:
+        return None
+
+    strategy = normalize_strategy(
+        strategy
+    )
+
+    if strategy is None:
+        return None
+
+    if strategy == "random":
+        return random.choice(items)
+
+    if strategy == "safe":
+        return max(
+            items,
+            key=lambda item: (
+                get_success_rate(item),
+                get_next_value(item),
+            )
         )
 
-    return {
-        "recommended_strategy": strategy,
-        "recommended_strategy_label": label,
-        "campaign_goal_rate_percent": goal_rate,
-        "risk_level": risk_level(goal_rate),
-        "dominant_successful_route": dominant_route,
-        "reason": (
-            f"{label}戦略は、"
-            f"目標到達率 {goal_rate}% で"
-            f"比較対象の中で最上位です。"
-        ),
-        "human_action": (
-            "これは仮想市場による戦略提案です。"
-            "実際の仕入れ・注文は人間が確認してから"
-            "実行してください。"
-        ),
-        "ranking": [
-            {
-                "strategy": item.get("strategy"),
-                "strategy_label": STRATEGY_LABELS.get(
-                    item.get("strategy"),
-                    item.get("strategy"),
-                ),
-                "campaign_goal_rate_percent": get_goal_rate(item),
-                "average_cycles_used": (
-                    None
-                    if get_average_cycles(item) == float("inf")
-                    else get_average_cycles(item)
-                ),
-                "total_restarts": (
-                    None
-                    if get_total_restarts(item) == float("inf")
-                    else get_total_restarts(item)
-                ),
-            }
-            for item in ranked
-        ],
-    }
+    if strategy == "aggressive":
+        return max(
+            items,
+            key=lambda item: (
+                get_next_value(item),
+                get_success_rate(item),
+            )
+        )
+
+    if strategy == "balanced":
+        return max(
+            items,
+            key=lambda item: (
+                calculate_balanced_score(item),
+                get_success_rate(item),
+                get_next_value(item),
+            )
+        )
+
+    return None
