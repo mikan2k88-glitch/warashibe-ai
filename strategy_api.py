@@ -2,30 +2,46 @@ from flask import Blueprint, jsonify, request, render_template_string
 
 from market_engine import MARKET
 from policy_engine import POLICY_VERSION, START_CAPITAL
-from strategy_engine import STRATEGY_LABELS, create_recommendation
 
-from simulation_engine import (
+from strategy_engine import STRATEGY_LABELS
+
+from simulation_engine import run_cycle
+
+from campaign_engine import (
     TARGET,
     MAX_CAMPAIGN_CYCLES,
-    run_cycle,
-    summarize_campaigns
+    summarize_campaigns,
+    evaluate_strategies,
 )
 
 
-strategy_bp = Blueprint("strategy", __name__)
+VERSION = "1.1"
 
+STRATEGIES = (
+    "random",
+    "safe",
+    "balanced",
+    "aggressive",
+)
+
+
+strategy_bp = Blueprint(
+    "strategy",
+    __name__
+)
+
+
+# ============================================================
+# 共通関数
+# ============================================================
 
 def get_strategy():
     strategy = request.args.get(
         "strategy",
         "random"
-    ).lower()
+    ).strip().lower()
 
-    if strategy not in {
-        "random",
-        "safe",
-        "aggressive"
-    }:
+    if strategy not in STRATEGIES:
         return None
 
     return strategy
@@ -44,7 +60,7 @@ def get_bounded_int(
 
     try:
         value = int(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
     if minimum <= value <= maximum:
@@ -53,48 +69,20 @@ def get_bounded_int(
     return None
 
 
-def evaluate_strategies(
-    campaigns,
-    max_cycles
-):
-    strategy_results = [
-        summarize_campaigns(
-            strategy,
-            campaigns,
-            max_cycles
+def strategy_error():
+    return jsonify({
+        "error": (
+            "strategy が不正です。"
+            "使用可能: random, safe, balanced, aggressive"
         )
-        for strategy in (
-            "random",
-            "safe",
-            "aggressive"
-        )
-    ]
+    }), 400
 
-    recommendation = create_recommendation(
-        strategy_results
-    )
 
-    ranked_results = sorted(
-        strategy_results,
-        key=lambda result: (
-            -result[
-                "campaign_goal_rate_percent"
-            ],
-            result[
-                "average_cycles_used"
-            ],
-            result[
-                "total_restarts"
-            ]
-        )
-    )
-
-    return (
-        strategy_results,
-        ranked_results,
-        recommendation
-    )
-
+# ============================================================
+# /journey
+#
+# 1回のわらしべ挑戦
+# ============================================================
 
 @strategy_bp.route("/journey")
 def journey():
@@ -102,20 +90,25 @@ def journey():
     strategy = get_strategy()
 
     if strategy is None:
-        return jsonify({
-            "error": "strategy が不正です。"
-        }), 400
+        return strategy_error()
 
     result = run_cycle(strategy)
 
     return jsonify({
-        "version": "1.1",
+        "version": VERSION,
         "policy_version": POLICY_VERSION,
         "strategy": strategy,
         "start_capital": START_CAPITAL,
+        "target": TARGET,
         **result
     })
 
+
+# ============================================================
+# /simulate
+#
+# 単体シミュレーション
+# ============================================================
 
 @strategy_bp.route("/simulate")
 def simulate():
@@ -130,9 +123,7 @@ def simulate():
     )
 
     if strategy is None:
-        return jsonify({
-            "error": "strategy が不正です。"
-        }), 400
+        return strategy_error()
 
     if simulations is None:
         return jsonify({
@@ -155,41 +146,57 @@ def simulate():
 
         result = run_cycle(strategy)
 
-        for trade in result["history"]:
+        for trade in result.get(
+            "history",
+            []
+        ):
 
-            stats = item_stats[
-                trade["selected_item"]
-            ]
+            item_name = trade.get(
+                "selected_item"
+            )
+
+            if not item_name:
+                continue
+
+            if item_name not in item_stats:
+                item_stats[item_name] = {
+                    "attempts": 0,
+                    "successes": 0,
+                    "failures": 0
+                }
+
+            stats = item_stats[item_name]
 
             stats["attempts"] += 1
 
-            if trade["success"]:
+            if trade.get("success"):
                 stats["successes"] += 1
             else:
                 stats["failures"] += 1
 
-        if result["status"] == "goal_reached":
+        if result.get("status") == "goal_reached":
             goal_reached += 1
 
     for stats in item_stats.values():
 
         attempts = stats["attempts"]
 
-        stats["success_rate_percent"] = (
-            round(
+        if attempts:
+            stats["success_rate_percent"] = round(
                 stats["successes"]
                 / attempts
                 * 100,
                 2
             )
-            if attempts
-            else 0
-        )
+        else:
+            stats["success_rate_percent"] = 0
 
     return jsonify({
-        "version": "1.1",
+        "version": VERSION,
         "policy_version": POLICY_VERSION,
         "strategy": strategy,
+        "start_capital": START_CAPITAL,
+        "target": TARGET,
         "simulations": simulations,
         "goal_reached": goal_reached,
         "goal_rate_percent": round(
@@ -201,6 +208,20 @@ def simulate():
         "item_stats": item_stats
     })
 
+
+# ============================================================
+# /campaign/simulate
+#
+# 再挑戦ありのキャンペーン統計
+#
+# 例：
+#
+# /campaign/simulate
+#     ?strategy=balanced
+#     &campaigns=1000
+#     &max_cycles=10
+#
+# ============================================================
 
 @strategy_bp.route("/campaign/simulate")
 def campaign_simulate():
@@ -222,18 +243,18 @@ def campaign_simulate():
     )
 
     if strategy is None:
-        return jsonify({
-            "error": "strategy が不正です。"
-        }), 400
+        return strategy_error()
 
-    if (
-        campaigns is None
-        or max_cycles is None
-    ):
+    if campaigns is None:
         return jsonify({
             "error":
-                "campaigns は1〜10000、"
-                "max_cycles は1〜100で指定してください。"
+                "campaigns は1〜10000の整数です。"
+        }), 400
+
+    if max_cycles is None:
+        return jsonify({
+            "error":
+                "max_cycles は1〜100の整数です。"
         }), 400
 
     summary = summarize_campaigns(
@@ -243,7 +264,7 @@ def campaign_simulate():
     )
 
     return jsonify({
-        "version": "1.1",
+        "version": VERSION,
         "policy_version": POLICY_VERSION,
         "start_capital": START_CAPITAL,
         "target": TARGET,
@@ -251,11 +272,17 @@ def campaign_simulate():
     })
 
 
+# ============================================================
+# /strategy/recommendation
+#
+# 4戦略を比較
+# 内部連携向けJSON
+# ============================================================
+
 @strategy_bp.route(
     "/strategy/recommendation"
 )
 def strategy_recommendation():
-    """内部連携向けのJSONデータ"""
 
     campaigns = get_bounded_int(
         "campaigns",
@@ -271,27 +298,37 @@ def strategy_recommendation():
         100
     )
 
-    if (
-        campaigns is None
-        or max_cycles is None
-    ):
+    if campaigns is None:
         return jsonify({
             "error":
-                "campaigns は100〜10000、"
-                "max_cycles は1〜100で指定してください。"
+                "campaigns は100〜10000の整数です。"
+        }), 400
+
+    if max_cycles is None:
+        return jsonify({
+            "error":
+                "max_cycles は1〜100の整数です。"
         }), 400
 
     (
         strategy_results,
         _,
-        recommendation
     ) = evaluate_strategies(
         campaigns,
         max_cycles
     )
 
+    recommendation = None
+
+    if strategy_results:
+        from strategy_engine import create_recommendation
+
+        recommendation = create_recommendation(
+            strategy_results
+        )
+
     return jsonify({
-        "version": "1.1",
+        "version": VERSION,
         "policy_version": POLICY_VERSION,
         "mode": "virtual_market_only",
         "current_capital": START_CAPITAL,
@@ -301,9 +338,14 @@ def strategy_recommendation():
     })
 
 
+# ============================================================
+# /strategy/report
+#
+# 人間向け戦略レポート
+# ============================================================
+
 @strategy_bp.route("/strategy/report")
 def strategy_report():
-    """人間向けの戦略レポート"""
 
     campaigns = get_bounded_int(
         "campaigns",
@@ -319,233 +361,269 @@ def strategy_report():
         100
     )
 
-    if (
-        campaigns is None
-        or max_cycles is None
-    ):
+    if campaigns is None:
         return (
-            "campaigns または "
+            "campaigns の指定が不正です。",
+            400
+        )
+
+    if max_cycles is None:
+        return (
             "max_cycles の指定が不正です。",
             400
         )
 
     (
-        _,
+        strategy_results,
         ranked_results,
-        recommendation
     ) = evaluate_strategies(
         campaigns,
         max_cycles
     )
 
-    return render_template_string("""
-    <!doctype html>
-    <html lang="ja">
+    from strategy_engine import create_recommendation
 
-    <head>
+    recommendation = create_recommendation(
+        strategy_results
+    )
 
-        <meta charset="utf-8">
+    return render_template_string(
+        """
+        <!doctype html>
 
-        <title>
-            Warashibe AI 戦略レポート
-        </title>
+        <html lang="ja">
 
-        <style>
+        <head>
 
-            body {
-                max-width: 760px;
-                margin: 40px auto;
-                padding: 0 20px;
-                font-family: sans-serif;
-                line-height: 1.7;
-                color: #222;
-            }
+            <meta charset="utf-8">
 
-            .card {
-                margin: 18px 0;
-                padding: 20px;
-                border-radius: 12px;
-                background: #f5f7fb;
-            }
+            <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1"
+            >
 
-            .recommendation {
-                background: #e8f5e9;
-                border-left:
-                    6px solid #2e7d32;
-            }
+            <title>
+                Warashibe AI 戦略レポート
+            </title>
 
-            .risk {
-                background: #fff3e0;
-                border-left:
-                    6px solid #ef6c00;
-            }
+            <style>
 
-            table {
-                width: 100%;
-                border-collapse: collapse;
-            }
+                body {
+                    max-width: 760px;
+                    margin: 40px auto;
+                    padding: 0 20px;
+                    font-family: sans-serif;
+                    line-height: 1.7;
+                    color: #222;
+                }
 
-            th,
-            td {
-                padding: 10px;
-                border-bottom:
-                    1px solid #ddd;
-                text-align: left;
-            }
+                .card {
+                    margin: 18px 0;
+                    padding: 20px;
+                    border-radius: 12px;
+                    background: #f5f7fb;
+                }
 
-        </style>
+                .recommendation {
+                    background: #e8f5e9;
+                    border-left:
+                        6px solid #2e7d32;
+                }
 
-    </head>
+                .risk {
+                    background: #fff3e0;
+                    border-left:
+                        6px solid #ef6c00;
+                }
 
-    <body>
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
 
-        <h1>
-            Warashibe AI 戦略レポート
-        </h1>
+                th,
+                td {
+                    padding: 10px;
+                    border-bottom:
+                        1px solid #ddd;
+                    text-align: left;
+                }
 
-        <p>
-            仮想市場で
-            {{ campaigns }}
-            回のキャンペーンを比較しました。
-        </p>
+            </style>
 
+        </head>
 
-        <div class="card recommendation">
+        <body>
 
-            <h2>
-                今日の結論
-            </h2>
+            <h1>
+                Warashibe AI 戦略レポート
+            </h1>
 
             <p>
+                仮想市場で
+                {{ campaigns }}
+                回のキャンペーンを比較しました。
+            </p>
 
-                <strong>
+
+            <div class="card recommendation">
+
+                <h2>
+                    今日の結論
+                </h2>
+
+                <p>
+
+                    <strong>
+                        {{
+                            recommendation.
+                            recommended_strategy_label
+                        }}戦略
+                    </strong>
+
+                    を提案します。
+
+                </p>
+
+                <p>
+                    {{ recommendation.reason }}
+                </p>
+
+                <p>
+
+                    代表的な成功ルート：
+
+                    <br>
+
                     {{
                         recommendation.
-                        recommended_strategy_label
-                    }}戦略
-                </strong>
-
-                を提案します。
-
-            </p>
-
-            <p>
-                {{ recommendation.reason }}
-            </p>
-
-            <p>
-
-                代表的な成功ルート：
-
-                <br>
-
-                {{
-                    recommendation.
-                    dominant_successful_route
-                }}
-
-            </p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h2>
-                戦略比較
-            </h2>
-
-            <table>
-
-                <tr>
-                    <th>順位</th>
-                    <th>戦略</th>
-                    <th>100万円到達率</th>
-                    <th>平均再挑戦回数</th>
-                </tr>
-
-                {% for result
-                in ranked_results %}
-
-                <tr>
-
-                    <td>
-                        {{ loop.index }}
-                    </td>
-
-                    <td>
-                        {{
-                            strategy_labels[
-                                result.strategy
-                            ]
-                        }}
-                    </td>
-
-                    <td>
-                        {{
-                            result.
-                            campaign_goal_rate_percent
-                        }}%
-                    </td>
-
-                    <td>
-                        {{
-                            result.
-                            average_restarts
-                        }}回
-                    </td>
-
-                </tr>
-
-                {% endfor %}
-
-            </table>
-
-        </div>
-
-
-        <div class="card risk">
-
-            <h2>
-                注意点
-            </h2>
-
-            <p>
-
-                リスク評価：
-
-                <strong>
-                    {{
-                        recommendation.risk_level
+                        dominant_successful_route
                     }}
-                </strong>
 
-            </p>
+                </p>
 
-            <p>
+            </div>
 
-                これは仮想市場での研究結果です。
 
-                実際の仕入れ・注文は、
-                必ず人間が確認してから
-                行ってください。
+            <div class="card">
 
-            </p>
+                <h2>
+                    戦略比較
+                </h2>
 
-        </div>
+                <table>
 
-    </body>
+                    <tr>
 
-    </html>
+                        <th>
+                            順位
+                        </th>
 
-    """,
+                        <th>
+                            戦略
+                        </th>
 
-    campaigns=campaigns,
+                        <th>
+                            100万円到達率
+                        </th>
 
-    ranked_results=ranked_results,
+                        <th>
+                            平均サイクル
+                        </th>
 
-    recommendation=recommendation,
+                        <th>
+                            平均再挑戦
+                        </th>
 
-    strategy_labels=STRATEGY_LABELS
+                    </tr>
 
+
+                    {% for result in ranked_results %}
+
+                    <tr>
+
+                        <td>
+                            {{ loop.index }}
+                        </td>
+
+                        <td>
+                            {{
+                                strategy_labels[
+                                    result.strategy
+                                ]
+                            }}
+                        </td>
+
+                        <td>
+                            {{
+                                result.
+                                campaign_goal_rate_percent
+                            }}%
+                        </td>
+
+                        <td>
+                            {{
+                                result.
+                                average_cycles_used
+                            }}
+                        </td>
+
+                        <td>
+                            {{
+                                result.
+                                average_restarts
+                            }}回
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </table>
+
+            </div>
+
+
+            <div class="card risk">
+
+                <h2>
+                    注意点
+                </h2>
+
+                <p>
+
+                    リスク評価：
+
+                    <strong>
+                        {{
+                            recommendation.risk_level
+                        }}
+                    </strong>
+
+                </p>
+
+                <p>
+
+                    これは仮想市場での研究結果です。
+
+                    実際の仕入れ・注文は、
+                    必ず人間が確認してから
+                    行ってください。
+
+                </p>
+
+            </div>
+
+        </body>
+
+        </html>
+        """,
+
+        campaigns=campaigns,
+
+        ranked_results=ranked_results,
+
+        recommendation=recommendation,
+
+        strategy_labels=STRATEGY_LABELS
     )
