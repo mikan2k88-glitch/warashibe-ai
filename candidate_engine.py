@@ -1,7 +1,17 @@
-# Warashibe AI v1.0
-# 市場ごとに異なる商品データを共通フォーマットへ変換する
+# Warashibe AI v1.1
+# Candidate Engine
+#
+# 役割：
+# ・市場ごとに異なる商品データを共通フォーマットへ変換する
+# ・Demand Engine による需要評価を付加する
+# ・Value Engine による価値変換評価を付加する
 
-CANDIDATE_VERSION = "1.0"
+
+from demand_engine import get_demand
+from value_engine import get_value_transformation
+
+
+CANDIDATE_VERSION = "1.1"
 
 
 def create_candidate(
@@ -28,6 +38,9 @@ def create_candidate(
     confidence:
         価格情報などに対する信頼度
         0.0 ～ 1.0
+
+    metadata:
+        市場データなどの追加情報
     """
 
     if metadata is None:
@@ -39,6 +52,15 @@ def create_candidate(
         expected_profit_rate = expected_profit / purchase_price
     else:
         expected_profit_rate = 0
+
+    asset = {
+        "name": name,
+        "value": expected_sale_price,
+        "category": category,
+    }
+
+    demand = get_demand(asset)
+    value_transformation = get_value_transformation(asset)
 
     return {
         "candidate_version": CANDIDATE_VERSION,
@@ -54,6 +76,9 @@ def create_candidate(
         "expected_profit_rate": expected_profit_rate,
 
         "confidence": confidence,
+
+        "demand": demand,
+        "value_transformation": value_transformation,
 
         "metadata": metadata
     }
