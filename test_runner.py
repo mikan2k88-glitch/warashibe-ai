@@ -34,6 +34,7 @@ REQUIRED_FILES = [
     "ranking_engine.py",
     "candidate_pipeline.py",
     "demand_engine.py",
+    "value_engine.py",
 ]
 
 STRATEGIES = [
@@ -138,6 +139,7 @@ def test_imports():
         "ranking_engine",
         "candidate_pipeline",
         "demand_engine",
+        "value_engine",
         "strategy_api",
         "candidate_api",
         "app",
@@ -279,6 +281,138 @@ def test_demand_engine():
         check(
             False,
             "demand_engine",
+            traceback.format_exc(),
+        )
+
+
+def test_value_engine():
+    try:
+        from value_engine import (
+            get_value_transformation,
+            get_value_growth_score,
+            get_next_value,
+            get_exchange_potential,
+        )
+
+        # 正常なカテゴリ
+        camera = get_value_transformation(
+            {
+                "name": "中古カメラ",
+                "value": 5000,
+                "category": "camera",
+            }
+        )
+
+        camera_valid = (
+            isinstance(camera, dict)
+            and camera.get("asset") == "中古カメラ"
+            and camera.get("category") == "camera"
+            and camera.get("current_value") == 5000
+            and camera.get("next_value") == 7500
+            and camera.get("value_growth_score") == 0.72
+            and camera.get("exchange_potential") == 0.68
+            and camera.get("route") == "collector"
+        )
+
+        check(
+            camera_valid,
+            "value_engine:camera",
+            "OK" if camera_valid else str(camera),
+        )
+
+        # 価値上昇スコア
+        growth_score = get_value_growth_score(
+            {
+                "name": "中古カメラ",
+                "value": 5000,
+                "category": "camera",
+            }
+        )
+
+        growth_valid = growth_score == 0.72
+
+        check(
+            growth_valid,
+            "value_engine:growth_score",
+            "OK" if growth_valid else str(growth_score),
+        )
+
+        # 次の価値
+        next_value = get_next_value(
+            {
+                "name": "中古カメラ",
+                "value": 5000,
+                "category": "camera",
+            }
+        )
+
+        next_value_valid = next_value == 7500
+
+        check(
+            next_value_valid,
+            "value_engine:next_value",
+            "OK" if next_value_valid else str(next_value),
+        )
+
+        # 交換可能性
+        exchange = get_exchange_potential(
+            {
+                "name": "中古カメラ",
+                "value": 5000,
+                "category": "camera",
+            }
+        )
+
+        exchange_valid = exchange == 0.68
+
+        check(
+            exchange_valid,
+            "value_engine:exchange_potential",
+            "OK" if exchange_valid else str(exchange),
+        )
+
+        # 未知カテゴリ
+        unknown = get_value_transformation(
+            {
+                "name": "未知の商品",
+                "value": 5000,
+                "category": "unknown",
+            }
+        )
+
+        unknown_valid = (
+            isinstance(unknown, dict)
+            and unknown.get("next_value") == 6000
+            and unknown.get("value_growth_score") == 0.50
+            and unknown.get("exchange_potential") == 0.50
+            and unknown.get("route") == "general"
+        )
+
+        check(
+            unknown_valid,
+            "value_engine:unknown_category",
+            "OK" if unknown_valid else str(unknown),
+        )
+
+        # 不正入力
+        invalid = get_value_transformation(None)
+
+        invalid_valid = (
+            isinstance(invalid, dict)
+            and invalid.get("current_value") == 0
+            and invalid.get("next_value") == 0
+        )
+
+        check(
+            invalid_valid,
+            "value_engine:invalid_input",
+            "OK" if invalid_valid else str(invalid),
+        )
+
+    except Exception:
+        check(
+            False,
+            "value_engine",
             traceback.format_exc(),
         )
 
@@ -552,6 +686,7 @@ def main():
     test_imports()
     test_strategy_engine()
     test_demand_engine()
+    test_value_engine()
     test_single_cycle()
     test_campaign_engine()
     test_strategy_api()
