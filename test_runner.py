@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+
 REQUIRED_FILES = [
     "app.py",
     "simulation_engine.py",
@@ -37,12 +38,14 @@ REQUIRED_FILES = [
     "value_engine.py",
 ]
 
+
 STRATEGIES = [
     "random",
     "safe",
     "balanced",
     "aggressive",
 ]
+
 
 API_TESTS = [
     ("/", "home"),
@@ -307,8 +310,8 @@ def test_value_engine():
             isinstance(camera, dict)
             and camera.get("asset") == "中古カメラ"
             and camera.get("category") == "camera"
-            and camera.get("current_value") == 5000
-            and camera.get("next_value") == 7500
+            and camera.get("current_value") == 5000.0
+            and camera.get("next_value") == 7500.0
             and camera.get("value_growth_score") == 0.72
             and camera.get("exchange_potential") == 0.68
             and camera.get("route") == "collector"
@@ -346,7 +349,7 @@ def test_value_engine():
             }
         )
 
-        next_value_valid = next_value == 7500
+        next_value_valid = next_value == 7500.0
 
         check(
             next_value_valid,
@@ -375,14 +378,14 @@ def test_value_engine():
         unknown = get_value_transformation(
             {
                 "name": "未知の商品",
-                "value": 5000,
+                "value": 1000,
                 "category": "unknown",
             }
         )
 
         unknown_valid = (
             isinstance(unknown, dict)
-            and unknown.get("next_value") == 6000
+            and unknown.get("next_value") == 1200.0
             and unknown.get("value_growth_score") == 0.50
             and unknown.get("exchange_potential") == 0.50
             and unknown.get("route") == "general"
@@ -413,6 +416,88 @@ def test_value_engine():
         check(
             False,
             "value_engine",
+            traceback.format_exc(),
+        )
+
+
+def test_candidate_engine():
+    try:
+        from candidate_engine import create_candidate
+
+        candidate = create_candidate(
+            name="中古カメラ",
+            purchase_price=5000,
+            expected_sale_price=7500,
+            source="test",
+            category="camera",
+            confidence=0.90,
+        )
+
+        demand = candidate.get("demand", {})
+        value = candidate.get("value_transformation", {})
+
+        valid = (
+            isinstance(candidate, dict)
+            and candidate.get("candidate_version") == "1.1"
+            and candidate.get("name") == "中古カメラ"
+            and candidate.get("category") == "camera"
+            and candidate.get("source") == "test"
+            and candidate.get("purchase_price") == 5000
+            and candidate.get("expected_sale_price") == 7500
+            and candidate.get("expected_profit") == 2500
+            and candidate.get("expected_profit_rate") == 0.5
+            and candidate.get("confidence") == 0.90
+            and isinstance(demand, dict)
+            and demand.get("demand_score") == 0.80
+            and demand.get("demand_level") == "high"
+            and demand.get("freshness_score") == 0.75
+            and demand.get("exchange_score") == 0.70
+            and isinstance(value, dict)
+            and value.get("current_value") == 7500.0
+            and value.get("next_value") == 11250.0
+            and value.get("value_growth_score") == 0.72
+            and value.get("exchange_potential") == 0.68
+            and value.get("route") == "collector"
+        )
+
+        check(
+            valid,
+            "candidate_engine:integration",
+            "OK" if valid else str(candidate),
+        )
+
+        # metadata が維持されること
+        metadata = {
+            "market": "test",
+            "source_id": "TEST001",
+        }
+
+        candidate_with_metadata = create_candidate(
+            name="中古カメラ",
+            purchase_price=5000,
+            expected_sale_price=7500,
+            source="test",
+            category="camera",
+            confidence=0.90,
+            metadata=metadata,
+        )
+
+        metadata_valid = (
+            candidate_with_metadata.get("metadata") == metadata
+        )
+
+        check(
+            metadata_valid,
+            "candidate_engine:metadata",
+            "OK" if metadata_valid else str(
+                candidate_with_metadata.get("metadata")
+            ),
+        )
+
+    except Exception:
+        check(
+            False,
+            "candidate_engine",
             traceback.format_exc(),
         )
 
@@ -687,6 +772,7 @@ def main():
     test_strategy_engine()
     test_demand_engine()
     test_value_engine()
+    test_candidate_engine()
     test_single_cycle()
     test_campaign_engine()
     test_strategy_api()
