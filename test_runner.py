@@ -33,6 +33,7 @@ REQUIRED_FILES = [
     "capital_filter.py",
     "ranking_engine.py",
     "candidate_pipeline.py",
+    "demand_engine.py",
 ]
 
 STRATEGIES = [
@@ -136,6 +137,7 @@ def test_imports():
         "capital_filter",
         "ranking_engine",
         "candidate_pipeline",
+        "demand_engine",
         "strategy_api",
         "candidate_api",
         "app",
@@ -176,6 +178,107 @@ def test_strategy_engine():
         check(
             False,
             "strategy_engine",
+            traceback.format_exc(),
+        )
+
+
+def test_demand_engine():
+    try:
+        from demand_engine import (
+            get_demand,
+            get_demand_level,
+            get_exchange_potential,
+        )
+
+        # 正常なカテゴリ
+        camera = get_demand(
+            {
+                "name": "中古カメラ",
+                "value": 5000,
+                "category": "camera",
+            }
+        )
+
+        camera_valid = (
+            isinstance(camera, dict)
+            and camera.get("asset") == "中古カメラ"
+            and camera.get("category") == "camera"
+            and camera.get("demand_score") == 0.80
+            and camera.get("demand_level") == "high"
+            and camera.get("freshness_score") == 0.75
+            and camera.get("exchange_score") == 0.70
+        )
+
+        check(
+            camera_valid,
+            "demand_engine:camera",
+            "OK" if camera_valid else str(camera),
+        )
+
+        # 未知カテゴリ
+        unknown = get_demand(
+            {
+                "name": "未知の商品",
+                "category": "unknown",
+            }
+        )
+
+        unknown_valid = (
+            isinstance(unknown, dict)
+            and unknown.get("demand_level") == "medium"
+            and unknown.get("demand_score") == 0.50
+        )
+
+        check(
+            unknown_valid,
+            "demand_engine:unknown_category",
+            "OK" if unknown_valid else str(unknown),
+        )
+
+        # 不正入力
+        invalid = get_demand(None)
+
+        invalid_valid = isinstance(invalid, dict)
+
+        check(
+            invalid_valid,
+            "demand_engine:invalid_input",
+            "OK" if invalid_valid else str(invalid),
+        )
+
+        # 需要レベル判定
+        level_valid = (
+            get_demand_level(0.80) == "high"
+            and get_demand_level(0.50) == "medium"
+            and get_demand_level(0.20) == "low"
+        )
+
+        check(
+            level_valid,
+            "demand_engine:demand_level",
+            "OK" if level_valid else "invalid",
+        )
+
+        # 交換可能性
+        exchange = get_exchange_potential(
+            {
+                "name": "中古カメラ",
+                "category": "camera",
+            }
+        )
+
+        exchange_valid = exchange == 0.70
+
+        check(
+            exchange_valid,
+            "demand_engine:exchange_potential",
+            "OK" if exchange_valid else str(exchange),
+        )
+
+    except Exception:
+        check(
+            False,
+            "demand_engine",
             traceback.format_exc(),
         )
 
@@ -448,6 +551,7 @@ def main():
     test_syntax()
     test_imports()
     test_strategy_engine()
+    test_demand_engine()
     test_single_cycle()
     test_campaign_engine()
     test_strategy_api()
