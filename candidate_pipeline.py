@@ -1,11 +1,16 @@
 # ============================================================
+# Warashibe AI v1.1
 # Candidate Pipeline
 #
+# 役割：
 # 候補商品を
 # 1. 危険フィルター
 # 2. 資本フィルター
 # 3. ランキング
 # の順番で処理する。
+#
+# Demand / Value 評価は Candidate Engine で付加され、
+# Ranking Engine がそれらを総合評価する。
 # ============================================================
 
 from danger_filter import filter_candidates
@@ -13,7 +18,7 @@ from capital_filter import filter_by_capital
 from ranking_engine import rank_candidates
 
 
-PIPELINE_VERSION = "1.0"
+PIPELINE_VERSION = "1.1"
 
 
 def evaluate_candidates(
@@ -47,7 +52,10 @@ def evaluate_candidates(
     )
 
     # ========================================================
-    # 3. ランキング
+    # 3. 総合ランキング
+    #
+    # 利益・信頼度に加えて、
+    # Demand / Value の評価も使用する。
     # ========================================================
 
     ranked_candidates = rank_candidates(
@@ -61,25 +69,18 @@ def evaluate_candidates(
     best_candidate = None
 
     if ranked_candidates:
-
-        best_candidate = (
-            ranked_candidates[0]
-        )
+        best_candidate = ranked_candidates[0]
 
     # ========================================================
     # 結果
     # ========================================================
 
     return {
+        "version": PIPELINE_VERSION,
 
-        "version":
-            PIPELINE_VERSION,
+        "current_capital": current_capital,
 
-        "current_capital":
-            current_capital,
-
-        "total_candidates":
-            len(candidates),
+        "total_candidates": len(candidates),
 
         "danger_allowed_count":
             len(danger_allowed),
