@@ -502,7 +502,113 @@ def test_candidate_engine():
         )
 
 
-def test_single_cycle():
+def test_ranking_engine():
+    try:
+        from ranking_engine import (
+            calculate_score,
+            rank_candidates,
+        )
+
+        # Demand / Value 評価を持つ候補
+        strong_candidate = {
+            "name": "高評価カメラ",
+            "expected_profit_rate": 0.50,
+            "expected_profit": 2500,
+            "confidence": 0.90,
+            "demand": {
+                "demand_score": 0.80,
+                "freshness_score": 0.75,
+                "exchange_score": 0.70,
+            },
+            "value_transformation": {
+                "value_growth_score": 0.72,
+                "exchange_potential": 0.68,
+            },
+        }
+
+        score = calculate_score(strong_candidate)
+
+        score_valid = (
+            isinstance(score, float)
+            and score > 0
+        )
+
+        check(
+            score_valid,
+            "ranking_engine:calculate_score",
+            str(score),
+        )
+
+        # 既存候補との比較
+        weak_candidate = {
+            "name": "低評価商品",
+            "expected_profit_rate": 0.10,
+            "expected_profit": 500,
+            "confidence": 0.50,
+            "demand": {
+                "demand_score": 0.40,
+                "freshness_score": 0.50,
+                "exchange_score": 0.35,
+            },
+            "value_transformation": {
+                "value_growth_score": 0.40,
+                "exchange_potential": 0.35,
+            },
+        }
+
+        ranked = rank_candidates(
+            [
+                weak_candidate,
+                strong_candidate,
+            ]
+        )
+
+        ranking_valid = (
+            isinstance(ranked, list)
+            and len(ranked) == 2
+            and ranked[0].get("name") == "高評価カメラ"
+            and ranked[0].get("rank") == 1
+            and ranked[1].get("rank") == 2
+            and ranked[0].get("score")
+            > ranked[1].get("score")
+        )
+
+        check(
+            ranking_valid,
+            "ranking_engine:rank_candidates",
+            "OK" if ranking_valid else str(ranked),
+        )
+
+        # Demand / Value がない候補でも動作すること
+        basic_candidate = {
+            "name": "基本候補",
+            "expected_profit_rate": 0.20,
+            "expected_profit": 1000,
+            "confidence": 0.60,
+        }
+
+        basic_score = calculate_score(basic_candidate)
+
+        basic_valid = (
+            isinstance(basic_score, float)
+            and basic_score > 0
+        )
+
+        check(
+            basic_valid,
+            "ranking_engine:backward_compatibility",
+            str(basic_score),
+        )
+
+    except Exception:
+        check(
+            False,
+            "ranking_engine",
+            traceback.format_exc(),
+        )
+
+
+def test_strategy_single_cycle():
     try:
         from simulation_engine import run_cycle
 
@@ -773,7 +879,8 @@ def main():
     test_demand_engine()
     test_value_engine()
     test_candidate_engine()
-    test_single_cycle()
+    test_ranking_engine()
+    test_strategy_single_cycle()
     test_campaign_engine()
     test_strategy_api()
     test_candidate_api()
