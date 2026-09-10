@@ -761,39 +761,73 @@ def candidates_evaluate():
 
         }), 400
 
-    allowed, blocked = filter_candidates(
-        [candidate]
+    current_capital = data.get(
+        "current_capital",
+        10_000
     )
 
-    if allowed:
-
+    try:
+        current_capital = float(current_capital)
+    except (TypeError, ValueError):
         return jsonify({
+            "error":
+                "現在資本が不正です。"
+        }), 400
 
+    result = evaluate_candidates(
+        [candidate],
+        current_capital
+    )
+
+    if result["best_candidate"] is not None:
+        return jsonify({
             "version":
                 VERSION,
 
             "status":
                 "allowed",
 
-            "candidate":
-                allowed[0]
+            "current_capital":
+                current_capital,
 
+            "candidate":
+                result["best_candidate"],
+
+            "pipeline":
+                result
         })
 
-    return jsonify({
+    reasons = []
 
+    if result["danger_blocked"]:
+        reasons.extend(
+            result["danger_blocked"][0]["reasons"]
+        )
+
+    if result["capital_blocked"]:
+        reasons.extend(
+            result["capital_blocked"][0].get(
+                "reasons",
+                []
+            )
+        )
+
+    return jsonify({
         "version":
             VERSION,
 
         "status":
             "blocked",
 
+        "current_capital":
+            current_capital,
+
         "candidate":
             candidate,
 
         "reasons":
-            blocked[0]["reasons"]
+            reasons,
 
+        "pipeline":
+            result
     })
-
-
