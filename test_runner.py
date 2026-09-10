@@ -608,6 +608,72 @@ def test_ranking_engine():
         )
 
 
+
+def test_candidate_pipeline():
+    try:
+        from candidate_engine import create_candidate
+        from candidate_pipeline import evaluate_candidates
+
+        candidates = [
+            create_candidate(
+                name="中古カメラ",
+                purchase_price=5000,
+                expected_sale_price=8000,
+                source="test",
+                category="camera",
+                confidence=0.90,
+            ),
+            create_candidate(
+                name="中古CD",
+                purchase_price=5000,
+                expected_sale_price=5500,
+                source="test",
+                category="cd",
+                confidence=0.90,
+            ),
+        ]
+
+        result = evaluate_candidates(candidates, current_capital=10000)
+
+        valid = (
+            isinstance(result, dict)
+            and result.get("version") == "1.1"
+            and result.get("current_capital") == 10000
+            and result.get("total_candidates") == 2
+            and isinstance(result.get("danger_blocked"), list)
+            and isinstance(result.get("capital_blocked"), list)
+            and isinstance(result.get("ranked_candidates"), list)
+            and result.get("best_candidate") is not None
+        )
+
+        check(valid, "candidate_pipeline:basic", "OK" if valid else str(result))
+
+        best = result.get("best_candidate")
+        ranked = result.get("ranked_candidates", [])
+
+        ranking_valid = (
+            isinstance(best, dict)
+            and best.get("name") == "中古カメラ"
+            and len(ranked) >= 1
+            and ranked[0].get("name") == "中古カメラ"
+            and ranked[0].get("rank") == 1
+        )
+
+        check(ranking_valid, "candidate_pipeline:best_candidate", "OK" if ranking_valid else str(result))
+
+        integration_valid = (
+            isinstance(best.get("demand"), dict)
+            and isinstance(best.get("value_transformation"), dict)
+            and isinstance(best.get("capital_fit"), dict)
+            and best["capital_fit"].get("allowed") is True
+            and isinstance(best.get("score"), (int, float))
+        )
+
+        check(integration_valid, "candidate_pipeline:integration", "OK" if integration_valid else str(best))
+
+    except Exception:
+        check(False, "candidate_pipeline", traceback.format_exc())
+
 def test_strategy_single_cycle():
     try:
         from simulation_engine import run_cycle
@@ -868,6 +934,75 @@ def test_flask_api():
         )
 
 
+
+def test_candidate_evaluate_api():
+    try:
+        from app import app
+
+        client = app.test_client()
+
+        payload = {
+            "name": "中古カメラ",
+            "purchase_price": 5000,
+            "expected_sale_price": 8000,
+            "source": "test",
+            "category": "camera",
+            "confidence": 0.90,
+            "current_capital": 10000,
+        }
+
+        response = client.post(
+            "/candidates/evaluate",
+            json=payload,
+        )
+
+        data = response.get_json()
+
+        valid = (
+            response.status_code == 200
+            and isinstance(data, dict)
+            and data.get("status") == "allowed"
+            and data.get("candidate", {}).get("name") == "中古カメラ"
+            and "demand" in data.get("candidate", {})
+            and "value_transformation"
+            in data.get("candidate", {})
+            and "capital_fit"
+            in data.get("candidate", {})
+            and isinstance(
+                data.get("candidate", {}).get("score"),
+                (int, float),
+            )
+        )
+
+        check(
+            valid,
+            "api:candidates_evaluate",
+            "OK"
+            if valid
+            else (
+                f"status={response.status_code} "
+                f"body={str(data)[:1000]}"
+            ),
+        )
+
+        results["api"]["candidates_evaluate"] = {
+            "passed": valid,
+            "status_code": response.status_code,
+        }
+
+    except Exception:
+        check(
+            False,
+            "api:candidates_evaluate",
+            traceback.format_exc(),
+        )
+
+        results["api"]["candidates_evaluate"] = {
+            "passed": False,
+            "error": traceback.format_exc(),
+        }
+
+
 def main():
     print("=" * 60)
     print("Warashibe AI 現行構成 一括テスト")
@@ -880,11 +1015,13 @@ def main():
     test_value_engine()
     test_candidate_engine()
     test_ranking_engine()
+    test_candidate_pipeline()
     test_strategy_single_cycle()
     test_campaign_engine()
     test_strategy_api()
     test_candidate_api()
     test_flask_api()
+    test_candidate_evaluate_api()
 
     print()
     print("=" * 60)
