@@ -27,6 +27,7 @@ def market_item_to_candidate(item):
         name=name,
         purchase_price=price,
         expected_sale_price=next_value,
+        source="virtual_market",
         confidence=success_rate,
     )
 
