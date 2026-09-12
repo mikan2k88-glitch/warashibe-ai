@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v0.6
+# Warashibe AI v0.7
 # simulation_engine.py
 #
 # 役割：
@@ -10,6 +10,10 @@
 #
 # 戦略：
 # ・strategy_engine.py
+#
+# Candidate評価：
+# ・market_candidate_adapter.py
+# ・candidate_pipeline.py
 #
 # 分析：
 # ・analysis_engine.py
@@ -22,6 +26,10 @@ import random
 
 from market_engine import find_items
 from policy_engine import START_CAPITAL, evaluate_trade
+
+from market_engine import MARKET
+from market_candidate_adapter import market_items_to_candidates
+from candidate_pipeline import evaluate_candidates
 
 from analysis_engine import (
     create_analysis_stats,
@@ -43,11 +51,34 @@ from strategy_engine import (
 # 基本設定
 # ============================================================
 
-VERSION = "0.6"
+VERSION = "0.7"
 
 TARGET = 1_000_000
 
 MAX_STEPS = 20
+
+
+# ============================================================
+# Candidate評価
+# ============================================================
+
+def evaluate_market_candidates(capital):
+    """
+    仮想市場の商品をCandidate形式へ変換し、
+    Candidate Pipelineで評価する。
+
+    既存のsimulation_engineの
+    商品選択ロジックは変更しない。
+    """
+
+    candidates = market_items_to_candidates(
+        MARKET
+    )
+
+    return evaluate_candidates(
+        candidates,
+        current_capital=capital
+    )
 
 
 # ============================================================
@@ -130,6 +161,8 @@ def run_cycle(
     """
     START_CAPITALから開始して、
     1回分のわらしべ挑戦を実行する。
+
+    既存のシミュレーションルールを維持する。
 
     失敗：
         status = failed
