@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v0.6
+# Warashibe AI v0.7
 # strategy_engine.py
 #
 # 役割：
@@ -7,6 +7,7 @@
 # ・戦略ラベル管理
 # ・商品の成功率 / 次価値取得
 # ・Balancedスコア計算
+# ・Candidate総合スコア取得
 # ・戦略に応じた商品選択
 # ・戦略比較結果から推奨戦略を作成
 #
@@ -47,15 +48,6 @@ STRATEGY_LABELS = {
 def normalize_strategy(strategy):
     """
     戦略名を正規化する。
-
-    例：
-        "balanced"
-        " BALANCED "
-        "Balanced"
-
-    → "balanced"
-
-    不正な戦略の場合は None。
     """
 
     if not isinstance(strategy, str):
@@ -132,6 +124,40 @@ def get_next_value(item):
 
 
 # ============================================================
+# Candidate総合スコア取得
+# ============================================================
+
+def get_candidate_score(item):
+    """
+    Candidate Pipelineで計算された
+    総合スコアを取得する。
+
+    Candidate形式でない商品は0を返す。
+    """
+
+    if not isinstance(item, dict):
+        return 0.0
+
+    try:
+        value = float(
+            item.get(
+                "candidate_score",
+                0.0
+            )
+        )
+    except (
+        TypeError,
+        ValueError
+    ):
+        return 0.0
+
+    return max(
+        0.0,
+        value
+    )
+
+
+# ============================================================
 # Balancedスコア
 # ============================================================
 
@@ -139,12 +165,24 @@ def calculate_balanced_score(item):
     """
     balanced戦略用スコア。
 
-    成功率60%
-    次価値40%
+    Candidate形式の場合：
+        Candidate Pipelineの総合scoreを使用
+
+    従来の商品形式の場合：
+        成功率60%
+        次価値40%
 
     次価値は桁が大きくなるため、
     平方根を使って影響を抑える。
     """
+
+    candidate_score = get_candidate_score(item)
+
+    if candidate_score > 0:
+        return round(
+            candidate_score,
+            6
+        )
 
     success_rate = get_success_rate(item)
     next_value = get_next_value(item)
@@ -185,7 +223,8 @@ def select_item(items, strategy):
         成功率を最優先
 
     balanced:
-        成功率と次価値をバランス
+        Candidate総合評価を優先
+        従来商品は成功率と次価値をバランス
 
     aggressive:
         次価値を最優先
@@ -335,18 +374,6 @@ def rank_strategies(strategy_results):
 def _get_risk_level(result):
     """
     戦略のリスクを簡易評価する。
-
-    aggressive：
-        高
-
-    safe：
-        低
-
-    balanced：
-        中
-
-    random：
-        中
     """
 
     strategy = normalize_strategy(
@@ -419,17 +446,6 @@ def create_recommendation(
     """
     戦略比較結果からAI戦略本部向けの
     推奨結果を作成する。
-
-    戻り値：
-
-    {
-        "recommended_strategy": "...",
-        "recommended_strategy_label": "...",
-        "campaign_goal_rate_percent": ...,
-        "reason": "...",
-        "dominant_successful_route": "...",
-        "risk_level": "..."
-    }
     """
 
     if not strategy_results:
