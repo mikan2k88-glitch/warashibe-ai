@@ -91,12 +91,15 @@ def evaluate_market_candidates(capital):
 def select_candidate_item(capital, strategy):
     """
     Candidate Pipelineで評価された候補から、
+    現在資本に近い価格帯を優先したうえで
     Strategyに応じて1商品を選択する。
 
     既存のrun_cycle()とは分離する。
     """
 
-    strategy = normalize_strategy(strategy)
+    strategy = normalize_strategy(
+        strategy
+    )
 
     if strategy is None:
         return None
@@ -115,7 +118,8 @@ def select_candidate_item(capital, strategy):
 
     return select_candidate(
         candidates,
-        strategy
+        strategy,
+        capital
     )
 
 
@@ -134,6 +138,7 @@ def run_candidate_cycle(
 
     現在資本以下で購入可能なCandidateを
     Candidate Pipelineで評価し、
+    現在資本に最も近い価格帯へ絞り込み、
     Strategyにより次の商品を選択する。
 
     失敗：
