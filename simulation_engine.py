@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v0.7
+# Warashibe AI v0.8
 # simulation_engine.py
 #
 # 役割：
@@ -14,6 +14,7 @@
 # Candidate評価：
 # ・market_candidate_adapter.py
 # ・candidate_pipeline.py
+# ・candidate_strategy_adapter.py
 #
 # 分析：
 # ・analysis_engine.py
@@ -30,6 +31,7 @@ from policy_engine import START_CAPITAL, evaluate_trade
 from market_engine import MARKET
 from market_candidate_adapter import market_items_to_candidates
 from candidate_pipeline import evaluate_candidates
+from candidate_strategy_adapter import select_candidate
 
 from analysis_engine import (
     create_analysis_stats,
@@ -51,7 +53,7 @@ from strategy_engine import (
 # 基本設定
 # ============================================================
 
-VERSION = "0.7"
+VERSION = "0.8"
 
 TARGET = 1_000_000
 
@@ -78,6 +80,41 @@ def evaluate_market_candidates(capital):
     return evaluate_candidates(
         candidates,
         current_capital=capital
+    )
+
+
+# ============================================================
+# Candidate + Strategyによる商品選択
+# ============================================================
+
+def select_candidate_item(capital, strategy):
+    """
+    Candidate Pipelineで評価された候補から、
+    Strategyに応じて1商品を選択する。
+
+    既存のrun_cycle()とは分離する。
+    """
+
+    strategy = normalize_strategy(strategy)
+
+    if strategy is None:
+        return None
+
+    result = evaluate_market_candidates(
+        capital
+    )
+
+    candidates = result.get(
+        "allowed",
+        []
+    )
+
+    if not candidates:
+        return None
+
+    return select_candidate(
+        candidates,
+        strategy
     )
 
 
