@@ -1,9 +1,10 @@
 # ============================================================
-# Warashibe AI v0.8
+# Warashibe AI v0.9
 # simulation_engine.py
 #
 # 役割：
 # ・1回のわらしべ挑戦
+# ・Candidate方式の実験
 #
 # キャンペーン：
 # ・campaign_engine.py
@@ -53,7 +54,7 @@ from strategy_engine import (
 # 基本設定
 # ============================================================
 
-VERSION = "0.8"
+VERSION = "0.9"
 
 TARGET = 1_000_000
 
@@ -119,6 +120,249 @@ def select_candidate_item(capital, strategy):
 
 
 # ============================================================
+# Candidate方式：1回のわらしべ挑戦
+# ============================================================
+
+def run_candidate_cycle(
+    strategy,
+    analysis_stats=None
+):
+    """
+    Candidate方式で1回のわらしべ挑戦を実行する。
+
+    既存のrun_cycle()とは独立して動作する。
+
+    現在資本以下で購入可能なCandidateを
+    Candidate Pipelineで評価し、
+    Strategyにより次の商品を選択する。
+
+    失敗：
+        status = failed
+
+    目標到達：
+        status = goal_reached
+
+    候補なし：
+        status = no_candidate
+    """
+
+    strategy = normalize_strategy(
+        strategy
+    )
+
+    if strategy is None:
+        return {
+            "status": "invalid_strategy",
+            "final_capital": START_CAPITAL,
+            "steps": 0,
+            "history": [],
+            "failure_reason": "invalid_strategy",
+        }
+
+    capital = START_CAPITAL
+    history = []
+
+    if analysis_stats is None:
+        analysis_stats = create_analysis_stats()
+
+    # ========================================================
+    # 最大ステップまで実行
+    # ========================================================
+
+    for step in range(
+        1,
+        MAX_STEPS + 1
+    ):
+
+        # ----------------------------------------------------
+        # Candidate選択
+        # ----------------------------------------------------
+
+        candidate = select_candidate_item(
+            capital,
+            strategy
+        )
+
+        if candidate is None:
+            return {
+                "status": "no_candidate",
+                "final_capital": capital,
+                "steps": step - 1,
+                "history": history,
+                "failure_reason": "no_candidate",
+                "analysis_stats": analysis_stats,
+            }
+
+        # ----------------------------------------------------
+        # 商品情報
+        # ----------------------------------------------------
+
+        item_name = candidate.get(
+            "name",
+            "unknown"
+        )
+
+        price = candidate.get(
+            "purchase_price",
+            0
+        )
+
+        next_value = candidate.get(
+            "expected_sale_price",
+            0
+        )
+
+        success_rate = candidate.get(
+            "confidence",
+            0
+        )
+
+        # ----------------------------------------------------
+        # 成功判定
+        # ----------------------------------------------------
+
+        random_value = random.random()
+
+        success = (
+            random_value < success_rate
+        )
+
+        # ----------------------------------------------------
+        # 取引記録
+        # ----------------------------------------------------
+
+        trade = {
+            "step": step,
+            "capital_before": capital,
+            "selected_item": item_name,
+            "price": price,
+            "next_value": next_value,
+            "success_rate": success_rate,
+            "success_rate_percent": round(
+                success_rate * 100,
+                2
+            ),
+            "random_value": random_value,
+            "success": success,
+            "strategy": strategy,
+            "source": candidate.get(
+                "source",
+                ""
+            ),
+            "candidate_score": candidate.get(
+                "score",
+                0
+            ),
+        }
+
+        # ----------------------------------------------------
+        # Balancedスコア
+        # ----------------------------------------------------
+
+        if strategy == "balanced":
+
+            trade["balanced_score"] = (
+                candidate.get(
+                    "score",
+                    0
+                )
+            )
+
+        # ----------------------------------------------------
+        # 成功
+        # ----------------------------------------------------
+
+        if success:
+
+            capital = next_value
+
+            trade["capital_after"] = (
+                capital
+            )
+
+            history.append(trade)
+
+            # ------------------------------------------------
+            # ゴール到達
+            # ------------------------------------------------
+
+            if capital >= TARGET:
+
+                update_analysis_stats(
+                    analysis_stats,
+                    history,
+                    True
+                )
+
+                return {
+                    "status": "goal_reached",
+                    "final_capital": capital,
+                    "steps": step,
+                    "history": history,
+                    "successful_route":
+                        build_successful_route(
+                            history
+                        ),
+                    "detailed_successful_route":
+                        build_detailed_successful_route(
+                            history
+                        ),
+                    "analysis_stats":
+                        analysis_stats,
+                }
+
+        # ----------------------------------------------------
+        # 失敗
+        # ----------------------------------------------------
+
+        else:
+
+            trade["capital_after"] = 0
+
+            trade["failure_reason"] = (
+                "trade_failed"
+            )
+
+            history.append(trade)
+
+            update_analysis_stats(
+                analysis_stats,
+                history,
+                False
+            )
+
+            return {
+                "status": "failed",
+                "final_capital": 0,
+                "steps": step,
+                "history": history,
+                "failure_reason": "trade_failed",
+                "analysis_stats":
+                    analysis_stats,
+            }
+
+    # ========================================================
+    # 最大ステップ到達
+    # ========================================================
+
+    update_analysis_stats(
+        analysis_stats,
+        history,
+        False
+    )
+
+    return {
+        "status": "max_steps_reached",
+        "final_capital": capital,
+        "steps": MAX_STEPS,
+        "history": history,
+        "failure_reason": "max_steps_reached",
+        "analysis_stats":
+            analysis_stats,
+    }
+
+
+# ============================================================
 # Policyによる選択可能商品取得
 # ============================================================
 
@@ -143,7 +387,10 @@ def get_policy_allowed_items(capital):
             item
         )
 
-        if decision.get("allowed", False):
+        if decision.get(
+            "allowed",
+            False
+        ):
             allowed_items.append(item)
 
         else:
@@ -173,7 +420,9 @@ def determine_success(item):
     商品のsuccess_rateに基づいて成功判定する。
     """
 
-    success_rate = get_success_rate(item)
+    success_rate = get_success_rate(
+        item
+    )
 
     random_value = random.random()
 
@@ -188,7 +437,7 @@ def determine_success(item):
 
 
 # ============================================================
-# 1回のわらしべ挑戦
+# 既存方式：1回のわらしべ挑戦
 # ============================================================
 
 def run_cycle(
@@ -200,18 +449,11 @@ def run_cycle(
     1回分のわらしべ挑戦を実行する。
 
     既存のシミュレーションルールを維持する。
-
-    失敗：
-        status = failed
-
-    目標到達：
-        status = goal_reached
-
-    Policyブロック：
-        status = policy_blocked
     """
 
-    strategy = normalize_strategy(strategy)
+    strategy = normalize_strategy(
+        strategy
+    )
 
     if strategy is None:
         return {
@@ -228,18 +470,10 @@ def run_cycle(
     if analysis_stats is None:
         analysis_stats = create_analysis_stats()
 
-    # ========================================================
-    # 最大ステップまで実行
-    # ========================================================
-
     for step in range(
         1,
         MAX_STEPS + 1
     ):
-
-        # ----------------------------------------------------
-        # Policy許可商品取得
-        # ----------------------------------------------------
 
         (
             available_items,
@@ -248,10 +482,6 @@ def run_cycle(
             capital
         )
 
-        # ----------------------------------------------------
-        # 全商品ブロック
-        # ----------------------------------------------------
-
         if not available_items:
             return {
                 "status": "policy_blocked",
@@ -259,13 +489,11 @@ def run_cycle(
                 "steps": step - 1,
                 "history": history,
                 "blocked_items": blocked_items,
-                "failure_reason": "policy_blocked",
-                "analysis_stats": analysis_stats,
+                "failure_reason":
+                    "policy_blocked",
+                "analysis_stats":
+                    analysis_stats,
             }
-
-        # ----------------------------------------------------
-        # 商品選択
-        # ----------------------------------------------------
 
         item = select_item(
             available_items,
@@ -279,12 +507,9 @@ def run_cycle(
                 "steps": step - 1,
                 "history": history,
                 "failure_reason": "no_item",
-                "analysis_stats": analysis_stats,
+                "analysis_stats":
+                    analysis_stats,
             }
-
-        # ----------------------------------------------------
-        # 商品情報
-        # ----------------------------------------------------
 
         item_name = item.get(
             "name",
@@ -296,30 +521,23 @@ def run_cycle(
             0
         )
 
-        next_value = get_next_value(item)
-        success_rate = get_success_rate(item)
+        next_value = get_next_value(
+            item
+        )
 
-        # ----------------------------------------------------
-        # 成功判定
-        # ----------------------------------------------------
+        success_rate = get_success_rate(
+            item
+        )
 
         (
             success,
             random_value
         ) = determine_success(item)
 
-        # ----------------------------------------------------
-        # Policy再確認
-        # ----------------------------------------------------
-
         policy = evaluate_trade(
             capital,
             item
         )
-
-        # ----------------------------------------------------
-        # 取引記録
-        # ----------------------------------------------------
 
         trade = {
             "step": step,
@@ -338,29 +556,23 @@ def run_cycle(
             "policy": policy,
         }
 
-        # ----------------------------------------------------
-        # Balancedスコア
-        # ----------------------------------------------------
-
         if strategy == "balanced":
-            trade["balanced_score"] = (
-                calculate_balanced_score(item)
-            )
 
-        # ----------------------------------------------------
-        # 成功
-        # ----------------------------------------------------
+            trade["balanced_score"] = (
+                calculate_balanced_score(
+                    item
+                )
+            )
 
         if success:
 
             capital = next_value
-            trade["capital_after"] = capital
+
+            trade["capital_after"] = (
+                capital
+            )
 
             history.append(trade)
-
-            # ------------------------------------------------
-            # ゴール到達
-            # ------------------------------------------------
 
             if capital >= TARGET:
 
@@ -371,10 +583,13 @@ def run_cycle(
                 )
 
                 return {
-                    "status": "goal_reached",
-                    "final_capital": capital,
+                    "status":
+                        "goal_reached",
+                    "final_capital":
+                        capital,
                     "steps": step,
-                    "history": history,
+                    "history":
+                        history,
                     "successful_route":
                         build_successful_route(
                             history
@@ -383,12 +598,9 @@ def run_cycle(
                         build_detailed_successful_route(
                             history
                         ),
-                    "analysis_stats": analysis_stats,
+                    "analysis_stats":
+                        analysis_stats,
                 }
-
-        # ----------------------------------------------------
-        # 失敗
-        # ----------------------------------------------------
 
         else:
 
@@ -411,13 +623,11 @@ def run_cycle(
                 "final_capital": 0,
                 "steps": step,
                 "history": history,
-                "failure_reason": "trade_failed",
-                "analysis_stats": analysis_stats,
+                "failure_reason":
+                    "trade_failed",
+                "analysis_stats":
+                    analysis_stats,
             }
-
-    # ========================================================
-    # 最大ステップ到達
-    # ========================================================
 
     update_analysis_stats(
         analysis_stats,
@@ -426,10 +636,13 @@ def run_cycle(
     )
 
     return {
-        "status": "max_steps_reached",
+        "status":
+            "max_steps_reached",
         "final_capital": capital,
         "steps": MAX_STEPS,
         "history": history,
-        "failure_reason": "max_steps_reached",
-        "analysis_stats": analysis_stats,
+        "failure_reason":
+            "max_steps_reached",
+        "analysis_stats":
+            analysis_stats,
     }
