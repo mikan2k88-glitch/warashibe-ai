@@ -48,6 +48,7 @@ from strategy_engine import (
     get_next_value,
     calculate_balanced_score,
     select_item,
+    get_adaptive_strategy,
 )
 
 
@@ -105,6 +106,10 @@ def select_candidate_item(capital, strategy):
     if strategy is None:
         return None
 
+    effective_strategy = get_adaptive_strategy(
+        capital
+    ) if strategy == "adaptive" else strategy
+
     result = evaluate_market_candidates(
         capital
     )
@@ -119,7 +124,7 @@ def select_candidate_item(capital, strategy):
 
     return select_candidate(
         candidates,
-        strategy,
+        effective_strategy,
         capital
     )
 
@@ -183,6 +188,12 @@ def run_candidate_cycle(
         # ----------------------------------------------------
         # Candidate選択
         # ----------------------------------------------------
+
+        effective_strategy = (
+            get_adaptive_strategy(capital)
+            if strategy == "adaptive"
+            else strategy
+        )
 
         candidate = select_candidate_item(
             capital,
@@ -251,6 +262,7 @@ def run_candidate_cycle(
             "random_value": random_value,
             "success": success,
             "strategy": strategy,
+            "effective_strategy": effective_strategy,
             "source": candidate.get(
                 "source",
                 ""
@@ -501,9 +513,15 @@ def run_cycle(
                     analysis_stats,
             }
 
+        effective_strategy = (
+            get_adaptive_strategy(capital)
+            if strategy == "adaptive"
+            else strategy
+        )
+
         item = select_item(
             available_items,
-            strategy
+            effective_strategy
         )
 
         if item is None:
@@ -559,6 +577,7 @@ def run_cycle(
             "random_value": random_value,
             "success": success,
             "strategy": strategy,
+            "effective_strategy": effective_strategy,
             "policy": policy,
         }
 
