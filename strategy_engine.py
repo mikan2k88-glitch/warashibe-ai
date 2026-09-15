@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v0.7
+# Warashibe AI v0.8
 # strategy_engine.py
 #
 # 役割：
@@ -8,48 +8,33 @@
 # ・商品の成功率 / 次価値取得
 # ・Balancedスコア計算
 # ・Candidate総合スコア取得
+# ・Adaptive戦略の資本帯判定
 # ・戦略に応じた商品選択
 # ・戦略比較結果から推奨戦略を作成
-#
-# simulation_engine.py から戦略処理を分離する。
 # ============================================================
 
 import random
 
-
-# ============================================================
-# 対応戦略
-# ============================================================
 
 SUPPORTED_STRATEGIES = {
     "random",
     "safe",
     "balanced",
     "aggressive",
+    "adaptive",
 }
 
-
-# ============================================================
-# 戦略表示名
-# ============================================================
 
 STRATEGY_LABELS = {
     "random": "ランダム",
     "safe": "セーフ",
     "balanced": "バランス",
     "aggressive": "アグレッシブ",
+    "adaptive": "アダプティブ",
 }
 
 
-# ============================================================
-# 戦略名の正規化
-# ============================================================
-
 def normalize_strategy(strategy):
-    """
-    戦略名を正規化する。
-    """
-
     if not isinstance(strategy, str):
         return None
 
@@ -61,183 +46,100 @@ def normalize_strategy(strategy):
     return normalized
 
 
-# ============================================================
-# 商品成功率取得
-# ============================================================
-
 def get_success_rate(item):
-    """
-    商品の成功率を0.0〜1.0に正規化する。
-    """
-
     if not isinstance(item, dict):
         return 0.0
 
     try:
-        value = float(
-            item.get(
-                "success_rate",
-                0.0
-            )
-        )
-    except (
-        TypeError,
-        ValueError
-    ):
+        value = float(item.get("success_rate", 0.0))
+    except (TypeError, ValueError):
         return 0.0
 
-    return max(
-        0.0,
-        min(1.0, value)
-    )
+    return max(0.0, min(1.0, value))
 
-
-# ============================================================
-# 商品の次価値取得
-# ============================================================
 
 def get_next_value(item):
-    """
-    成功時の次の資本価値を取得する。
-    """
-
     if not isinstance(item, dict):
         return 0.0
 
     try:
-        value = float(
-            item.get(
-                "next_value",
-                0
-            )
-        )
-    except (
-        TypeError,
-        ValueError
-    ):
+        value = float(item.get("next_value", 0))
+    except (TypeError, ValueError):
         return 0.0
 
-    return max(
-        0.0,
-        value
-    )
+    return max(0.0, value)
 
-
-# ============================================================
-# Candidate総合スコア取得
-# ============================================================
 
 def get_candidate_score(item):
-    """
-    Candidate Pipelineで計算された
-    総合スコアを取得する。
-
-    Candidate形式でない商品は0を返す。
-    """
-
     if not isinstance(item, dict):
         return 0.0
 
     try:
-        value = float(
-            item.get(
-                "candidate_score",
-                0.0
-            )
-        )
-    except (
-        TypeError,
-        ValueError
-    ):
+        value = float(item.get("candidate_score", 0.0))
+    except (TypeError, ValueError):
         return 0.0
 
-    return max(
-        0.0,
-        value
-    )
+    return max(0.0, value)
 
-
-# ============================================================
-# Balancedスコア
-# ============================================================
 
 def calculate_balanced_score(item):
-    """
-    balanced戦略用スコア。
-
-    Candidate形式の場合：
-        Candidate Pipelineの総合scoreを使用
-
-    従来の商品形式の場合：
-        成功率60%
-        次価値40%
-
-    次価値は桁が大きくなるため、
-    平方根を使って影響を抑える。
-    """
-
     candidate_score = get_candidate_score(item)
 
     if candidate_score > 0:
-        return round(
-            candidate_score,
-            6
-        )
+        return round(candidate_score, 6)
 
     success_rate = get_success_rate(item)
     next_value = get_next_value(item)
 
-    success_component = (
-        success_rate * 100
-    )
-
-    value_component = (
-        next_value ** 0.5
-        if next_value > 0
-        else 0.0
-    )
+    success_component = success_rate * 100
+    value_component = next_value ** 0.5 if next_value > 0 else 0.0
 
     score = (
         success_component * 0.6
         + value_component * 0.4
     )
 
-    return round(
-        score,
-        6
-    )
+    return round(score, 6)
 
 
-# ============================================================
-# 商品選択
-# ============================================================
+def get_adaptive_strategy(capital):
+    """
+    現在資本に応じて戦略を自動切り替えする。
+
+    第1段階：
+        100〜999円      -> balanced
+    第2段階：
+        1,000〜9,999円  -> safe
+    第3段階：
+        10,000〜99,999円 -> aggressive
+    第4段階：
+        100,000円以上   -> aggressive
+    """
+
+    try:
+        capital = float(capital)
+    except (TypeError, ValueError):
+        return "balanced"
+
+    if capital < 1_000:
+        return "balanced"
+
+    if capital < 10_000:
+        return "safe"
+
+    return "aggressive"
+
 
 def select_item(items, strategy):
-    """
-    戦略に応じて候補商品から1つ選択する。
-
-    random:
-        ランダム
-
-    safe:
-        成功率を最優先
-
-    balanced:
-        Candidate総合評価を優先
-        従来商品は成功率と次価値をバランス
-
-    aggressive:
-        次価値を最優先
-    """
-
     if not items:
         return None
 
-    strategy = normalize_strategy(
-        strategy
-    )
+    strategy = normalize_strategy(strategy)
 
     if strategy is None:
+        return None
+
+    if strategy == "adaptive":
         return None
 
     if strategy == "random":
@@ -274,52 +176,21 @@ def select_item(items, strategy):
     return None
 
 
-# ============================================================
-# 数値取得ヘルパー
-# ============================================================
-
-def _get_number(
-    result,
-    key,
-    default=0.0
-):
-    """
-    戦略結果から安全に数値を取得する。
-    """
-
+def _get_number(result, key, default=0.0):
     if not isinstance(result, dict):
         return default
 
     try:
-        return float(
-            result.get(
-                key,
-                default
-            )
-        )
-    except (
-        TypeError,
-        ValueError
-    ):
+        return float(result.get(key, default))
+    except (TypeError, ValueError):
         return default
 
 
-# ============================================================
-# 成功ルート取得
-# ============================================================
-
 def _get_route(result):
-    """
-    戦略結果から代表的な成功ルートを取得する。
-    """
-
     if not isinstance(result, dict):
         return ""
 
-    route = result.get(
-        "dominant_successful_route",
-        ""
-    )
+    route = result.get("dominant_successful_route", "")
 
     if route is None:
         return ""
@@ -327,21 +198,7 @@ def _get_route(result):
     return str(route)
 
 
-# ============================================================
-# 戦略比較
-# ============================================================
-
 def rank_strategies(strategy_results):
-    """
-    戦略結果をランキングする。
-
-    優先順位：
-
-    1. 100万円到達率
-    2. 平均サイクル数
-    3. 総リスタート数
-    """
-
     if not strategy_results:
         return []
 
@@ -367,15 +224,7 @@ def rank_strategies(strategy_results):
     )
 
 
-# ============================================================
-# リスク評価
-# ============================================================
-
 def _get_risk_level(result):
-    """
-    戦略のリスクを簡易評価する。
-    """
-
     strategy = normalize_strategy(
         result.get("strategy")
         if isinstance(result, dict)
@@ -391,21 +240,13 @@ def _get_risk_level(result):
     if strategy == "balanced":
         return "中"
 
+    if strategy == "adaptive":
+        return "可変"
+
     return "中"
 
 
-# ============================================================
-# 推奨理由
-# ============================================================
-
-def _build_reason(
-    result,
-    rank
-):
-    """
-    推奨戦略の説明文を作る。
-    """
-
+def _build_reason(result, rank):
     strategy = normalize_strategy(
         result.get("strategy")
         if isinstance(result, dict)
@@ -436,18 +277,7 @@ def _build_reason(
     )
 
 
-# ============================================================
-# 推奨戦略作成
-# ============================================================
-
-def create_recommendation(
-    strategy_results
-):
-    """
-    戦略比較結果からAI戦略本部向けの
-    推奨結果を作成する。
-    """
-
+def create_recommendation(strategy_results):
     if not strategy_results:
         return {
             "recommended_strategy": None,
@@ -458,10 +288,7 @@ def create_recommendation(
             "risk_level": "不明",
         }
 
-    ranked_results = rank_strategies(
-        strategy_results
-    )
-
+    ranked_results = rank_strategies(strategy_results)
     best_result = ranked_results[0]
 
     strategy = normalize_strategy(
@@ -479,35 +306,15 @@ def create_recommendation(
         0.0
     )
 
-    route = _get_route(
-        best_result
-    )
-
-    reason = _build_reason(
-        best_result,
-        1
-    )
-
-    risk_level = _get_risk_level(
-        best_result
-    )
+    route = _get_route(best_result)
+    reason = _build_reason(best_result, 1)
+    risk_level = _get_risk_level(best_result)
 
     return {
-        "recommended_strategy":
-            strategy,
-
-        "recommended_strategy_label":
-            label,
-
-        "campaign_goal_rate_percent":
-            goal_rate,
-
-        "reason":
-            reason,
-
-        "dominant_successful_route":
-            route,
-
-        "risk_level":
-            risk_level,
+        "recommended_strategy": strategy,
+        "recommended_strategy_label": label,
+        "campaign_goal_rate_percent": goal_rate,
+        "reason": reason,
+        "dominant_successful_route": route,
+        "risk_level": risk_level,
     }
