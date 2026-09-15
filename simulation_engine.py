@@ -37,6 +37,7 @@ from candidate_strategy_adapter import select_candidate
 from analysis_engine import (
     create_analysis_stats,
     update_analysis_stats,
+    finalize_analysis_stats,
     build_successful_route,
     build_detailed_successful_route,
 )
@@ -195,7 +196,7 @@ def run_candidate_cycle(
                 "steps": step - 1,
                 "history": history,
                 "failure_reason": "no_candidate",
-                "analysis_stats": analysis_stats,
+                "analysis_stats": finalize_analysis_stats(analysis_stats),
             }
 
         # ----------------------------------------------------
@@ -313,7 +314,7 @@ def run_candidate_cycle(
                             history
                         ),
                     "analysis_stats":
-                        analysis_stats,
+                        finalize_analysis_stats(analysis_stats),
                 }
 
         # ----------------------------------------------------
@@ -343,7 +344,7 @@ def run_candidate_cycle(
                 "history": history,
                 "failure_reason": "trade_failed",
                 "analysis_stats":
-                    analysis_stats,
+                    finalize_analysis_stats(analysis_stats),
             }
 
     # ========================================================
@@ -363,7 +364,7 @@ def run_candidate_cycle(
         "history": history,
         "failure_reason": "max_steps_reached",
         "analysis_stats":
-            analysis_stats,
+            finalize_analysis_stats(analysis_stats),
     }
 
 
@@ -604,7 +605,7 @@ def run_cycle(
                             history
                         ),
                     "analysis_stats":
-                        analysis_stats,
+                        finalize_analysis_stats(analysis_stats),
                 }
 
         else:
@@ -631,7 +632,7 @@ def run_cycle(
                 "failure_reason":
                     "trade_failed",
                 "analysis_stats":
-                    analysis_stats,
+                    finalize_analysis_stats(analysis_stats),
             }
 
     update_analysis_stats(
