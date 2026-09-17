@@ -39,7 +39,7 @@ CATEGORY_MAP = {
 }
 
 def get_category(name):
-"""商品名からカテゴリーを取得する"""
+    """商品名からカテゴリーを取得する"""
 
 ```
 return CATEGORY_MAP.get(name, "unknown")
