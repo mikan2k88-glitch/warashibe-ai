@@ -41,14 +41,13 @@ CATEGORY_MAP = {
 def get_category(name):
     """商品名からカテゴリーを取得する"""
 
-```
-return CATEGORY_MAP.get(name, "unknown")
-```
+turn CATEGORY_MAP.get(name, "unknown")
+
 
 def market_item_to_candidate(item):
-"""仮想市場の商品1件をCandidate形式へ変換する"""
+    """仮想市場の商品1件をCandidate形式へ変換する"""
 
-```
+
 price = item.get("price", 0)
 name = item.get("name", "")
 next_value = item.get("next_value", 0)
@@ -64,14 +63,14 @@ return create_candidate(
     category=category,
     confidence=success_rate,
 )
-```
+
 
 def market_items_to_candidates(items):
-"""仮想市場の商品一覧をCandidate一覧へ変換する"""
+    """仮想市場の商品一覧をCandidate一覧へ変換する"""
 
-```
+
 return [
     market_item_to_candidate(item)
     for item in items
 ]
-```
+
