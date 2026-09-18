@@ -1,19 +1,15 @@
-# ============================================================
 # Warashibe AI v1.1
-# value_engine.py
+# 価値変換エンジン
 #
 # 役割：
-# ・現在の資産価値を評価する
-# ・次に狙える価値を推定する
-# ・価値上昇の可能性を評価する
-# ・次の交換可能性を評価する
-# ・価値変換ルートを返す
+# ・現在の資産価値から次の価値変換可能性を評価する
+# ・価値成長率、交換可能性、次の想定価値を返す
 #
-# 現段階では仮想データを使用する。
+# 現段階では仮想価値データを使用する。
 # 実市場データとの接続は後の段階で行う。
-# ============================================================
 
-VERSION = "0.1"
+
+VERSION = "0.2"
 
 
 VALUE_DATA = {
@@ -47,6 +43,30 @@ VALUE_DATA = {
         "exchange_potential": 0.30,
         "route": "used_market",
     },
+    "collector": {
+        "growth_rate": 1.70,
+        "growth_score": 0.75,
+        "exchange_potential": 0.78,
+        "route": "collector",
+    },
+    "electronics": {
+        "growth_rate": 1.40,
+        "growth_score": 0.68,
+        "exchange_potential": 0.65,
+        "route": "electronics",
+    },
+    "tools": {
+        "growth_rate": 1.50,
+        "growth_score": 0.60,
+        "exchange_potential": 0.62,
+        "route": "specialist",
+    },
+    "general": {
+        "growth_rate": 1.20,
+        "growth_score": 0.50,
+        "exchange_potential": 0.50,
+        "route": "general",
+    },
 }
 
 
@@ -67,75 +87,47 @@ def _normalize_category(category):
 
 def _normalize_value(value):
     try:
-        value = float(value)
+        return float(value)
     except (TypeError, ValueError):
-        return 0
-
-    if value < 0:
-        return 0
-
-    return value
+        return 0.0
 
 
 def get_value_transformation(asset):
-    """
-    現在の資産から次の価値への変換可能性を評価する。
-    """
-
     if not isinstance(asset, dict):
         asset = {}
 
     name = asset.get("name", "")
-    category = _normalize_category(
-        asset.get("category")
-    )
-    current_value = _normalize_value(
-        asset.get("value")
-    )
+    category = _normalize_category(asset.get("category"))
+    current_value = _normalize_value(asset.get("value", 0))
 
-    data = VALUE_DATA.get(
-        category,
-        DEFAULT_VALUE,
-    )
+    value = VALUE_DATA.get(category, DEFAULT_VALUE)
 
-    next_value = current_value * data["growth_rate"]
+    next_value = current_value * value["growth_rate"]
 
     return {
         "asset": name,
         "category": category,
         "current_value": current_value,
         "next_value": next_value,
-        "value_growth_score": data["growth_score"],
-        "exchange_potential": data["exchange_potential"],
-        "route": data["route"],
+        "value_growth_score": value["growth_score"],
+        "exchange_potential": value["exchange_potential"],
+        "route": value["route"],
     }
 
 
 def get_value_growth_score(asset):
-    """
-    価値上昇の可能性だけを返す。
-    """
+    value = get_value_transformation(asset)
 
-    result = get_value_transformation(asset)
-
-    return result["value_growth_score"]
+    return value["value_growth_score"]
 
 
 def get_next_value(asset):
-    """
-    次に狙える推定価値を返す。
-    """
+    value = get_value_transformation(asset)
 
-    result = get_value_transformation(asset)
-
-    return result["next_value"]
+    return value["next_value"]
 
 
 def get_exchange_potential(asset):
-    """
-    次の資産へ交換できる可能性を返す。
-    """
+    value = get_value_transformation(asset)
 
-    result = get_value_transformation(asset)
-
-    return result["exchange_potential"]
+    return value["exchange_potential"]
