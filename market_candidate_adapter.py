@@ -12,7 +12,7 @@
 from candidate_engine import create_candidate
 
 
-ADAPTER_VERSION = "1.2"
+ADAPTER_VERSION = "1.3"
 
 
 # 仮想市場の商品カテゴリー
@@ -20,11 +20,25 @@ ADAPTER_VERSION = "1.2"
 # Demand Engine / Value Engine が
 # 商品を評価できるようにする。
 CATEGORY_MAP = {
-    "中古カメラ": "camera",
-    "中古ゲーム": "game",
-    "ブランド小物": "brand",
+    "わら": "general",
+    "古い切手": "collector",
+    "小物": "general",
+    "雑貨セット": "general",
     "古本セット": "book",
+    "限定古書": "book",
     "中古CDセット": "cd",
+    "アンティーク小物": "collector",
+    "中古ゲーム": "game",
+    "コレクターソフト": "game",
+    "電子機器": "electronics",
+    "工具セット": "tools",
+    "ブランド小物": "brand",
+    "中古カメラ": "camera",
+    "高級中古品": "brand",
+    "ヴィンテージ時計": "collector",
+    "高額商品": "general",
+    "限定家電": "electronics",
+    "希少商品": "collector",
 }
 
 
@@ -55,7 +69,7 @@ def market_item_to_candidate(item):
 
 
 def market_items_to_candidates(items):
-    """仮想市場の商品一覧をCandidate一覧へ変換する"""
+    """仮想市場の商品一覧をCandidate形式へ変換する"""
 
     return [
         market_item_to_candidate(item)
