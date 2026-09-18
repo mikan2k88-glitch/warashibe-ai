@@ -1,3 +1,4 @@
+```python
 # Warashibe AI v1.1
 # 需要エンジン
 #
@@ -9,12 +10,9 @@
 # 実市場APIとの接続は後の段階で行う。
 
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 
-# 仮想需要データ
-#
-# 0.0 ～ 1.0 の範囲で設定する。
 DEMAND_DATA = {
     "camera": {
         "demand_score": 0.80,
@@ -46,6 +44,30 @@ DEMAND_DATA = {
         "exchange_score": 0.40,
         "demand_level": "low",
     },
+    "collector": {
+        "demand_score": 0.70,
+        "freshness_score": 0.65,
+        "exchange_score": 0.75,
+        "demand_level": "high",
+    },
+    "electronics": {
+        "demand_score": 0.72,
+        "freshness_score": 0.82,
+        "exchange_score": 0.68,
+        "demand_level": "high",
+    },
+    "tools": {
+        "demand_score": 0.60,
+        "freshness_score": 0.55,
+        "exchange_score": 0.62,
+        "demand_level": "medium",
+    },
+    "general": {
+        "demand_score": 0.50,
+        "freshness_score": 0.50,
+        "exchange_score": 0.50,
+        "demand_level": "medium",
+    },
 }
 
 
@@ -58,8 +80,6 @@ DEFAULT_DEMAND = {
 
 
 def _normalize_category(category):
-    """カテゴリーを安全に文字列化する。"""
-
     if category is None:
         return ""
 
@@ -67,26 +87,6 @@ def _normalize_category(category):
 
 
 def get_demand(asset):
-    """
-    現在の資産に対する需要情報を返す。
-
-    Parameters
-    ----------
-    asset : dict
-        以下の情報を想定する。
-
-        {
-            "name": "中古カメラ",
-            "value": 5000,
-            "category": "camera"
-        }
-
-    Returns
-    -------
-    dict
-        需要情報。
-    """
-
     if not isinstance(asset, dict):
         asset = {}
 
@@ -106,10 +106,6 @@ def get_demand(asset):
 
 
 def get_demand_level(demand_score):
-    """
-    需要スコアから需要レベルを判定する。
-    """
-
     try:
         score = float(demand_score)
     except (TypeError, ValueError):
@@ -125,10 +121,7 @@ def get_demand_level(demand_score):
 
 
 def get_exchange_potential(asset):
-    """
-    現在の資産が次の価値へ交換される可能性を返す。
-    """
-
     demand = get_demand(asset)
 
     return demand["exchange_score"]
+```
