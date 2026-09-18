@@ -1,4 +1,3 @@
-```python
 # Warashibe AI v1.1
 # 需要エンジン
 #
@@ -124,4 +123,3 @@ def get_exchange_potential(asset):
     demand = get_demand(asset)
 
     return demand["exchange_score"]
-```
