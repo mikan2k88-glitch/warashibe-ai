@@ -1,18 +1,57 @@
-# Warashibe AI v1.0
-# 候補商品の地雷を検出するフィルター
+# Warashibe AI v1.1
+# Danger Filter
+#
+# 役割：
+# ・候補商品のリスクを評価する
+# ・成功率、価値倍率、利益率などからリスク情報を付与する
+# ・明らかに不正な候補だけをブロックする
+#
+# 「危険だから即除外」ではなく、
+# Strategy / Ranking が判断できるように
+# リスク情報を候補へ付加する。
 
-DANGER_FILTER_VERSION = "1.0"
 
-MIN_CONFIDENCE = 0.50
+DANGER_FILTER_VERSION = "1.1"
+
+MIN_CONFIDENCE = 0.10
 MIN_PROFIT = 0
 MIN_PROFIT_RATE = 0.05
 
 
+def calculate_multiplier(candidate):
+    """仕入れ価格に対する想定売却価格の倍率を計算する"""
+
+    purchase_price = candidate.get("purchase_price", 0)
+    expected_sale_price = candidate.get("expected_sale_price", 0)
+
+    if purchase_price <= 0:
+        return 0
+
+    return expected_sale_price / purchase_price
+
+
+def classify_risk(success_rate, multiplier):
+    """成功率と価値倍率からリスク区分を決定する"""
+
+    if multiplier >= 8.0:
+        if success_rate < 0.40:
+            return "high_risk_high_multiplier"
+        return "high_multiplier"
+
+    if success_rate >= 0.60:
+        return "stable"
+
+    if success_rate >= 0.50:
+        return "standard"
+
+    if success_rate >= 0.40:
+        return "challenge"
+
+    return "high_risk"
+
+
 def evaluate_candidate(candidate):
-    """
-    商品候補を評価し、
-    危険・情報不足・採算不明な候補を除外する。
-    """
+    """候補商品のリスクを評価する"""
 
     reasons = []
 
@@ -21,6 +60,13 @@ def evaluate_candidate(candidate):
     expected_profit = candidate.get("expected_profit", 0)
     expected_profit_rate = candidate.get("expected_profit_rate", 0)
     confidence = candidate.get("confidence", 0)
+
+    multiplier = calculate_multiplier(candidate)
+
+    risk_level = classify_risk(
+        confidence,
+        multiplier
+    )
 
     if not candidate.get("name"):
         reasons.append("商品名がありません")
@@ -47,23 +93,25 @@ def evaluate_candidate(candidate):
             f"情報信頼度が最低基準 {MIN_CONFIDENCE * 100}% 未満です"
         )
 
+    allowed = len(reasons) == 0
+
     return {
-        "allowed": len(reasons) == 0,
+        "allowed": allowed,
         "filter_version": DANGER_FILTER_VERSION,
         "reasons": reasons,
+        "risk_level": risk_level,
+        "success_rate": confidence,
+        "multiplier": round(multiplier, 2),
         "risk_summary": {
             "minimum_confidence": MIN_CONFIDENCE,
             "minimum_profit": MIN_PROFIT,
-            "minimum_profit_rate": MIN_PROFIT_RATE
-        }
+            "minimum_profit_rate": MIN_PROFIT_RATE,
+        },
     }
 
 
 def filter_candidates(candidates):
-    """
-    複数の商品候補を安全な候補と
-    除外された候補に分ける。
-    """
+    """候補一覧をリスク評価し、明らかな不正候補だけをブロックする"""
 
     allowed = []
     blocked = []
@@ -72,11 +120,29 @@ def filter_candidates(candidates):
         decision = evaluate_candidate(candidate)
 
         if decision["allowed"]:
-            allowed.append(candidate)
+            allowed_candidate = candidate.copy()
+
+            allowed_candidate["risk"] = {
+                "risk_level": decision["risk_level"],
+                "success_rate": decision["success_rate"],
+                "multiplier": decision["multiplier"],
+                "filter_version": decision["filter_version"],
+            }
+
+            allowed.append(allowed_candidate)
+
         else:
-            blocked.append({
-                "candidate": candidate,
-                "reasons": decision["reasons"]
-            })
+            blocked.append(
+                {
+                    "candidate": candidate,
+                    "reasons": decision["reasons"],
+                    "risk": {
+                        "risk_level": decision["risk_level"],
+                        "success_rate": decision["success_rate"],
+                        "multiplier": decision["multiplier"],
+                        "filter_version": decision["filter_version"],
+                    },
+                }
+            )
 
     return allowed, blocked
