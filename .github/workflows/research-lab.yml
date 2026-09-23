@@ -1,6 +1,9 @@
 name: Warashibe AI Research Lab
 
 on:
+  push:
+    branches:
+      - research-lab
   workflow_dispatch:
   schedule:
     - cron: "17 */6 * * *"
