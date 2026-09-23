@@ -4,7 +4,7 @@
 #
 # 現在のモジュール分割構成に対応した一括テスト
 #
-# Route Engine v1.1 / Route Metrics / 6戦略 Campaign / Route API 対応版
+# Route Engine v1.1.1 / Risk Metrics / Route Metrics / 6戦略 Campaign / Route API 対応版
 #
 # 実行：
 #     python test_runner.py
@@ -243,7 +243,7 @@ def test_route_engine():
         # ----------------------------------------------------
 
         check(
-            ROUTE_ENGINE_VERSION == "1.1",
+            ROUTE_ENGINE_VERSION == "1.1.1",
             "route_engine:version",
             str(ROUTE_ENGINE_VERSION),
         )
@@ -394,7 +394,7 @@ def test_route_engine():
         )
 
         # ----------------------------------------------------
-        # Route Engine v1.1 Metrics
+        # Route Engine v1.1.1 Metrics
         # ----------------------------------------------------
 
         metric_keys = (
@@ -418,13 +418,13 @@ def test_route_engine():
 
         check(
             metrics_present,
-            "route_engine:v1_1_metrics_present",
+            "route_engine:v1_1_1_metrics_present",
             "OK" if metrics_present else str(direct_candidate),
         )
 
         metrics_valid = (
             isinstance(direct_candidate, dict)
-            and direct_candidate.get("route_engine_version") == "1.1"
+            and direct_candidate.get("route_engine_version") == "1.1.1"
             and direct_candidate.get("route_steps_to_target") == 6
             and abs(float(direct_candidate.get("route_capital_multiplier", 0)) - 1.5) < 1e-12
             and abs(float(direct_candidate.get("route_expected_capital", 0)) - 120.0) < 1e-12
@@ -437,9 +437,39 @@ def test_route_engine():
 
         check(
             metrics_valid,
-            "route_engine:v1_1_metrics_values",
+            "route_engine:v1_1_1_metrics_values",
             "OK" if metrics_valid else str(direct_candidate),
         )
+
+        # ----------------------------------------------------
+        # Route Engine v1.1.1 Risk伝播
+        # ----------------------------------------------------
+
+        risk_cases = {
+            100: ("わら", "stable"),
+            1200: ("コレクターソフト", "high_risk_high_multiplier"),
+            100000: ("限定家電", "high_risk_high_multiplier"),
+        }
+
+        for risk_capital, (expected_name, expected_risk) in risk_cases.items():
+            risk_candidate = select_route_candidate(
+                capital=risk_capital,
+                target=TARGET,
+                candidate_provider=evaluate_market_candidates,
+            )
+
+            risk_valid = (
+                isinstance(risk_candidate, dict)
+                and risk_candidate.get("name") == expected_name
+                and risk_candidate.get("route_risk_level") == expected_risk
+                and risk_candidate.get("route_risk_level") != "unknown"
+            )
+
+            check(
+                risk_valid,
+                f"route_engine:risk_{risk_capital}",
+                expected_risk if risk_valid else str(risk_candidate),
+            )
 
         regression_valid = (
             direct_candidate.get("name") == "わら"
@@ -527,7 +557,7 @@ def test_route_engine():
                 or trade.get(
                     "route_engine_version"
                 )
-                != "1.1"
+                != "1.1.1"
             ):
                 history_valid = False
                 break
