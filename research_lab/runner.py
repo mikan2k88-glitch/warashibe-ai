@@ -37,7 +37,7 @@ def run_cycle():
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "dashboard_research_kpis", "next_theme": "dashboard_route_probability_chart", "checks": checks}
+                "stage": "dashboard_route_probability_chart", "next_theme": "dashboard_uncertainty_monitor", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
