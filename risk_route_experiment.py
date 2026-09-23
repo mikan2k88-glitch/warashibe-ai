@@ -2,39 +2,33 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.4
+# Risk-sensitive Route Experiment v0.5
 #
 # 目的：
-#   Route Engine v1.1.1 の現在Routeと、
-#   各資本帯における1-step alternative routeを比較する。
-#
-# 比較指標：
+#   現在の仮想市場で到達可能な全Routeを列挙し、
 #
 #   - Goal Probability
-#   - Failure Probability
 #   - Route Steps
-#   - Expected Journeys To Goal
 #   - Expected Economic Loss / Journey
+#   - Expected Journeys To Goal
 #   - Expected Economic Loss Until Goal
 #
+#   を比較する。
+#
+# さらに、
+#
+#   maximize:
+#       Goal Probability
+#
+#   minimize:
+#       Expected Economic Loss Until Goal
+#       Route Steps
+#
+#   によるPareto Frontierを求める。
+#
 # 重要：
-#   この実験ではRoute Engineを変更しない。
-#
-# Alternative Route：
-#
-#   現在の資本帯で別候補を最初の1手として選び、
-#   その成功後は現行Route Engineの最適Routeへ戻る。
-#
-# これにより、
-#
-#   「Goal Probabilityを最大化する現在Route」
-#
-#   と
-#
-#   「Goal Probabilityは多少低いが、
-#     Economic Lossが小さいRoute」
-#
-#   が実際に存在するか観測する。
+#   Route Engine v1.1.1は変更しない。
+#   Risk penaltyもまだ導入しない。
 #
 # Failure Model：
 #
@@ -44,7 +38,7 @@
 # Restart Model：
 #
 #   Journey failure ->
-#   START_CAPITALから新しいJourneyを開始
+#   START_CAPITALから再スタート
 #
 # 実行：
 #
@@ -69,11 +63,13 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.4"
+EXPERIMENT_VERSION = "0.5"
 
 START_CAPITAL = 100
 
 MAX_ROUTE_STEPS = 20
+
+FLOAT_TOLERANCE = 1e-12
 
 
 # ============================================================
@@ -98,10 +94,10 @@ def to_float(
 # Candidate Helpers
 # ============================================================
 
-def get_candidate_success_probability(
+def get_success_probability(
     candidate,
 ):
-    confidence = to_float(
+    probability = to_float(
         candidate.get(
             "confidence"
         )
@@ -111,12 +107,12 @@ def get_candidate_success_probability(
         0.0,
         min(
             1.0,
-            confidence,
+            probability,
         ),
     )
 
 
-def get_candidate_next_capital(
+def get_next_capital(
     candidate,
 ):
     return to_float(
@@ -126,7 +122,7 @@ def get_candidate_next_capital(
     )
 
 
-def get_candidate_risk_level(
+def get_risk_level(
     candidate,
 ):
     route_risk = candidate.get(
@@ -160,12 +156,19 @@ def get_candidate_risk_level(
 
 
 # ============================================================
-# Market Candidates
+# Market Candidate Provider
 # ============================================================
 
 def get_price_band_candidates(
     capital,
 ):
+    """
+    現在のWarashibe ruleを維持する。
+
+    affordable candidatesの中から、
+    最も高いpurchase_price帯だけを対象とする。
+    """
+
     result = evaluate_market_candidates(
         capital
     )
@@ -187,10 +190,34 @@ def get_price_band_candidates(
     ):
         return []
 
-    return filter_by_price_band(
+    candidates = filter_by_price_band(
         ranked,
         capital,
     )
+
+    valid = []
+
+    for candidate in candidates:
+        if not isinstance(
+            candidate,
+            dict,
+        ):
+            continue
+
+        next_capital = (
+            get_next_capital(
+                candidate
+            )
+        )
+
+        if next_capital <= capital:
+            continue
+
+        valid.append(
+            candidate
+        )
+
+    return valid
 
 
 # ============================================================
@@ -209,9 +236,8 @@ def build_current_route(
 
     visited = set()
 
-    for step in range(
-        1,
-        MAX_ROUTE_STEPS + 1,
+    for _ in range(
+        MAX_ROUTE_STEPS
     ):
         if capital >= target:
             break
@@ -242,12 +268,8 @@ def build_current_route(
         ):
             break
 
-        route.append(
-            candidate
-        )
-
         next_capital = (
-            get_candidate_next_capital(
+            get_next_capital(
                 candidate
             )
         )
@@ -255,55 +277,123 @@ def build_current_route(
         if next_capital <= capital:
             break
 
+        route.append(
+            candidate
+        )
+
         capital = next_capital
 
     return route
 
 
 # ============================================================
-# Alternative Route
+# Exhaustive Route Search
 # ============================================================
 
-def build_alternative_route(
+def enumerate_routes(
     capital,
-    first_candidate,
     target,
+    route=None,
+    visited=None,
 ):
     """
-    指定候補を最初の1手として固定する。
+    現在のprice-band ruleの下で、
+    targetへ到達可能な全Routeを列挙する。
 
-    その候補が成功した後は、
-    現行Route Engineの最適Routeへ戻る。
+    next_capital > capitalのみ許可するため、
+    基本的にはDAG探索になる。
+
+    visitedも使用し、
+    将来market modelが変わった場合のloopを防止する。
     """
 
-    route = [
-        first_candidate
-    ]
+    if route is None:
+        route = []
 
-    next_capital = (
-        get_candidate_next_capital(
-            first_candidate
+    if visited is None:
+        visited = set()
+
+    capital = to_float(
+        capital
+    )
+
+    if capital >= target:
+        return [
+            list(
+                route
+            )
+        ]
+
+    if capital <= 0:
+        return []
+
+    if len(
+        route
+    ) >= MAX_ROUTE_STEPS:
+        return []
+
+    if capital in visited:
+        return []
+
+    next_visited = set(
+        visited
+    )
+
+    next_visited.add(
+        capital
+    )
+
+    candidates = (
+        get_price_band_candidates(
+            capital
         )
     )
 
-    if next_capital >= target:
-        return route
+    if not candidates:
+        return []
 
-    if next_capital <= capital:
-        return route
+    routes = []
 
-    continuation = (
-        build_current_route(
-            next_capital,
-            target,
+    for candidate in candidates:
+        next_capital = (
+            get_next_capital(
+                candidate
+            )
         )
-    )
 
-    route.extend(
-        continuation
-    )
+        if next_capital <= capital:
+            continue
 
-    return route
+        next_route = (
+            list(
+                route
+            )
+            + [
+                candidate
+            ]
+        )
+
+        if next_capital >= target:
+            routes.append(
+                next_route
+            )
+
+            continue
+
+        child_routes = (
+            enumerate_routes(
+                next_capital,
+                target,
+                route=next_route,
+                visited=next_visited,
+            )
+        )
+
+        routes.extend(
+            child_routes
+        )
+
+    return routes
 
 
 # ============================================================
@@ -315,26 +405,15 @@ def analyze_route(
     route,
     target,
 ):
-    """
-    与えられたRouteについて、
-
-    - Goal Probability
-    - Failure Probability
-    - Failure Stage Distribution
-    - Expected Economic Loss
-
-    を計算する。
-    """
-
     capital = to_float(
         start_capital
     )
 
     reach_probability = 1.0
 
-    total_failure_probability = 0.0
+    expected_loss = 0.0
 
-    expected_economic_loss = 0.0
+    total_failure_probability = 0.0
 
     stages = []
 
@@ -345,7 +424,7 @@ def analyze_route(
         start=1,
     ):
         success_probability = (
-            get_candidate_success_probability(
+            get_success_probability(
                 candidate
             )
         )
@@ -356,7 +435,7 @@ def analyze_route(
         )
 
         next_capital = (
-            get_candidate_next_capital(
+            get_next_capital(
                 candidate
             )
         )
@@ -371,7 +450,7 @@ def analyze_route(
             * capital
         )
 
-        expected_economic_loss += (
+        expected_loss += (
             weighted_loss
         )
 
@@ -405,7 +484,7 @@ def analyze_route(
                     weighted_loss
                 ),
                 "risk_level": (
-                    get_candidate_risk_level(
+                    get_risk_level(
                         candidate
                     )
                 ),
@@ -433,16 +512,6 @@ def analyze_route(
     else:
         goal_probability = 0.0
 
-    probability_total = (
-        total_failure_probability
-        + goal_probability
-    )
-
-    if not completed:
-        probability_total = (
-            total_failure_probability
-        )
-
     return {
         "completed": completed,
         "steps": len(
@@ -459,87 +528,63 @@ def analyze_route(
             total_failure_probability
         ),
         "probability_total": (
-            probability_total
+            total_failure_probability
+            + goal_probability
         ),
         "expected_economic_loss_per_journey": (
-            expected_economic_loss
+            expected_loss
         ),
         "stages": stages,
     }
 
 
 # ============================================================
-# Restart / Long-run Analysis
+# Long-run Metrics
 # ============================================================
 
-def expected_journeys_to_goal(
-    goal_probability,
-):
-    p = to_float(
-        goal_probability
-    )
-
-    if p <= 0:
-        return math.inf
-
-    return 1.0 / p
-
-
-def expected_failures_before_goal(
-    goal_probability,
-):
-    p = to_float(
-        goal_probability
-    )
-
-    if p <= 0:
-        return math.inf
-
-    return (
-        1.0
-        - p
-    ) / p
-
-
 def calculate_long_run_metrics(
-    route_analysis,
+    analysis,
 ):
-    goal_probability = (
-        route_analysis[
-            "goal_probability"
-        ]
-    )
+    p = analysis[
+        "goal_probability"
+    ]
+
+    if p <= 0:
+        return {
+            "expected_journeys_to_goal": (
+                math.inf
+            ),
+            "expected_failures_before_goal": (
+                math.inf
+            ),
+            "expected_economic_loss_until_goal": (
+                math.inf
+            ),
+        }
 
     expected_journeys = (
-        expected_journeys_to_goal(
-            goal_probability
-        )
+        1.0
+        / p
     )
 
     expected_failures = (
-        expected_failures_before_goal(
-            goal_probability
+        (
+            1.0
+            - p
         )
+        / p
     )
 
     loss_per_journey = (
-        route_analysis[
+        analysis[
             "expected_economic_loss_per_journey"
         ]
     )
 
-    if math.isinf(
-        expected_failures
-    ):
-        expected_loss_until_goal = (
-            math.inf
-        )
-
-    else:
-        expected_loss_until_goal = (
-            loss_per_journey
-            * expected_failures
-        )
+    expected_loss_until_goal = (
+        loss_per_journey
+        * expected_failures
+    )
 
     return {
         "expected_journeys_to_goal": (
@@ -555,11 +600,35 @@ def calculate_long_run_metrics(
 
 
 # ============================================================
-# Route Signature
+# Route Record
 # ============================================================
 
+def create_route_record(
+    route,
+):
+    analysis = (
+        analyze_route(
+            START_CAPITAL,
+            route,
+            TARGET,
+        )
+    )
+
+    long_run = (
+        calculate_long_run_metrics(
+            analysis
+        )
+    )
+
+    return {
+        "route": route,
+        "analysis": analysis,
+        "long_run": long_run,
+    }
+
+
 def route_signature(
-    route_analysis,
+    record,
 ):
     return tuple(
         (
@@ -573,182 +642,27 @@ def route_signature(
                 "next_capital"
             ],
         )
-        for stage in route_analysis[
+        for stage in record[
+            "analysis"
+        ][
             "stages"
         ]
     )
 
 
 def route_names(
-    route_analysis,
+    record,
 ):
     return " -> ".join(
         stage[
             "name"
         ]
-        for stage in route_analysis[
+        for stage in record[
+            "analysis"
+        ][
             "stages"
         ]
     )
-
-
-# ============================================================
-# Comparison Builder
-# ============================================================
-
-def build_route_comparisons():
-    """
-    現行Route上の各資本帯について、
-
-    現在選択候補
-    +
-    同価格帯の代替候補
-
-    を比較する。
-    """
-
-    current_route = (
-        build_current_route(
-            START_CAPITAL,
-            TARGET,
-        )
-    )
-
-    current_analysis = (
-        analyze_route(
-            START_CAPITAL,
-            current_route,
-            TARGET,
-        )
-    )
-
-    comparisons = []
-
-    seen = set()
-
-    for current_stage in current_analysis[
-        "stages"
-    ]:
-        capital = current_stage[
-            "capital"
-        ]
-
-        candidates = (
-            get_price_band_candidates(
-                capital
-            )
-        )
-
-        for candidate in candidates:
-            alternative_route = (
-                build_alternative_route(
-                    capital,
-                    candidate,
-                    TARGET,
-                )
-            )
-
-            prefix = []
-
-            for stage in current_analysis[
-                "stages"
-            ]:
-                if (
-                    stage[
-                        "capital"
-                    ]
-                    == capital
-                ):
-                    break
-
-                prefix_candidate = (
-                    select_route_candidate(
-                        capital=stage[
-                            "capital"
-                        ],
-                        target=TARGET,
-                        candidate_provider=(
-                            evaluate_market_candidates
-                        ),
-                    )
-                )
-
-                if isinstance(
-                    prefix_candidate,
-                    dict,
-                ):
-                    prefix.append(
-                        prefix_candidate
-                    )
-
-            full_route = (
-                prefix
-                + alternative_route
-            )
-
-            analysis = (
-                analyze_route(
-                    START_CAPITAL,
-                    full_route,
-                    TARGET,
-                )
-            )
-
-            signature = (
-                route_signature(
-                    analysis
-                )
-            )
-
-            if signature in seen:
-                continue
-
-            seen.add(
-                signature
-            )
-
-            long_run = (
-                calculate_long_run_metrics(
-                    analysis
-                )
-            )
-
-            comparisons.append(
-                {
-                    "branch_capital": (
-                        capital
-                    ),
-                    "first_candidate": (
-                        candidate.get(
-                            "name"
-                        )
-                    ),
-                    "analysis": (
-                        analysis
-                    ),
-                    "long_run": (
-                        long_run
-                    ),
-                }
-            )
-
-    current_long_run = (
-        calculate_long_run_metrics(
-            current_analysis
-        )
-    )
-
-    return {
-        "current_route": (
-            current_analysis
-        ),
-        "current_long_run": (
-            current_long_run
-        ),
-        "comparisons": (
-            comparisons
-        ),
-    }
 
 
 # ============================================================
@@ -760,7 +674,7 @@ def dominates(
     right,
 ):
     """
-    Pareto dominance:
+    Pareto objectives:
 
     maximize:
         Goal Probability
@@ -768,8 +682,6 @@ def dominates(
     minimize:
         Expected Economic Loss Until Goal
         Route Steps
-
-    少なくとも1項目でstrictly better。
     """
 
     left_analysis = left[
@@ -825,15 +737,25 @@ def dominates(
     )
 
     no_worse = (
-        left_goal >= right_goal
-        and left_loss <= right_loss
-        and left_steps <= right_steps
+        left_goal
+        >= right_goal
+        - FLOAT_TOLERANCE
+        and left_loss
+        <= right_loss
+        + FLOAT_TOLERANCE
+        and left_steps
+        <= right_steps
     )
 
     strictly_better = (
-        left_goal > right_goal
-        or left_loss < right_loss
-        or left_steps < right_steps
+        left_goal
+        > right_goal
+        + FLOAT_TOLERANCE
+        or left_loss
+        < right_loss
+        - FLOAT_TOLERANCE
+        or left_steps
+        < right_steps
     )
 
     return (
@@ -843,42 +765,42 @@ def dominates(
 
 
 def find_pareto_routes(
-    comparisons,
+    records,
 ):
     pareto = []
 
-    for candidate in comparisons:
+    for record in records:
         dominated = False
 
-        for other in comparisons:
-            if other is candidate:
+        for other in records:
+            if other is record:
                 continue
 
             if dominates(
                 other,
-                candidate,
+                record,
             ):
                 dominated = True
                 break
 
         if not dominated:
             pareto.append(
-                candidate
+                record
             )
 
     pareto.sort(
-        key=lambda item: (
-            -item[
+        key=lambda record: (
+            -record[
                 "analysis"
             ][
                 "goal_probability"
             ],
-            item[
+            record[
                 "long_run"
             ][
                 "expected_economic_loss_until_goal"
             ],
-            item[
+            record[
                 "analysis"
             ][
                 "steps"
@@ -890,12 +812,129 @@ def find_pareto_routes(
 
 
 # ============================================================
-# 表示
+# Best Metrics
+# ============================================================
+
+def find_best_goal_route(
+    records,
+):
+    return max(
+        records,
+        key=lambda record: (
+            record[
+                "analysis"
+            ][
+                "goal_probability"
+            ],
+            -record[
+                "long_run"
+            ][
+                "expected_economic_loss_until_goal"
+            ],
+            -record[
+                "analysis"
+            ][
+                "steps"
+            ],
+        ),
+    )
+
+
+def find_lowest_loss_route(
+    records,
+):
+    return min(
+        records,
+        key=lambda record: (
+            record[
+                "long_run"
+            ][
+                "expected_economic_loss_until_goal"
+            ],
+            -record[
+                "analysis"
+            ][
+                "goal_probability"
+            ],
+            record[
+                "analysis"
+            ][
+                "steps"
+            ],
+        ),
+    )
+
+
+def find_shortest_route(
+    records,
+):
+    return min(
+        records,
+        key=lambda record: (
+            record[
+                "analysis"
+            ][
+                "steps"
+            ],
+            -record[
+                "analysis"
+            ][
+                "goal_probability"
+            ],
+            record[
+                "long_run"
+            ][
+                "expected_economic_loss_until_goal"
+            ],
+        ),
+    )
+
+
+# ============================================================
+# Current Route Matching
+# ============================================================
+
+def find_current_route_record(
+    records,
+):
+    current_route = (
+        build_current_route(
+            START_CAPITAL,
+            TARGET,
+        )
+    )
+
+    current_record = (
+        create_route_record(
+            current_route
+        )
+    )
+
+    current_signature = (
+        route_signature(
+            current_record
+        )
+    )
+
+    for record in records:
+        if (
+            route_signature(
+                record
+            )
+            == current_signature
+        ):
+            return record
+
+    return current_record
+
+
+# ============================================================
+# Output Helpers
 # ============================================================
 
 def print_header():
     print(
-        "=" * 88
+        "=" * 92
     )
 
     print(
@@ -904,7 +943,7 @@ def print_header():
     )
 
     print(
-        "=" * 88
+        "=" * 92
     )
 
     print(
@@ -928,168 +967,178 @@ def print_header():
     )
 
     print(
-        "Optimization       : "
-        "NONE - comparison experiment only"
+        "Search             : "
+        "Exhaustive Route Enumeration"
     )
 
     print(
-        "=" * 88
+        "Optimization       : "
+        "NONE - observation only"
+    )
+
+    print(
+        "=" * 92
     )
 
 
-def print_current_route(
-    result,
+def print_record(
+    title,
+    record,
 ):
-    analysis = result[
-        "current_route"
+    analysis = record[
+        "analysis"
     ]
 
-    long_run = result[
-        "current_long_run"
+    long_run = record[
+        "long_run"
     ]
 
     print()
 
     print(
-        "CURRENT ROUTE"
+        title
     )
 
     print(
-        "-" * 88
-    )
-
-    for stage in analysis[
-        "stages"
-    ]:
-        print(
-            f"{stage['capital']:>9,.0f}"
-            f" -> "
-            f"{stage['next_capital']:>9,.0f}"
-            f" | "
-            f"{stage['name']}"
-            f" | success "
-            f"{stage['success_probability'] * 100:>6.2f}%"
-            f" | "
-            f"{stage['risk_level']}"
-        )
-
-    print(
-        "-" * 88
+        "-" * 92
     )
 
     print(
-        f"Goal Probability        : "
+        f"Route          : "
+        f"{route_names(record)}"
+    )
+
+    print(
+        f"Goal           : "
         f"{analysis['goal_probability'] * 100:.6f}%"
     )
 
     print(
-        f"Route Steps             : "
+        f"Steps          : "
         f"{analysis['steps']}"
     )
 
     print(
-        f"Expected Loss/Journey   : "
+        f"Loss/Journey   : "
         f"{analysis['expected_economic_loss_per_journey']:,.4f}"
     )
 
     print(
-        f"Expected Journeys       : "
-        f"{long_run['expected_journeys_to_goal']:.4f}"
+        f"Expected Trips : "
+        f"{long_run['expected_journeys_to_goal']:,.4f}"
     )
 
     print(
-        f"Expected Loss Until Goal: "
+        f"Loss Until Goal: "
         f"{long_run['expected_economic_loss_until_goal']:,.4f}"
     )
 
     print(
-        "-" * 88
+        "-" * 92
     )
 
 
-def print_comparisons(
-    comparisons,
+def print_search_summary(
+    records,
+    pareto,
 ):
     print()
 
     print(
-        "ONE-STEP ALTERNATIVE ROUTES"
+        "EXHAUSTIVE SEARCH SUMMARY"
     )
 
     print(
-        "=" * 88
+        "-" * 92
+    )
+
+    print(
+        f"Total Complete Routes : "
+        f"{len(records)}"
+    )
+
+    print(
+        f"Pareto Routes         : "
+        f"{len(pareto)}"
+    )
+
+    print(
+        "-" * 92
+    )
+
+
+def print_all_routes(
+    records,
+):
+    print()
+
+    print(
+        "ALL COMPLETE ROUTES"
+    )
+
+    print(
+        "=" * 92
     )
 
     ordered = sorted(
-        comparisons,
-        key=lambda item: (
-            item[
-                "branch_capital"
-            ],
-            -item[
+        records,
+        key=lambda record: (
+            -record[
                 "analysis"
             ][
                 "goal_probability"
             ],
-            item[
+            record[
                 "long_run"
             ][
                 "expected_economic_loss_until_goal"
             ],
+            record[
+                "analysis"
+            ][
+                "steps"
+            ],
         ),
     )
 
-    for item in ordered:
-        analysis = item[
+    for index, record in enumerate(
+        ordered,
+        start=1,
+    ):
+        analysis = record[
             "analysis"
         ]
 
-        long_run = item[
+        long_run = record[
             "long_run"
         ]
 
         print(
-            f"Branch Capital : "
-            f"{item['branch_capital']:,.0f}"
+            f"ROUTE {index}"
         )
 
         print(
-            f"First Candidate: "
-            f"{item['first_candidate']}"
+            f"  Path : "
+            f"{route_names(record)}"
         )
 
         print(
-            f"Route          : "
-            f"{route_names(analysis)}"
-        )
-
-        print(
-            f"Goal           : "
+            f"  Goal : "
             f"{analysis['goal_probability'] * 100:.6f}%"
         )
 
         print(
-            f"Steps          : "
+            f"  Steps: "
             f"{analysis['steps']}"
         )
 
         print(
-            f"Loss/Journey   : "
-            f"{analysis['expected_economic_loss_per_journey']:,.4f}"
-        )
-
-        print(
-            f"Expected Trips : "
-            f"{long_run['expected_journeys_to_goal']:.4f}"
-        )
-
-        print(
-            f"Loss Until Goal: "
+            f"  Loss : "
             f"{long_run['expected_economic_loss_until_goal']:,.4f}"
         )
 
         print(
-            "-" * 88
+            "-" * 92
         )
 
 
@@ -1099,22 +1148,22 @@ def print_pareto(
     print()
 
     print(
-        "PARETO ROUTES"
+        "PARETO FRONTIER"
     )
 
     print(
-        "=" * 88
+        "=" * 92
     )
 
-    for index, item in enumerate(
+    for index, record in enumerate(
         pareto,
         start=1,
     ):
-        analysis = item[
+        analysis = record[
             "analysis"
         ]
 
-        long_run = item[
+        long_run = record[
             "long_run"
         ]
 
@@ -1123,18 +1172,8 @@ def print_pareto(
         )
 
         print(
-            f"  Branch Capital : "
-            f"{item['branch_capital']:,.0f}"
-        )
-
-        print(
-            f"  First Candidate: "
-            f"{item['first_candidate']}"
-        )
-
-        print(
             f"  Route          : "
-            f"{route_names(analysis)}"
+            f"{route_names(record)}"
         )
 
         print(
@@ -1148,12 +1187,22 @@ def print_pareto(
         )
 
         print(
+            f"  Loss/Journey   : "
+            f"{analysis['expected_economic_loss_per_journey']:,.4f}"
+        )
+
+        print(
+            f"  Expected Trips : "
+            f"{long_run['expected_journeys_to_goal']:,.4f}"
+        )
+
+        print(
             f"  Loss Until Goal: "
             f"{long_run['expected_economic_loss_until_goal']:,.4f}"
         )
 
         print(
-            "-" * 88
+            "-" * 92
         )
 
 
@@ -1162,13 +1211,18 @@ def print_pareto(
 # ============================================================
 
 def validate(
-    result,
+    records,
+    pareto,
+    current_record,
 ):
     errors = []
 
-    current = result[
-        "current_route"
-    ]
+    if not records:
+        errors.append(
+            "No complete routes found"
+        )
+
+        return errors
 
     expected_names = [
         "わら",
@@ -1179,73 +1233,115 @@ def validate(
         "限定家電",
     ]
 
-    actual_names = [
+    current_names = [
         stage[
             "name"
         ]
-        for stage in current[
+        for stage in current_record[
+            "analysis"
+        ][
             "stages"
         ]
     ]
 
-    if actual_names != expected_names:
+    if current_names != expected_names:
         errors.append(
             "Current optimal route changed: "
-            f"{actual_names}"
+            f"{current_names}"
         )
 
     expected_probability = (
         0.00875875
     )
 
-    actual_probability = (
-        current[
+    current_probability = (
+        current_record[
+            "analysis"
+        ][
             "goal_probability"
         ]
     )
 
     if (
         abs(
-            actual_probability
+            current_probability
             - expected_probability
         )
-        > 1e-12
+        > FLOAT_TOLERANCE
     ):
         errors.append(
             "Current goal probability changed: "
-            f"{actual_probability}"
+            f"{current_probability}"
         )
 
-    if not current[
-        "completed"
-    ]:
-        errors.append(
-            "Current route does not reach target"
-        )
-
-    for item in result[
-        "comparisons"
-    ]:
-        analysis = item[
+    for record in records:
+        analysis = record[
             "analysis"
         ]
 
-        if analysis[
+        if not analysis[
             "completed"
         ]:
-            if (
-                abs(
-                    analysis[
-                        "probability_total"
-                    ]
-                    - 1.0
-                )
-                > 1e-12
-            ):
-                errors.append(
-                    "Probability total failed for "
-                    f"{item['first_candidate']}"
-                )
+            errors.append(
+                "Incomplete route found "
+                "inside complete-route set"
+            )
+
+            break
+
+        if (
+            abs(
+                analysis[
+                    "probability_total"
+                ]
+                - 1.0
+            )
+            > FLOAT_TOLERANCE
+        ):
+            errors.append(
+                "Probability total "
+                "does not equal 100%"
+            )
+
+            break
+
+    current_signature = (
+        route_signature(
+            current_record
+        )
+    )
+
+    all_signatures = {
+        route_signature(
+            record
+        )
+        for record in records
+    }
+
+    if (
+        current_signature
+        not in all_signatures
+    ):
+        errors.append(
+            "Current Route Engine route "
+            "was not found by exhaustive search"
+        )
+
+    pareto_signatures = {
+        route_signature(
+            record
+        )
+        for record in pareto
+    }
+
+    if (
+        current_signature
+        not in pareto_signatures
+    ):
+        errors.append(
+            "Current Route Engine route "
+            "is not Pareto optimal"
+        )
 
     return errors
 
@@ -1257,26 +1353,106 @@ def validate(
 def main():
     print_header()
 
-    result = (
-        build_route_comparisons()
+    routes = enumerate_routes(
+        START_CAPITAL,
+        TARGET,
     )
+
+    records = [
+        create_route_record(
+            route
+        )
+        for route in routes
+    ]
+
+    unique_records = []
+
+    seen = set()
+
+    for record in records:
+        signature = (
+            route_signature(
+                record
+            )
+        )
+
+        if signature in seen:
+            continue
+
+        seen.add(
+            signature
+        )
+
+        unique_records.append(
+            record
+        )
+
+    records = unique_records
+
+    if not records:
+        print(
+            "No complete routes found."
+        )
+
+        raise SystemExit(1)
 
     pareto = (
         find_pareto_routes(
-            result[
-                "comparisons"
-            ]
+            records
         )
     )
 
-    print_current_route(
-        result
+    current_record = (
+        find_current_route_record(
+            records
+        )
     )
 
-    print_comparisons(
-        result[
-            "comparisons"
-        ]
+    best_goal = (
+        find_best_goal_route(
+            records
+        )
+    )
+
+    lowest_loss = (
+        find_lowest_loss_route(
+            records
+        )
+    )
+
+    shortest = (
+        find_shortest_route(
+            records
+        )
+    )
+
+    print_search_summary(
+        records,
+        pareto,
+    )
+
+    print_record(
+        "CURRENT ROUTE ENGINE ROUTE",
+        current_record,
+    )
+
+    print_record(
+        "HIGHEST GOAL PROBABILITY ROUTE",
+        best_goal,
+    )
+
+    print_record(
+        "LOWEST LOSS UNTIL GOAL ROUTE",
+        lowest_loss,
+    )
+
+    print_record(
+        "SHORTEST COMPLETE ROUTE",
+        shortest,
+    )
+
+    print_all_routes(
+        records
     )
 
     print_pareto(
@@ -1284,13 +1460,15 @@ def main():
     )
 
     errors = validate(
-        result
+        records,
+        pareto,
+        current_record,
     )
 
     print()
 
     print(
-        "=" * 88
+        "=" * 92
     )
 
     print(
@@ -1298,7 +1476,7 @@ def main():
     )
 
     print(
-        "=" * 88
+        "=" * 92
     )
 
     if errors:
@@ -1322,15 +1500,15 @@ def main():
     )
 
     print(
-        "Alternative-route comparison verified."
+        "Exhaustive route enumeration verified."
     )
 
     print(
-        "Risk/goal trade-off observation ready."
+        "Current route is Pareto optimal."
     )
 
     print(
-        "=" * 88
+        "=" * 92
     )
 
 
