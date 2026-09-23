@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = Path(os.environ.get("WARASHIBE_LAB_OUTPUT", ROOT / "research_output"))
+HISTORY_LIMIT = 120
 
 
 def run_command(args):
@@ -35,8 +36,18 @@ def run_cycle():
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "lab_dashboard_live_snapshot", "next_theme": "dashboard_history_metrics", "checks": checks}
+                "stage": "dashboard_history_metrics", "next_theme": "dashboard_research_kpis", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    history_path = OUTPUT / "history.json"
+    try:
+        history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
+    except (OSError, json.JSONDecodeError):
+        history = []
+    history.append({"generated_at": snapshot["generated_at"], "status": snapshot["status"],
+                    "stage": snapshot["stage"], "next_theme": snapshot["next_theme"],
+                    "passed_checks": sum(1 for x in checks if x["returncode"] == 0),
+                    "total_checks": len(checks)})
+    history_path.write_text(json.dumps(history[-HISTORY_LIMIT:], ensure_ascii=False, indent=2), encoding="utf-8")
     (OUTPUT / "latest.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUTPUT / "latest.md").write_text("# Warashibe AI Lab — Latest Run\n\n"
         + f"- Generated: {snapshot['generated_at']}\n- Status: **{snapshot['status'].upper()}**\n"
