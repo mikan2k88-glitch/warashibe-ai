@@ -11,6 +11,7 @@ from research_lab.config import LAB_BRANCH, PRODUCTION_BRANCH, RESEARCH_TRACKS
 from research_lab.dashboard_kpis import research_kpis, route_probability_series
 from research_lab.dashboard_uncertainty import demo_uncertainty_metrics
 from research_lab.storage import ResearchRepository
+from research_lab.github_actions_bridge import live_snapshot, workflow_runs
 
 lab_bp = Blueprint("research_lab", __name__)
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +27,7 @@ h1{margin:0 0 4px}.muted{color:#91a0b8}.grid{display:grid;grid-template-columns:
 .flow{display:flex;align-items:center;gap:10px;overflow:auto;padding:12px 0}.node{min-width:170px;background:#18243a;border:1px solid #304363;border-radius:12px;padding:14px}.arrow{font-size:24px;color:#607493}
 .bar{height:10px;background:#263550;border-radius:8px;overflow:hidden;margin-top:8px}.fill{height:100%;background:linear-gradient(90deg,#6ee7a8,#79a8ff)}
 .chart{display:flex;align-items:flex-end;gap:5px;height:130px;padding:14px 4px 4px}.col{flex:1;min-width:5px;background:linear-gradient(#79a8ff,#6ee7a8);border-radius:4px 4px 0 0;opacity:.9}.chartlabel{display:flex;justify-content:space-between;color:#91a0b8;font-size:12px}
-.probchart{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end;height:220px;padding-top:12px}.probgroup{height:100%;display:flex;align-items:end;justify-content:center;gap:5px;border-bottom:1px solid #304363}.pbar{width:28%;min-width:12px;border-radius:5px 5px 0 0}.current{background:#607493}.optimal{background:#6ee7a8}.plabel{text-align:center;color:#91a0b8;font-size:12px;margin-top:7px}.legend{display:flex;gap:18px;font-size:12px;color:#91a0b8;margin-top:12px}
+.probchart{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;height:220px;padding-top:12px}.probchart>div{height:190px;display:flex;flex-direction:column}.probgroup{height:165px;display:flex;align-items:flex-end;justify-content:center;gap:5px;border-bottom:1px solid #304363}.pbar{width:28%;min-width:12px;border-radius:5px 5px 0 0}.current{background:#607493}.optimal{background:#6ee7a8}.plabel{text-align:center;color:#91a0b8;font-size:12px;margin-top:7px}.legend{display:flex;gap:18px;font-size:12px;color:#91a0b8;margin-top:12px}
 table{width:100%;border-collapse:collapse;background:#121b2d;border-radius:14px;overflow:hidden}th,td{padding:12px;text-align:left;border-bottom:1px solid #263550}th{color:#91a0b8}
 code{color:#b7c7ff}@media(max-width:700px){.wrap{padding:16px}th:nth-child(3),td:nth-child(3){display:none}}
 </style></head><body><div class="wrap">
@@ -70,6 +71,12 @@ def _repo():
 
 
 def _history():
+    runs = workflow_runs()
+    if runs:
+        rows = []
+        for run in reversed(runs[-40:]):
+            rows.append({"generated_at": run["updated_at"], "status": run["conclusion"] or run["status"], "check_percent": 100 if run["conclusion"] == "success" else 0})
+        return rows
     path = OUTPUT / "history.json"
     if not path.exists():
         return []
@@ -84,6 +91,9 @@ def _history():
 
 
 def _snapshot():
+    live = live_snapshot("dashboard_uncertainty_monitor", "live_outcome_dashboard_bridge", 17)
+    if live:
+        return live
     path = OUTPUT / "latest.json"
     data = {"status": "waiting", "stage": "bootstrap", "next_theme": "research_cycle", "generated_at": None, "checks": []}
     if path.exists():
