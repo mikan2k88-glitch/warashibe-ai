@@ -41,7 +41,7 @@ def run():
     assert result["best_candidate"]["name"] == "Evidence Camera A"
 
     blocked_names = {x["name"] for x in result["danger_blocked"]}
-    capital_blocked_names = {x["name"] for x in result["capital_blocked"]}
+    capital_blocked_names = {x["candidate"]["name"] for x in result["capital_blocked"]}
     assert "Evidence Camera B" in blocked_names
     assert "Evidence Camera C" in capital_blocked_names
 
