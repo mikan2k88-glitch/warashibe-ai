@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, render_template_string
 from research_lab import LAB_VERSION
 from research_lab.config import LAB_BRANCH, PRODUCTION_BRANCH, RESEARCH_TRACKS
 from research_lab.dashboard_kpis import research_kpis, route_probability_series
+from research_lab.dashboard_uncertainty import demo_uncertainty_metrics
 from research_lab.storage import ResearchRepository
 
 lab_bp = Blueprint("research_lab", __name__)
@@ -47,6 +48,14 @@ code{color:#b7c7ff}@media(max-width:700px){.wrap{padding:16px}th:nth-child(3),td
 <div class="muted">Recovery率別 · Current policy / Optimal policy</div>
 <div class="probchart">{% for p in probabilities %}<div><div class="probgroup"><div class="pbar current" title="Current {{ '%.2f'|format(p.current_goal_probability_percent) }}%" style="height:{{ p.current_goal_probability_percent }}%"></div><div class="pbar optimal" title="Optimal {{ '%.2f'|format(p.optimal_goal_probability_percent) }}%" style="height:{{ p.optimal_goal_probability_percent }}%"></div></div><div class="plabel">{{ "%.0f"|format(p.recovery_rate_percent) }}%</div></div>{% endfor %}</div>
 <div class="legend"><span>■ Current</span><span>■ Optimal</span><span>横軸: Recovery率</span></div></div>
+<h2>不確実性モニター</h2><div class="grid">
+<div class="card"><div class="muted">PRIOR</div><div class="big">{{ "%.1f"|format(uncertainty.prior_probability_percent) }}%</div></div>
+<div class="card"><div class="muted">POSTERIOR</div><div class="big">{{ "%.1f"|format(uncertainty.posterior_probability_percent) }}%</div></div>
+<div class="card"><div class="muted">CONSERVATIVE</div><div class="big warn">{{ "%.1f"|format(uncertainty.conservative_probability_percent) }}%</div></div>
+<div class="card"><div class="muted">UNCERTAINTY σ</div><div class="big">{{ "%.1f"|format(uncertainty.posterior_std_percent) }}pt</div></div>
+<div class="card"><div class="muted">RAW OUTCOMES</div><div class="big">{{ uncertainty.raw_outcome_count }}</div></div>
+<div class="card"><div class="muted">EVIDENCE / SOURCES</div><div class="big">{{ uncertainty.evidence_count }} / {{ uncertainty.source_count }}</div></div></div>
+<div class="card muted">現在は研究用fixtureの可視化です。実市場outcomeが接続された段階で同じ計器をライブデータへ切り替えます。</div>
 <h2>研究履歴</h2>
 <div class="card"><div class="muted">CHECK PASS RATE · 直近{{ history|length }}サイクル</div>
 {% if history %}<div class="chart">{% for h in history %}<div class="col" title="{{ h.generated_at }} · {{ h.check_percent }}%" style="height:{{ h.check_percent }}%"></div>{% endfor %}</div>
@@ -95,7 +104,7 @@ def dashboard():
     repository = _repo()
     return render_template_string(TEMPLATE, version=LAB_VERSION, production=PRODUCTION_BRANCH,
         branch=LAB_BRANCH, tracks=RESEARCH_TRACKS, stats=repository.stats(),
-        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis(), probabilities=route_probability_series())
+        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis(), probabilities=route_probability_series(), uncertainty=demo_uncertainty_metrics())
 
 
 @lab_bp.route("/lab/api/status")
@@ -103,4 +112,4 @@ def status():
     repository = _repo()
     return jsonify({"lab_version": LAB_VERSION, "production_branch": PRODUCTION_BRANCH,
         "research_branch": LAB_BRANCH, "tracks": RESEARCH_TRACKS, "snapshot": _snapshot(),
-        "stats": repository.stats(), "kpis": research_kpis(), "route_probabilities": route_probability_series(), "history": _history(), "recent_experiments": repository.recent(20)})
+        "stats": repository.stats(), "kpis": research_kpis(), "route_probabilities": route_probability_series(), "uncertainty": demo_uncertainty_metrics(), "history": _history(), "recent_experiments": repository.recent(20)})
