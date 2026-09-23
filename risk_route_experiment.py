@@ -2,26 +2,33 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.1
+# Risk-sensitive Route Experiment v0.2
 #
 # 目的：
-#   Route Engine v1.1.1 が選択するルートについて、
-#   Goal Probability だけでなく downside risk を観測する。
+#   Route Engine v1.1.1 が選択する現在の最適Routeについて、
+#   単発Riskだけでなく「失敗後の再スタート」を含めて観測する。
 #
-# 注意：
-#   この実験では Route Engine の選択ロジックを変更しない。
-#   Risk は観測のみであり、最適化には使用しない。
+# この実験ではRoute Engineの選択ロジックを変更しない。
 #
 # 現在の失敗モデル：
 #
 #   成功 -> expected_sale_price
-#   失敗 -> 0
+#   失敗 -> capital 0
+#   Journey失敗後 -> START_CAPITALから再スタート可能
+#
+# 注意：
+#   restart cost は各Journey開始時に必要なSTART_CAPITALだけを
+#   単純な外部投入額として数える。
+#
+#   各Journey内部で得た資本を新しい外部投入額としては数えない。
 #
 # 実行：
 #
 #   python risk_route_experiment.py
 #
 # ============================================================
+
+import math
 
 from route_engine import (
     ROUTE_ENGINE_VERSION,
@@ -34,11 +41,20 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.1"
+EXPERIMENT_VERSION = "0.2"
 
 START_CAPITAL = 100
 
 MAX_ROUTE_STEPS = 20
+
+RESTART_TRIALS = (
+    1,
+    10,
+    50,
+    100,
+    500,
+    1000,
+)
 
 
 # ============================================================
@@ -67,17 +83,6 @@ def calculate_candidate_risk(
     capital,
     candidate,
 ):
-    """
-    1回の価値転換に対するRisk指標を計算する。
-
-    現在のシミュレーションモデルでは、
-
-        成功 -> expected_sale_price
-        失敗 -> 0
-
-    とする。
-    """
-
     capital = to_float(
         capital
     )
@@ -112,8 +117,6 @@ def calculate_candidate_risk(
     expected_capital = (
         success_probability
         * success_capital
-        + failure_probability
-        * failure_capital
     )
 
     capital_multiplier = 0.0
@@ -151,11 +154,6 @@ def calculate_candidate_risk(
             / capital
         )
 
-    risk_level = candidate.get(
-        "route_risk_level",
-        "unknown",
-    )
-
     return {
         "capital": capital,
         "name": candidate.get(
@@ -191,8 +189,9 @@ def calculate_candidate_risk(
         "expected_downside_loss_rate": (
             expected_downside_loss_rate
         ),
-        "risk_level": (
-            risk_level
+        "risk_level": candidate.get(
+            "route_risk_level",
+            "unknown",
         ),
         "route_goal_probability": (
             to_float(
@@ -210,18 +209,13 @@ def calculate_candidate_risk(
 
 
 # ============================================================
-# Route Risk
+# Route構築
 # ============================================================
 
 def analyze_route(
     start_capital,
     target,
 ):
-    """
-    Route Engineが現在選択する最適ルートを辿り、
-    各ステップのRiskを観測する。
-    """
-
     capital = start_capital
 
     route = []
@@ -289,22 +283,12 @@ def analyze_route(
 
 
 # ============================================================
-# Route全体のRisk集計
+# 単発Route集計
 # ============================================================
 
 def summarize_route(
     route,
 ):
-    """
-    Route全体の成功確率・失敗確率・Risk構造を集計する。
-
-    全ステップを成功する確率は、
-    各ステップ成功確率の積。
-
-    1回以上失敗する確率は、
-        1 - 全ステップ成功確率
-    """
-
     if not route:
         return {
             "steps": 0,
@@ -328,24 +312,16 @@ def summarize_route(
     unknown_risk_steps = 0
 
     for item in route:
-        success_probability = (
+        route_success_probability *= (
             item[
                 "success_probability"
             ]
         )
 
-        failure_probability = (
+        failure_probabilities.append(
             item[
                 "failure_probability"
             ]
-        )
-
-        route_success_probability *= (
-            success_probability
-        )
-
-        failure_probabilities.append(
-            failure_probability
         )
 
         expected_downside_rates.append(
@@ -374,28 +350,6 @@ def summarize_route(
         - route_success_probability
     )
 
-    average_failure_probability = (
-        sum(
-            failure_probabilities
-        )
-        / len(
-            failure_probabilities
-        )
-    )
-
-    maximum_failure_probability = max(
-        failure_probabilities
-    )
-
-    average_expected_downside_loss_rate = (
-        sum(
-            expected_downside_rates
-        )
-        / len(
-            expected_downside_rates
-        )
-    )
-
     return {
         "steps": len(route),
         "route_success_probability": (
@@ -405,19 +359,249 @@ def summarize_route(
             route_failure_probability
         ),
         "average_failure_probability": (
-            average_failure_probability
+            sum(
+                failure_probabilities
+            )
+            / len(
+                failure_probabilities
+            )
         ),
         "maximum_failure_probability": (
-            maximum_failure_probability
+            max(
+                failure_probabilities
+            )
         ),
         "average_expected_downside_loss_rate": (
-            average_expected_downside_loss_rate
+            sum(
+                expected_downside_rates
+            )
+            / len(
+                expected_downside_rates
+            )
         ),
         "high_risk_steps": (
             high_risk_steps
         ),
         "unknown_risk_steps": (
             unknown_risk_steps
+        ),
+    }
+
+
+# ============================================================
+# Restart Model
+# ============================================================
+
+def cumulative_goal_probability(
+    single_journey_probability,
+    journeys,
+):
+    """
+    独立かつ同一条件でJourneyを繰り返す単純モデル。
+
+    N回以内に少なくとも1回成功する確率：
+
+        1 - (1 - p) ** N
+    """
+
+    p = max(
+        0.0,
+        min(
+            1.0,
+            to_float(
+                single_journey_probability
+            ),
+        ),
+    )
+
+    if journeys <= 0:
+        return 0.0
+
+    return (
+        1.0
+        - (
+            1.0
+            - p
+        ) ** journeys
+    )
+
+
+def expected_journeys_to_goal(
+    single_journey_probability,
+):
+    """
+    幾何分布の期待値。
+
+        E[N] = 1 / p
+    """
+
+    p = to_float(
+        single_journey_probability
+    )
+
+    if p <= 0:
+        return math.inf
+
+    return 1.0 / p
+
+
+def expected_failures_before_goal(
+    single_journey_probability,
+):
+    """
+    成功Journeyまでに期待される失敗Journey数。
+
+        E[F] = (1 - p) / p
+    """
+
+    p = to_float(
+        single_journey_probability
+    )
+
+    if p <= 0:
+        return math.inf
+
+    return (
+        1.0
+        - p
+    ) / p
+
+
+def journeys_for_probability(
+    single_journey_probability,
+    target_probability,
+):
+    """
+    累積成功確率が指定値以上になる最小Journey数。
+
+        1 - (1-p)^N >= target
+    """
+
+    p = to_float(
+        single_journey_probability
+    )
+
+    target_probability = to_float(
+        target_probability
+    )
+
+    if p <= 0:
+        return math.inf
+
+    if p >= 1:
+        return 1
+
+    if target_probability <= 0:
+        return 0
+
+    if target_probability >= 1:
+        return math.inf
+
+    numerator = math.log(
+        1.0
+        - target_probability
+    )
+
+    denominator = math.log(
+        1.0
+        - p
+    )
+
+    return math.ceil(
+        numerator
+        / denominator
+    )
+
+
+def analyze_restarts(
+    single_journey_probability,
+    start_capital,
+):
+    expected_journeys = (
+        expected_journeys_to_goal(
+            single_journey_probability
+        )
+    )
+
+    expected_failures = (
+        expected_failures_before_goal(
+            single_journey_probability
+        )
+    )
+
+    if math.isinf(
+        expected_journeys
+    ):
+        expected_start_capital投入 = (
+            math.inf
+        )
+
+    else:
+        expected_start_capital投入 = (
+            expected_journeys
+            * start_capital
+        )
+
+    trial_results = []
+
+    for journeys in RESTART_TRIALS:
+        probability = (
+            cumulative_goal_probability(
+                single_journey_probability,
+                journeys,
+            )
+        )
+
+        trial_results.append(
+            {
+                "journeys": journeys,
+                "probability": probability,
+                "restart_budget": (
+                    journeys
+                    * start_capital
+                ),
+            }
+        )
+
+    return {
+        "single_journey_probability": (
+            single_journey_probability
+        ),
+        "expected_journeys_to_goal": (
+            expected_journeys
+        ),
+        "expected_failures_before_goal": (
+            expected_failures
+        ),
+        "expected_start_capital_input": (
+            expected_start_capital投入
+        ),
+        "journeys_for_50_percent": (
+            journeys_for_probability(
+                single_journey_probability,
+                0.50,
+            )
+        ),
+        "journeys_for_90_percent": (
+            journeys_for_probability(
+                single_journey_probability,
+                0.90,
+            )
+        ),
+        "journeys_for_95_percent": (
+            journeys_for_probability(
+                single_journey_probability,
+                0.95,
+            )
+        ),
+        "journeys_for_99_percent": (
+            journeys_for_probability(
+                single_journey_probability,
+                0.99,
+            )
+        ),
+        "trial_results": (
+            trial_results
         ),
     }
 
@@ -463,6 +647,11 @@ def print_header():
     print(
         "Failure Model      : "
         "failed trade -> capital 0"
+    )
+
+    print(
+        "Restart Model      : "
+        "new journey from start capital"
     )
 
     print(
@@ -524,11 +713,6 @@ def print_route(
         )
 
         print(
-            f"  Failure Capital      : "
-            f"{item['failure_capital']:,.0f}"
-        )
-
-        print(
             f"  Expected Capital     : "
             f"{item['expected_capital']:,.2f}"
         )
@@ -536,21 +720,6 @@ def print_route(
         print(
             f"  Capital Multiplier   : "
             f"x{item['capital_multiplier']:.2f}"
-        )
-
-        print(
-            f"  Downside Loss        : "
-            f"{item['downside_loss']:,.0f}"
-        )
-
-        print(
-            f"  Downside Loss Rate   : "
-            f"{item['downside_loss_rate'] * 100:.2f}%"
-        )
-
-        print(
-            f"  Expected Downside    : "
-            f"{item['expected_downside_loss']:,.2f}"
         )
 
         print(
@@ -573,13 +742,13 @@ def print_route(
         )
 
 
-def print_summary(
+def print_route_summary(
     summary,
 ):
     print()
 
     print(
-        "ROUTE RISK SUMMARY"
+        "SINGLE JOURNEY RISK SUMMARY"
     )
 
     print(
@@ -612,11 +781,6 @@ def print_summary(
     )
 
     print(
-        f"Average Expected Downside      : "
-        f"{summary['average_expected_downside_loss_rate'] * 100:.2f}%"
-    )
-
-    print(
         f"High Risk Steps                : "
         f"{summary['high_risk_steps']}"
     )
@@ -631,13 +795,95 @@ def print_summary(
     )
 
 
+def print_restart_summary(
+    restart,
+):
+    print()
+
+    print(
+        "RESTART MODEL"
+    )
+
+    print(
+        "-" * 78
+    )
+
+    print(
+        f"Single Journey Goal Rate       : "
+        f"{restart['single_journey_probability'] * 100:.6f}%"
+    )
+
+    print(
+        f"Expected Journeys To Goal      : "
+        f"{restart['expected_journeys_to_goal']:.2f}"
+    )
+
+    print(
+        f"Expected Failures Before Goal  : "
+        f"{restart['expected_failures_before_goal']:.2f}"
+    )
+
+    print(
+        f"Expected Start Capital Input   : "
+        f"{restart['expected_start_capital_input']:,.2f}"
+    )
+
+    print(
+        f"Journeys For >= 50% Goal       : "
+        f"{restart['journeys_for_50_percent']}"
+    )
+
+    print(
+        f"Journeys For >= 90% Goal       : "
+        f"{restart['journeys_for_90_percent']}"
+    )
+
+    print(
+        f"Journeys For >= 95% Goal       : "
+        f"{restart['journeys_for_95_percent']}"
+    )
+
+    print(
+        f"Journeys For >= 99% Goal       : "
+        f"{restart['journeys_for_99_percent']}"
+    )
+
+    print(
+        "-" * 78
+    )
+
+    print(
+        "CUMULATIVE GOAL PROBABILITY"
+    )
+
+    print(
+        "-" * 78
+    )
+
+    for result in restart[
+        "trial_results"
+    ]:
+        print(
+            f"{result['journeys']:>4} journeys"
+            f" | Goal "
+            f"{result['probability'] * 100:>9.6f}%"
+            f" | Start-capital budget "
+            f"{result['restart_budget']:>8,}"
+        )
+
+    print(
+        "-" * 78
+    )
+
+
 # ============================================================
-# Regression Validation
+# Validation
 # ============================================================
 
 def validate(
     route,
     summary,
+    restart,
 ):
     errors = []
 
@@ -715,6 +961,44 @@ def validate(
             f"{actual_risks}"
         )
 
+    expected_journeys = (
+        1.0
+        / expected_probability
+    )
+
+    actual_journeys = restart.get(
+        "expected_journeys_to_goal",
+        0.0,
+    )
+
+    if (
+        abs(
+            actual_journeys
+            - expected_journeys
+        )
+        > 1e-9
+    ):
+        errors.append(
+            "Expected journey calculation failed: "
+            f"{actual_journeys}"
+        )
+
+    probability_100 = (
+        cumulative_goal_probability(
+            expected_probability,
+            100,
+        )
+    )
+
+    if not (
+        0.0
+        < probability_100
+        < 1.0
+    ):
+        errors.append(
+            "Cumulative probability invalid"
+        )
+
     return errors
 
 
@@ -734,17 +1018,29 @@ def main():
         route
     )
 
+    restart = analyze_restarts(
+        summary[
+            "route_success_probability"
+        ],
+        START_CAPITAL,
+    )
+
     print_route(
         route
     )
 
-    print_summary(
+    print_route_summary(
         summary
+    )
+
+    print_restart_summary(
+        restart
     )
 
     errors = validate(
         route,
         summary,
+        restart,
     )
 
     print()
@@ -782,7 +1078,7 @@ def main():
     )
 
     print(
-        "Risk propagation verified."
+        "Restart model verified."
     )
 
     print(
