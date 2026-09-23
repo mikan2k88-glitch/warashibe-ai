@@ -2,55 +2,44 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.6.1
+# Risk-sensitive Route Experiment v0.7
+#
+# Recovery / Salvage Value Sensitivity Analysis
 #
 # 目的：
-#   v0.6のGoal-constrained Risk Optimizationを維持しつつ、
-#   Expected Economic Loss Until Goalの数式を修正する。
 #
-# 修正：
+#   Failure = 全損
 #
-#   Expected Loss / Journey は、
+# という現在の単純モデルを拡張し、
 #
-#       Σ(
-#           Journey内でそのStepに到達する確率
-#           × そのStepで失敗する確率
-#           × Capital At Risk
-#       )
+#   failure_loss
+#       = capital * (1 - recovery_rate)
 #
-#   であり、すでに失敗確率を含む
-#   「1 Journeyあたりの無条件期待損失」である。
+# としてRecovery Rateの影響を観察する。
 #
-#   独立したJourneyを成功するまで繰り返す場合、
+# このv0.7ではRecovery Rateは全商品共通。
 #
-#       Expected Loss Until Goal
-#           = Expected Loss / Journey
-#             / Goal Probability
+#   0%
+#   25%
+#   50%
+#   75%
+#   90%
 #
-#   とする。
+# を比較する。
 #
-#   旧式：
+# 重要：
 #
-#       Loss/Journey
-#       × Expected Failures Before Goal
+#   この実験ではRecovery Capitalを次の取引へ
+#   再投入しない。
 #
-#   は使用しない。
+#   Goal Probabilityは従来モデルのまま。
+#
+#   Recovery RateはEconomic Lossだけに作用する。
+#
+# これはTransition Modelではなく、
+# Economic Loss Sensitivity Analysisである。
 #
 # Route Engine v1.1.1は変更しない。
-#
-# Failure Model：
-#
-#   success -> expected_sale_price
-#   failure -> capital 0
-#
-# Restart Model：
-#
-#   Journey failure ->
-#   START_CAPITALから再スタート
-#
-# 実行：
-#
-#   python risk_route_experiment.py
 #
 # ============================================================
 
@@ -71,7 +60,7 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.6.1"
+EXPERIMENT_VERSION = "0.7"
 
 START_CAPITAL = 100
 
@@ -80,18 +69,17 @@ MAX_ROUTE_STEPS = 20
 FLOAT_TOLERANCE = 1e-12
 
 
-GOAL_TOLERANCES = (
+RECOVERY_RATES = (
     0.00,
-    0.01,
-    0.02,
-    0.05,
-    0.10,
-    0.20,
+    0.25,
+    0.50,
+    0.75,
+    0.90,
 )
 
 
 # ============================================================
-# 数値変換
+# Numeric Helpers
 # ============================================================
 
 def to_float(
@@ -404,9 +392,20 @@ def analyze_route(
     start_capital,
     route,
     target,
+    recovery_rate=0.0,
 ):
     capital = to_float(
         start_capital
+    )
+
+    recovery_rate = max(
+        0.0,
+        min(
+            1.0,
+            to_float(
+                recovery_rate
+            ),
+        ),
     )
 
     reach_probability = 1.0
@@ -445,9 +444,19 @@ def analyze_route(
             * failure_probability
         )
 
+        recovery_value = (
+            capital
+            * recovery_rate
+        )
+
+        failure_loss = (
+            capital
+            - recovery_value
+        )
+
         weighted_loss = (
             journey_failure_probability
-            * capital
+            * failure_loss
         )
 
         total_failure_probability += (
@@ -479,6 +488,15 @@ def analyze_route(
                 ),
                 "journey_failure_probability": (
                     journey_failure_probability
+                ),
+                "recovery_rate": (
+                    recovery_rate
+                ),
+                "recovery_value": (
+                    recovery_value
+                ),
+                "failure_loss": (
+                    failure_loss
                 ),
                 "weighted_loss": (
                     weighted_loss
@@ -530,6 +548,9 @@ def analyze_route(
         "probability_total": (
             total_failure_probability
             + goal_probability
+        ),
+        "recovery_rate": (
+            recovery_rate
         ),
         "expected_economic_loss_per_journey": (
             expected_loss
@@ -598,25 +619,6 @@ def calculate_long_run_metrics(
     else:
         conditional_loss_given_failure = 0.0
 
-    # --------------------------------------------------------
-    # v0.6.1 corrected formula
-    #
-    # Loss/Journey は無条件期待損失。
-    #
-    # 成功までのJourney数の期待値は 1/p。
-    #
-    # 成功Journeyではfailure lossが0なので、
-    #
-    # Expected Loss Until Goal
-    #     = Loss/Journey * (1/p)
-    #     = Loss/Journey / p
-    #
-    # 同値：
-    #
-    # Conditional Loss Given Failure
-    #     * Expected Failures Before Goal
-    # --------------------------------------------------------
-
     expected_loss_until_goal = (
         loss_per_journey
         / p
@@ -639,17 +641,19 @@ def calculate_long_run_metrics(
 
 
 # ============================================================
-# Route Record
+# Route Records
 # ============================================================
 
 def create_route_record(
     route,
+    recovery_rate=0.0,
 ):
     analysis = (
         analyze_route(
             START_CAPITAL,
             route,
             TARGET,
+            recovery_rate,
         )
     )
 
@@ -704,12 +708,9 @@ def route_names(
     )
 
 
-# ============================================================
-# Unique Records
-# ============================================================
-
 def make_unique_records(
     routes,
+    recovery_rate=0.0,
 ):
     records = []
 
@@ -718,7 +719,8 @@ def make_unique_records(
     for route in routes:
         record = (
             create_route_record(
-                route
+                route,
+                recovery_rate,
             )
         )
 
@@ -743,141 +745,6 @@ def make_unique_records(
 
 
 # ============================================================
-# Pareto Analysis
-# ============================================================
-
-def dominates(
-    left,
-    right,
-):
-    left_analysis = left[
-        "analysis"
-    ]
-
-    right_analysis = right[
-        "analysis"
-    ]
-
-    left_long = left[
-        "long_run"
-    ]
-
-    right_long = right[
-        "long_run"
-    ]
-
-    left_goal = (
-        left_analysis[
-            "goal_probability"
-        ]
-    )
-
-    right_goal = (
-        right_analysis[
-            "goal_probability"
-        ]
-    )
-
-    left_loss = (
-        left_long[
-            "expected_economic_loss_until_goal"
-        ]
-    )
-
-    right_loss = (
-        right_long[
-            "expected_economic_loss_until_goal"
-        ]
-    )
-
-    left_steps = (
-        left_analysis[
-            "steps"
-        ]
-    )
-
-    right_steps = (
-        right_analysis[
-            "steps"
-        ]
-    )
-
-    no_worse = (
-        left_goal
-        >= right_goal
-        - FLOAT_TOLERANCE
-        and left_loss
-        <= right_loss
-        + FLOAT_TOLERANCE
-        and left_steps
-        <= right_steps
-    )
-
-    strictly_better = (
-        left_goal
-        > right_goal
-        + FLOAT_TOLERANCE
-        or left_loss
-        < right_loss
-        - FLOAT_TOLERANCE
-        or left_steps
-        < right_steps
-    )
-
-    return (
-        no_worse
-        and strictly_better
-    )
-
-
-def find_pareto_routes(
-    records,
-):
-    pareto = []
-
-    for record in records:
-        dominated = False
-
-        for other in records:
-            if other is record:
-                continue
-
-            if dominates(
-                other,
-                record,
-            ):
-                dominated = True
-                break
-
-        if not dominated:
-            pareto.append(
-                record
-            )
-
-    pareto.sort(
-        key=lambda record: (
-            -record[
-                "analysis"
-            ][
-                "goal_probability"
-            ],
-            record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
-            ],
-            record[
-                "analysis"
-            ][
-                "steps"
-            ],
-        )
-    )
-
-    return pareto
-
-
-# ============================================================
 # Basic Optima
 # ============================================================
 
@@ -896,11 +763,6 @@ def find_best_goal_route(
                 "long_run"
             ][
                 "expected_economic_loss_until_goal"
-            ],
-            -record[
-                "analysis"
-            ][
-                "steps"
             ],
         ),
     )
@@ -922,177 +784,79 @@ def find_lowest_loss_route(
             ][
                 "goal_probability"
             ],
-            record[
-                "analysis"
-            ][
-                "steps"
-            ],
-        ),
-    )
-
-
-def find_shortest_route(
-    records,
-):
-    return min(
-        records,
-        key=lambda record: (
-            record[
-                "analysis"
-            ][
-                "steps"
-            ],
-            -record[
-                "analysis"
-            ][
-                "goal_probability"
-            ],
-            record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
-            ],
         ),
     )
 
 
 # ============================================================
-# Goal-constrained Risk Optimization
+# Recovery Sensitivity
 # ============================================================
 
-def optimize_with_goal_constraint(
-    records,
-    best_goal_probability,
-    tolerance,
+def analyze_recovery_scenarios(
+    routes,
 ):
-    required_goal = (
-        best_goal_probability
-        * (
-            1.0
-            - tolerance
-        )
-    )
+    results = []
 
-    eligible = [
-        record
-        for record in records
-        if (
-            record[
-                "analysis"
-            ][
-                "goal_probability"
-            ]
-            >= required_goal
-            - FLOAT_TOLERANCE
-        )
-    ]
-
-    if not eligible:
-        return {
-            "tolerance": tolerance,
-            "required_goal": (
-                required_goal
-            ),
-            "eligible_count": 0,
-            "selected": None,
-        }
-
-    selected = min(
-        eligible,
-        key=lambda record: (
-            record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
-            ],
-            -record[
-                "analysis"
-            ][
-                "goal_probability"
-            ],
-            record[
-                "analysis"
-            ][
-                "steps"
-            ],
-        ),
-    )
-
-    return {
-        "tolerance": tolerance,
-        "required_goal": (
-            required_goal
-        ),
-        "eligible_count": len(
-            eligible
-        ),
-        "selected": selected,
-    }
-
-
-def run_constrained_optimization(
-    records,
-):
-    best_goal_record = (
-        find_best_goal_route(
-            records
-        )
-    )
-
-    best_goal_probability = (
-        best_goal_record[
-            "analysis"
-        ][
-            "goal_probability"
-        ]
-    )
-
-    return [
-        optimize_with_goal_constraint(
-            records,
-            best_goal_probability,
-            tolerance,
-        )
-        for tolerance in GOAL_TOLERANCES
-    ]
-
-
-# ============================================================
-# Current Route Matching
-# ============================================================
-
-def find_current_route_record(
-    records,
-):
-    current_route = (
-        build_current_route(
-            START_CAPITAL,
-            TARGET,
-        )
-    )
-
-    current_record = (
-        create_route_record(
-            current_route
-        )
-    )
-
-    signature = (
-        route_signature(
-            current_record
-        )
-    )
-
-    for record in records:
-        if (
-            route_signature(
-                record
+    for recovery_rate in RECOVERY_RATES:
+        records = (
+            make_unique_records(
+                routes,
+                recovery_rate,
             )
-            == signature
-        ):
-            return record
+        )
 
-    return current_record
+        best_goal = (
+            find_best_goal_route(
+                records
+            )
+        )
+
+        lowest_loss = (
+            find_lowest_loss_route(
+                records
+            )
+        )
+
+        results.append(
+            {
+                "recovery_rate": (
+                    recovery_rate
+                ),
+                "records": records,
+                "best_goal": (
+                    best_goal
+                ),
+                "lowest_loss": (
+                    lowest_loss
+                ),
+            }
+        )
+
+    return results
+
+
+# ============================================================
+# Current Route Recovery Analysis
+# ============================================================
+
+def analyze_current_route_recovery(
+    current_route,
+):
+    results = []
+
+    for recovery_rate in RECOVERY_RATES:
+        record = (
+            create_route_record(
+                current_route,
+                recovery_rate,
+            )
+        )
+
+        results.append(
+            record
+        )
+
+    return results
 
 
 # ============================================================
@@ -1139,13 +903,18 @@ def print_header():
     )
 
     print(
-        "Optimization       : "
-        "Goal-constrained loss minimization"
+        "Experiment         : "
+        "Recovery / Salvage Sensitivity"
     )
 
     print(
-        "Loss Formula       : "
-        "E[Loss/Journey] / Goal Probability"
+        "Goal Model         : "
+        "UNCHANGED"
+    )
+
+    print(
+        "Recovery Transition: "
+        "DISABLED"
     )
 
     print(
@@ -1153,22 +922,20 @@ def print_header():
     )
 
 
-def print_record(
-    title,
-    record,
+def print_current_route(
+    current_route,
 ):
-    analysis = record[
-        "analysis"
-    ]
-
-    long_run = record[
-        "long_run"
-    ]
+    record = (
+        create_route_record(
+            current_route,
+            0.0,
+        )
+    )
 
     print()
 
     print(
-        title
+        "CURRENT ROUTE"
     )
 
     print(
@@ -1176,38 +943,18 @@ def print_record(
     )
 
     print(
-        f"Route          : "
+        f"Route : "
         f"{route_names(record)}"
     )
 
     print(
-        f"Goal           : "
-        f"{analysis['goal_probability'] * 100:.6f}%"
+        f"Goal  : "
+        f"{record['analysis']['goal_probability'] * 100:.6f}%"
     )
 
     print(
-        f"Steps          : "
-        f"{analysis['steps']}"
-    )
-
-    print(
-        f"Loss/Journey   : "
-        f"{analysis['expected_economic_loss_per_journey']:,.4f}"
-    )
-
-    print(
-        f"Loss/Failure   : "
-        f"{long_run['conditional_loss_given_failure']:,.4f}"
-    )
-
-    print(
-        f"Expected Trips : "
-        f"{long_run['expected_journeys_to_goal']:,.4f}"
-    )
-
-    print(
-        f"Loss Until Goal: "
-        f"{long_run['expected_economic_loss_until_goal']:,.4f}"
+        f"Steps : "
+        f"{record['analysis']['steps']}"
     )
 
     print(
@@ -1215,52 +962,20 @@ def print_record(
     )
 
 
-def print_search_summary(
+def print_current_route_recovery(
     records,
-    pareto,
 ):
     print()
 
     print(
-        "SEARCH SUMMARY"
-    )
-
-    print(
-        "-" * 92
-    )
-
-    print(
-        f"Total Complete Routes : "
-        f"{len(records)}"
-    )
-
-    print(
-        f"Pareto Routes         : "
-        f"{len(pareto)}"
-    )
-
-    print(
-        "-" * 92
-    )
-
-
-def print_pareto(
-    pareto,
-):
-    print()
-
-    print(
-        "PARETO FRONTIER"
+        "CURRENT ROUTE - RECOVERY SENSITIVITY"
     )
 
     print(
         "=" * 92
     )
 
-    for index, record in enumerate(
-        pareto,
-        start=1,
-    ):
+    for record in records:
         analysis = record[
             "analysis"
         ]
@@ -1269,133 +984,20 @@ def print_pareto(
             "long_run"
         ]
 
-        print(
-            f"PARETO {index}"
+        recovery_rate = (
+            analysis[
+                "recovery_rate"
+            ]
         )
 
         print(
-            f"  Route : "
-            f"{route_names(record)}"
+            f"Recovery Rate  : "
+            f"{recovery_rate * 100:.0f}%"
         )
 
         print(
-            f"  Goal  : "
+            f"Goal           : "
             f"{analysis['goal_probability'] * 100:.6f}%"
-        )
-
-        print(
-            f"  Steps : "
-            f"{analysis['steps']}"
-        )
-
-        print(
-            f"  Loss  : "
-            f"{long_run['expected_economic_loss_until_goal']:,.4f}"
-        )
-
-        print(
-            "-" * 92
-        )
-
-
-def print_constraint_results(
-    results,
-    best_goal_probability,
-):
-    print()
-
-    print(
-        "GOAL-CONSTRAINED RISK OPTIMIZATION"
-    )
-
-    print(
-        "=" * 92
-    )
-
-    print(
-        f"Maximum Goal Probability : "
-        f"{best_goal_probability * 100:.6f}%"
-    )
-
-    print(
-        "-" * 92
-    )
-
-    for result in results:
-        tolerance = result[
-            "tolerance"
-        ]
-
-        required_goal = result[
-            "required_goal"
-        ]
-
-        selected = result[
-            "selected"
-        ]
-
-        print(
-            f"Goal Tolerance : "
-            f"{tolerance * 100:.0f}%"
-        )
-
-        print(
-            f"Required Goal  : "
-            f"{required_goal * 100:.6f}%"
-        )
-
-        print(
-            f"Eligible Routes: "
-            f"{result['eligible_count']}"
-        )
-
-        if selected is None:
-            print(
-                "Selected       : NONE"
-            )
-
-            print(
-                "-" * 92
-            )
-
-            continue
-
-        analysis = selected[
-            "analysis"
-        ]
-
-        long_run = selected[
-            "long_run"
-        ]
-
-        actual_goal_drop = (
-            (
-                best_goal_probability
-                - analysis[
-                    "goal_probability"
-                ]
-            )
-            / best_goal_probability
-        )
-
-        print(
-            f"Selected       : "
-            f"{route_names(selected)}"
-        )
-
-        print(
-            f"Selected Goal  : "
-            f"{analysis['goal_probability'] * 100:.6f}%"
-        )
-
-        print(
-            f"Actual Drop    : "
-            f"{actual_goal_drop * 100:.4f}%"
-        )
-
-        print(
-            f"Steps          : "
-            f"{analysis['steps']}"
         )
 
         print(
@@ -1409,13 +1011,93 @@ def print_constraint_results(
         )
 
         print(
-            f"Expected Trips : "
-            f"{long_run['expected_journeys_to_goal']:,.4f}"
+            f"Loss Until Goal: "
+            f"{long_run['expected_economic_loss_until_goal']:,.4f}"
         )
 
         print(
-            f"Loss Until Goal: "
-            f"{long_run['expected_economic_loss_until_goal']:,.4f}"
+            "-" * 92
+        )
+
+
+def print_global_recovery_results(
+    scenario_results,
+):
+    print()
+
+    print(
+        "ALL ROUTES - RECOVERY SENSITIVITY"
+    )
+
+    print(
+        "=" * 92
+    )
+
+    for scenario in scenario_results:
+        recovery_rate = (
+            scenario[
+                "recovery_rate"
+            ]
+        )
+
+        best_goal = (
+            scenario[
+                "best_goal"
+            ]
+        )
+
+        lowest_loss = (
+            scenario[
+                "lowest_loss"
+            ]
+        )
+
+        print(
+            f"RECOVERY RATE : "
+            f"{recovery_rate * 100:.0f}%"
+        )
+
+        print(
+            f"Complete Routes: "
+            f"{len(scenario['records'])}"
+        )
+
+        print(
+            "Best Goal Route"
+        )
+
+        print(
+            f"  Route : "
+            f"{route_names(best_goal)}"
+        )
+
+        print(
+            f"  Goal  : "
+            f"{best_goal['analysis']['goal_probability'] * 100:.6f}%"
+        )
+
+        print(
+            f"  Loss  : "
+            f"{best_goal['long_run']['expected_economic_loss_until_goal']:,.4f}"
+        )
+
+        print(
+            "Lowest Loss Route"
+        )
+
+        print(
+            f"  Route : "
+            f"{route_names(lowest_loss)}"
+        )
+
+        print(
+            f"  Goal  : "
+            f"{lowest_loss['analysis']['goal_probability'] * 100:.6f}%"
+        )
+
+        print(
+            f"  Loss  : "
+            f"{lowest_loss['long_run']['expected_economic_loss_until_goal']:,.4f}"
         )
 
         print(
@@ -1428,22 +1110,22 @@ def print_constraint_results(
 # ============================================================
 
 def validate(
-    records,
-    pareto,
-    current_record,
-    constrained_results,
+    routes,
+    current_route,
+    current_recovery_results,
+    scenario_results,
 ):
     errors = []
 
     if len(
-        records
+        routes
     ) != 89:
         errors.append(
             "Complete route count changed: "
-            f"{len(records)}"
+            f"{len(routes)}"
         )
 
-    expected_current_names = [
+    expected_names = [
         "わら",
         "雑貨セット",
         "中古CDセット",
@@ -1452,32 +1134,36 @@ def validate(
         "限定家電",
     ]
 
+    baseline_record = (
+        create_route_record(
+            current_route,
+            0.0,
+        )
+    )
+
     current_names = [
         stage[
             "name"
         ]
-        for stage in current_record[
+        for stage in baseline_record[
             "analysis"
         ][
             "stages"
         ]
     ]
 
-    if (
-        current_names
-        != expected_current_names
-    ):
+    if current_names != expected_names:
         errors.append(
             "Current route changed: "
             f"{current_names}"
         )
 
-    expected_probability = (
+    expected_goal = (
         0.00875875
     )
 
-    current_probability = (
-        current_record[
+    actual_goal = (
+        baseline_record[
             "analysis"
         ][
             "goal_probability"
@@ -1486,8 +1172,8 @@ def validate(
 
     if (
         abs(
-            current_probability
-            - expected_probability
+            actual_goal
+            - expected_goal
         )
         > FLOAT_TOLERANCE
     ):
@@ -1495,173 +1181,117 @@ def validate(
             "Current goal probability changed"
         )
 
-    for record in records:
-        analysis = record[
-            "analysis"
-        ]
-
-        long_run = record[
-            "long_run"
-        ]
-
-        if (
-            abs(
-                analysis[
-                    "probability_total"
-                ]
-                - 1.0
-            )
-            > FLOAT_TOLERANCE
-        ):
-            errors.append(
-                "Probability total "
-                "does not equal 1"
-            )
-
-            break
-
-        p = analysis[
-            "goal_probability"
-        ]
-
-        loss_per_journey = (
-            analysis[
-                "expected_economic_loss_per_journey"
-            ]
-        )
-
-        expected_loss = (
-            loss_per_journey
-            / p
-        )
-
-        actual_loss = (
-            long_run[
-                "expected_economic_loss_until_goal"
-            ]
-        )
-
-        if (
-            abs(
-                actual_loss
-                - expected_loss
-            )
-            > 1e-8
-        ):
-            errors.append(
-                "Corrected loss formula "
-                "validation failed"
-            )
-
-            break
-
-        failure_probability = (
-            1.0
-            - p
-        )
-
-        if failure_probability > 0:
-            conditional_loss = (
-                loss_per_journey
-                / failure_probability
-            )
-
-            equivalent_loss = (
-                conditional_loss
-                * long_run[
-                    "expected_failures_before_goal"
-                ]
-            )
-
-            if (
-                abs(
-                    equivalent_loss
-                    - actual_loss
-                )
-                > 1e-8
-            ):
-                errors.append(
-                    "Conditional-loss "
-                    "equivalence failed"
-                )
-
-                break
-
-    current_signature = (
-        route_signature(
-            current_record
-        )
+    expected_baseline_loss = (
+        418753.2468
     )
 
-    pareto_signatures = {
-        route_signature(
-            record
-        )
-        for record in pareto
-    }
+    actual_baseline_loss = (
+        baseline_record[
+            "long_run"
+        ][
+            "expected_economic_loss_until_goal"
+        ]
+    )
 
     if (
-        current_signature
-        not in pareto_signatures
+        abs(
+            actual_baseline_loss
+            - expected_baseline_loss
+        )
+        > 0.01
     ):
         errors.append(
-            "Current route is not Pareto"
+            "0% recovery baseline loss changed: "
+            f"{actual_baseline_loss}"
         )
 
-    for result in constrained_results:
-        selected = result[
-            "selected"
+    baseline_goal = (
+        baseline_record[
+            "analysis"
+        ][
+            "goal_probability"
         ]
+    )
 
-        if selected is None:
-            errors.append(
-                "Constraint optimization "
-                "returned no route"
-            )
+    baseline_loss = (
+        baseline_record[
+            "long_run"
+        ][
+            "expected_economic_loss_until_goal"
+        ]
+    )
 
-            continue
+    for record in current_recovery_results:
+        recovery_rate = (
+            record[
+                "analysis"
+            ][
+                "recovery_rate"
+            ]
+        )
 
-        selected_goal = (
-            selected[
+        goal = (
+            record[
                 "analysis"
             ][
                 "goal_probability"
             ]
         )
 
-        required_goal = result[
-            "required_goal"
-        ]
+        loss = (
+            record[
+                "long_run"
+            ][
+                "expected_economic_loss_until_goal"
+            ]
+        )
 
         if (
-            selected_goal
-            < required_goal
-            - FLOAT_TOLERANCE
+            abs(
+                goal
+                - baseline_goal
+            )
+            > FLOAT_TOLERANCE
         ):
             errors.append(
-                "Selected route violates "
-                "Goal constraint"
+                "Recovery changed Goal Probability"
             )
 
-    zero_selected = (
-        constrained_results[
-            0
-        ][
-            "selected"
-        ]
-    )
+            break
 
-    if zero_selected is not None:
+        expected_loss = (
+            baseline_loss
+            * (
+                1.0
+                - recovery_rate
+            )
+        )
+
         if (
-            route_signature(
-                zero_selected
+            abs(
+                loss
+                - expected_loss
             )
-            != current_signature
+            > 0.01
         ):
             errors.append(
-                "0% tolerance did not "
-                "select current best Goal route"
+                "Recovery loss scaling failed "
+                f"at {recovery_rate}"
             )
+
+            break
+
+    for scenario in scenario_results:
+        if len(
+            scenario[
+                "records"
+            ]
+        ) != 89:
+            errors.append(
+                "Scenario route count changed"
+            )
+
+            break
 
     return errors
 
@@ -1673,107 +1303,56 @@ def validate(
 def main():
     print_header()
 
-    routes = enumerate_routes(
-        START_CAPITAL,
-        TARGET,
-    )
-
-    records = (
-        make_unique_records(
-            routes
+    routes = (
+        enumerate_routes(
+            START_CAPITAL,
+            TARGET,
         )
     )
 
-    if not records:
+    if not routes:
         print(
             "No complete routes found."
         )
 
         raise SystemExit(1)
 
-    pareto = (
-        find_pareto_routes(
-            records
+    current_route = (
+        build_current_route(
+            START_CAPITAL,
+            TARGET,
         )
     )
 
-    current_record = (
-        find_current_route_record(
-            records
+    current_recovery_results = (
+        analyze_current_route_recovery(
+            current_route
         )
     )
 
-    best_goal = (
-        find_best_goal_route(
-            records
+    scenario_results = (
+        analyze_recovery_scenarios(
+            routes
         )
     )
 
-    lowest_loss = (
-        find_lowest_loss_route(
-            records
-        )
+    print_current_route(
+        current_route
     )
 
-    shortest = (
-        find_shortest_route(
-            records
-        )
+    print_current_route_recovery(
+        current_recovery_results
     )
 
-    constrained_results = (
-        run_constrained_optimization(
-            records
-        )
-    )
-
-    best_goal_probability = (
-        best_goal[
-            "analysis"
-        ][
-            "goal_probability"
-        ]
-    )
-
-    print_search_summary(
-        records,
-        pareto,
-    )
-
-    print_record(
-        "CURRENT ROUTE ENGINE ROUTE",
-        current_record,
-    )
-
-    print_record(
-        "HIGHEST GOAL PROBABILITY ROUTE",
-        best_goal,
-    )
-
-    print_record(
-        "LOWEST LOSS UNTIL GOAL ROUTE",
-        lowest_loss,
-    )
-
-    print_record(
-        "SHORTEST COMPLETE ROUTE",
-        shortest,
-    )
-
-    print_pareto(
-        pareto
-    )
-
-    print_constraint_results(
-        constrained_results,
-        best_goal_probability,
+    print_global_recovery_results(
+        scenario_results
     )
 
     errors = validate(
-        records,
-        pareto,
-        current_record,
-        constrained_results,
+        routes,
+        current_route,
+        current_recovery_results,
+        scenario_results,
     )
 
     print()
@@ -1811,13 +1390,15 @@ def main():
     )
 
     print(
-        "Corrected cumulative economic-loss "
-        "formula verified."
+        "Recovery sensitivity model verified."
     )
 
     print(
-        "Goal-constrained risk optimization "
-        "recalculated."
+        "Goal Probability intentionally unchanged."
+    )
+
+    print(
+        "Recovery transition intentionally disabled."
     )
 
     print(
