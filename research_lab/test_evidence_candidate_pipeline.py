@@ -25,7 +25,7 @@ def estimate(name, buy, sell, probability, confidence):
 
 def run():
     strong = estimate("Evidence Camera A", 10000, 18000, 0.75, 0.90)
-    weak = estimate("Evidence Camera B", 10000, 12000, 0.20, 0.30)
+    weak = estimate("Evidence Camera B", 10000, 12000, 0.05, 0.30)
     expensive = estimate("Evidence Camera C", 20000, 40000, 0.80, 0.90)
 
     candidate = estimate_to_candidate(strong)
@@ -40,7 +40,7 @@ def run():
     assert result["best_candidate"] is not None
     assert result["best_candidate"]["name"] == "Evidence Camera A"
 
-    blocked_names = {x["name"] for x in result["danger_blocked"]}
+    blocked_names = {x["candidate"]["name"] for x in result["danger_blocked"]}
     capital_blocked_names = {x["candidate"]["name"] for x in result["capital_blocked"]}
     assert "Evidence Camera B" in blocked_names
     assert "Evidence Camera C" in capital_blocked_names
