@@ -2,11 +2,17 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.2
+# Risk-sensitive Route Experiment v0.3
 #
 # 目的：
 #   Route Engine v1.1.1 が選択する現在の最適Routeについて、
-#   単発Riskだけでなく「失敗後の再スタート」を含めて観測する。
+#
+#   1. 単発Journey Risk
+#   2. Restart Model
+#   3. Failure Stage Distribution
+#   4. Expected Economic Loss
+#
+#   を観測する。
 #
 # この実験ではRoute Engineの選択ロジックを変更しない。
 #
@@ -16,11 +22,14 @@
 #   失敗 -> capital 0
 #   Journey失敗後 -> START_CAPITALから再スタート可能
 #
-# 注意：
-#   restart cost は各Journey開始時に必要なSTART_CAPITALだけを
-#   単純な外部投入額として数える。
+# Economic Loss：
 #
-#   各Journey内部で得た資本を新しい外部投入額としては数えない。
+#   あるSTEPで失敗した場合、
+#   そのSTEP開始時点のcapitalを失うものとして計算する。
+#
+# 注意：
+#   Economic Lossは「外部から追加投入した現金」とは異なる。
+#   Journey内部で獲得した資本価値の喪失も含む。
 #
 # 実行：
 #
@@ -41,7 +50,7 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.2"
+EXPERIMENT_VERSION = "0.3"
 
 START_CAPITAL = 100
 
@@ -296,7 +305,6 @@ def summarize_route(
             "route_failure_probability": 1.0,
             "average_failure_probability": 0.0,
             "maximum_failure_probability": 0.0,
-            "average_expected_downside_loss_rate": 0.0,
             "high_risk_steps": 0,
             "unknown_risk_steps": 0,
         }
@@ -304,8 +312,6 @@ def summarize_route(
     route_success_probability = 1.0
 
     failure_probabilities = []
-
-    expected_downside_rates = []
 
     high_risk_steps = 0
 
@@ -324,12 +330,6 @@ def summarize_route(
             ]
         )
 
-        expected_downside_rates.append(
-            item[
-                "expected_downside_loss_rate"
-            ]
-        )
-
         risk_level = item.get(
             "risk_level",
             "unknown",
@@ -345,18 +345,14 @@ def summarize_route(
         if risk_level == "unknown":
             unknown_risk_steps += 1
 
-    route_failure_probability = (
-        1.0
-        - route_success_probability
-    )
-
     return {
         "steps": len(route),
         "route_success_probability": (
             route_success_probability
         ),
         "route_failure_probability": (
-            route_failure_probability
+            1.0
+            - route_success_probability
         ),
         "average_failure_probability": (
             sum(
@@ -369,14 +365,6 @@ def summarize_route(
         "maximum_failure_probability": (
             max(
                 failure_probabilities
-            )
-        ),
-        "average_expected_downside_loss_rate": (
-            sum(
-                expected_downside_rates
-            )
-            / len(
-                expected_downside_rates
             )
         ),
         "high_risk_steps": (
@@ -396,14 +384,6 @@ def cumulative_goal_probability(
     single_journey_probability,
     journeys,
 ):
-    """
-    独立かつ同一条件でJourneyを繰り返す単純モデル。
-
-    N回以内に少なくとも1回成功する確率：
-
-        1 - (1 - p) ** N
-    """
-
     p = max(
         0.0,
         min(
@@ -429,12 +409,6 @@ def cumulative_goal_probability(
 def expected_journeys_to_goal(
     single_journey_probability,
 ):
-    """
-    幾何分布の期待値。
-
-        E[N] = 1 / p
-    """
-
     p = to_float(
         single_journey_probability
     )
@@ -448,12 +422,6 @@ def expected_journeys_to_goal(
 def expected_failures_before_goal(
     single_journey_probability,
 ):
-    """
-    成功Journeyまでに期待される失敗Journey数。
-
-        E[F] = (1 - p) / p
-    """
-
     p = to_float(
         single_journey_probability
     )
@@ -471,12 +439,6 @@ def journeys_for_probability(
     single_journey_probability,
     target_probability,
 ):
-    """
-    累積成功確率が指定値以上になる最小Journey数。
-
-        1 - (1-p)^N >= target
-    """
-
     p = to_float(
         single_journey_probability
     )
@@ -497,19 +459,15 @@ def journeys_for_probability(
     if target_probability >= 1:
         return math.inf
 
-    numerator = math.log(
-        1.0
-        - target_probability
-    )
-
-    denominator = math.log(
-        1.0
-        - p
-    )
-
     return math.ceil(
-        numerator
-        / denominator
+        math.log(
+            1.0
+            - target_probability
+        )
+        / math.log(
+            1.0
+            - p
+        )
     )
 
 
@@ -532,12 +490,12 @@ def analyze_restarts(
     if math.isinf(
         expected_journeys
     ):
-        expected_start_capital投入 = (
+        expected_start_capital_input = (
             math.inf
         )
 
     else:
-        expected_start_capital投入 = (
+        expected_start_capital_input = (
             expected_journeys
             * start_capital
         )
@@ -574,7 +532,7 @@ def analyze_restarts(
             expected_failures
         ),
         "expected_start_capital_input": (
-            expected_start_capital投入
+            expected_start_capital_input
         ),
         "journeys_for_50_percent": (
             journeys_for_probability(
@@ -602,6 +560,164 @@ def analyze_restarts(
         ),
         "trial_results": (
             trial_results
+        ),
+    }
+
+
+# ============================================================
+# Failure Stage Distribution
+# ============================================================
+
+def analyze_failure_stages(
+    route,
+):
+    """
+    Journey全体から見た各STEPでの失敗確率を計算する。
+
+    STEP iで失敗する確率：
+
+        STEP iまで到達する確率
+        ×
+        STEP i自身の失敗確率
+
+    例：
+
+        STEP1 success = 0.80
+        STEP2 failure = 0.45
+
+        STEP2で失敗
+        = 0.80 * 0.45
+        = 0.36
+    """
+
+    stages = []
+
+    reach_probability = 1.0
+
+    expected_economic_loss = 0.0
+
+    total_failure_probability = 0.0
+
+    for item in route:
+        step_failure_probability = (
+            reach_probability
+            * item[
+                "failure_probability"
+            ]
+        )
+
+        capital_at_risk = (
+            item[
+                "capital"
+            ]
+        )
+
+        weighted_economic_loss = (
+            step_failure_probability
+            * capital_at_risk
+        )
+
+        expected_economic_loss += (
+            weighted_economic_loss
+        )
+
+        total_failure_probability += (
+            step_failure_probability
+        )
+
+        stages.append(
+            {
+                "step": item["step"],
+                "name": item["name"],
+                "capital": capital_at_risk,
+                "reach_probability": (
+                    reach_probability
+                ),
+                "conditional_failure_probability": (
+                    item[
+                        "failure_probability"
+                    ]
+                ),
+                "journey_failure_probability": (
+                    step_failure_probability
+                ),
+                "weighted_economic_loss": (
+                    weighted_economic_loss
+                ),
+                "risk_level": (
+                    item[
+                        "risk_level"
+                    ]
+                ),
+            }
+        )
+
+        reach_probability *= (
+            item[
+                "success_probability"
+            ]
+        )
+
+    goal_probability = (
+        reach_probability
+    )
+
+    probability_total = (
+        total_failure_probability
+        + goal_probability
+    )
+
+    return {
+        "stages": stages,
+        "total_failure_probability": (
+            total_failure_probability
+        ),
+        "goal_probability": (
+            goal_probability
+        ),
+        "probability_total": (
+            probability_total
+        ),
+        "expected_economic_loss_per_journey": (
+            expected_economic_loss
+        ),
+    }
+
+
+# ============================================================
+# Economic Loss Until Goal
+# ============================================================
+
+def analyze_loss_until_goal(
+    failure_analysis,
+    restart_analysis,
+):
+    expected_loss_per_journey = (
+        failure_analysis[
+            "expected_economic_loss_per_journey"
+        ]
+    )
+
+    expected_failures = (
+        restart_analysis[
+            "expected_failures_before_goal"
+        ]
+    )
+
+    expected_loss_until_goal = (
+        expected_loss_per_journey
+        * expected_failures
+    )
+
+    return {
+        "expected_economic_loss_per_journey": (
+            expected_loss_per_journey
+        ),
+        "expected_failures_before_goal": (
+            expected_failures
+        ),
+        "expected_economic_loss_until_goal": (
+            expected_loss_until_goal
         ),
     }
 
@@ -670,7 +786,7 @@ def print_route(
     print()
 
     print(
-        "CURRENT ROUTE RISK"
+        "CURRENT ROUTE"
     )
 
     print(
@@ -680,66 +796,18 @@ def print_route(
     for item in route:
         print(
             f"STEP {item['step']}"
-        )
-
-        print(
-            f"  Capital              : "
-            f"{item['capital']:,.0f}"
-        )
-
-        print(
-            f"  Candidate            : "
-            f"{item['name']}"
-        )
-
-        print(
-            f"  Risk Level           : "
+            f" | {item['capital']:>9,.0f}"
+            f" -> {item['success_capital']:>9,.0f}"
+            f" | {item['name']}"
+            f" | Success "
+            f"{item['success_probability'] * 100:>6.2f}%"
+            f" | Risk "
             f"{item['risk_level']}"
         )
 
-        print(
-            f"  Success Probability  : "
-            f"{item['success_probability'] * 100:.2f}%"
-        )
-
-        print(
-            f"  Failure Probability  : "
-            f"{item['failure_probability'] * 100:.2f}%"
-        )
-
-        print(
-            f"  Success Capital      : "
-            f"{item['success_capital']:,.0f}"
-        )
-
-        print(
-            f"  Expected Capital     : "
-            f"{item['expected_capital']:,.2f}"
-        )
-
-        print(
-            f"  Capital Multiplier   : "
-            f"x{item['capital_multiplier']:.2f}"
-        )
-
-        print(
-            f"  Expected Downside %  : "
-            f"{item['expected_downside_loss_rate'] * 100:.2f}%"
-        )
-
-        print(
-            f"  Goal Probability     : "
-            f"{item['route_goal_probability'] * 100:.6f}%"
-        )
-
-        print(
-            f"  Steps To Target      : "
-            f"{item['route_steps_to_target']}"
-        )
-
-        print(
-            "-" * 78
-        )
+    print(
+        "-" * 78
+    )
 
 
 def print_route_summary(
@@ -748,7 +816,7 @@ def print_route_summary(
     print()
 
     print(
-        "SINGLE JOURNEY RISK SUMMARY"
+        "SINGLE JOURNEY SUMMARY"
     )
 
     print(
@@ -761,23 +829,13 @@ def print_route_summary(
     )
 
     print(
-        f"Full Route Success Probability : "
+        f"Goal Probability               : "
         f"{summary['route_success_probability'] * 100:.6f}%"
     )
 
     print(
-        f"Route Failure Probability      : "
+        f"Failure Probability            : "
         f"{summary['route_failure_probability'] * 100:.6f}%"
-    )
-
-    print(
-        f"Average Step Failure           : "
-        f"{summary['average_failure_probability'] * 100:.2f}%"
-    )
-
-    print(
-        f"Maximum Step Failure           : "
-        f"{summary['maximum_failure_probability'] * 100:.2f}%"
     )
 
     print(
@@ -806,11 +864,6 @@ def print_restart_summary(
 
     print(
         "-" * 78
-    )
-
-    print(
-        f"Single Journey Goal Rate       : "
-        f"{restart['single_journey_probability'] * 100:.6f}%"
     )
 
     print(
@@ -852,24 +905,118 @@ def print_restart_summary(
         "-" * 78
     )
 
+
+def print_failure_distribution(
+    failure_analysis,
+):
+    print()
+
     print(
-        "CUMULATIVE GOAL PROBABILITY"
+        "FAILURE STAGE DISTRIBUTION"
     )
 
     print(
         "-" * 78
     )
 
-    for result in restart[
-        "trial_results"
+    for stage in failure_analysis[
+        "stages"
     ]:
         print(
-            f"{result['journeys']:>4} journeys"
-            f" | Goal "
-            f"{result['probability'] * 100:>9.6f}%"
-            f" | Start-capital budget "
-            f"{result['restart_budget']:>8,}"
+            f"STEP {stage['step']}"
         )
+
+        print(
+            f"  Candidate             : "
+            f"{stage['name']}"
+        )
+
+        print(
+            f"  Capital At Risk       : "
+            f"{stage['capital']:,.0f}"
+        )
+
+        print(
+            f"  Reach Probability     : "
+            f"{stage['reach_probability'] * 100:.6f}%"
+        )
+
+        print(
+            f"  Conditional Failure   : "
+            f"{stage['conditional_failure_probability'] * 100:.2f}%"
+        )
+
+        print(
+            f"  Journey Failure Share : "
+            f"{stage['journey_failure_probability'] * 100:.6f}%"
+        )
+
+        print(
+            f"  Weighted Loss         : "
+            f"{stage['weighted_economic_loss']:,.4f}"
+        )
+
+        print(
+            f"  Risk Level            : "
+            f"{stage['risk_level']}"
+        )
+
+        print(
+            "-" * 78
+        )
+
+    print(
+        f"Total Failure Probability      : "
+        f"{failure_analysis['total_failure_probability'] * 100:.6f}%"
+    )
+
+    print(
+        f"Goal Probability               : "
+        f"{failure_analysis['goal_probability'] * 100:.6f}%"
+    )
+
+    print(
+        f"Probability Check              : "
+        f"{failure_analysis['probability_total'] * 100:.6f}%"
+    )
+
+    print(
+        f"Expected Economic Loss/Journey : "
+        f"{failure_analysis['expected_economic_loss_per_journey']:,.4f}"
+    )
+
+    print(
+        "-" * 78
+    )
+
+
+def print_loss_summary(
+    loss_analysis,
+):
+    print()
+
+    print(
+        "ECONOMIC LOSS MODEL"
+    )
+
+    print(
+        "-" * 78
+    )
+
+    print(
+        f"Expected Loss / Journey        : "
+        f"{loss_analysis['expected_economic_loss_per_journey']:,.4f}"
+    )
+
+    print(
+        f"Expected Failures Before Goal  : "
+        f"{loss_analysis['expected_failures_before_goal']:.4f}"
+    )
+
+    print(
+        f"Expected Loss Until Goal       : "
+        f"{loss_analysis['expected_economic_loss_until_goal']:,.4f}"
+    )
 
     print(
         "-" * 78
@@ -884,6 +1031,7 @@ def validate(
     route,
     summary,
     restart,
+    failure_analysis,
 ):
     errors = []
 
@@ -961,42 +1109,50 @@ def validate(
             f"{actual_risks}"
         )
 
+    if (
+        abs(
+            failure_analysis[
+                "probability_total"
+            ]
+            - 1.0
+        )
+        > 1e-12
+    ):
+        errors.append(
+            "Failure distribution "
+            "does not sum to 100%"
+        )
+
+    if (
+        abs(
+            failure_analysis[
+                "goal_probability"
+            ]
+            - expected_probability
+        )
+        > 1e-12
+    ):
+        errors.append(
+            "Failure-stage goal probability "
+            "does not match Route probability"
+        )
+
     expected_journeys = (
         1.0
         / expected_probability
     )
 
-    actual_journeys = restart.get(
-        "expected_journeys_to_goal",
-        0.0,
-    )
-
     if (
         abs(
-            actual_journeys
+            restart[
+                "expected_journeys_to_goal"
+            ]
             - expected_journeys
         )
         > 1e-9
     ):
         errors.append(
-            "Expected journey calculation failed: "
-            f"{actual_journeys}"
-        )
-
-    probability_100 = (
-        cumulative_goal_probability(
-            expected_probability,
-            100,
-        )
-    )
-
-    if not (
-        0.0
-        < probability_100
-        < 1.0
-    ):
-        errors.append(
-            "Cumulative probability invalid"
+            "Expected journey calculation failed"
         )
 
     return errors
@@ -1025,6 +1181,19 @@ def main():
         START_CAPITAL,
     )
 
+    failure_analysis = (
+        analyze_failure_stages(
+            route
+        )
+    )
+
+    loss_analysis = (
+        analyze_loss_until_goal(
+            failure_analysis,
+            restart,
+        )
+    )
+
     print_route(
         route
     )
@@ -1037,10 +1206,19 @@ def main():
         restart
     )
 
+    print_failure_distribution(
+        failure_analysis
+    )
+
+    print_loss_summary(
+        loss_analysis
+    )
+
     errors = validate(
         route,
         summary,
         restart,
+        failure_analysis,
     )
 
     print()
@@ -1078,7 +1256,11 @@ def main():
     )
 
     print(
-        "Restart model verified."
+        "Failure-stage distribution verified."
+    )
+
+    print(
+        "Economic-loss observation verified."
     )
 
     print(
