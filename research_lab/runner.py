@@ -30,11 +30,12 @@ def run_cycle():
               run_command([sys.executable, "-m", "research_lab.test_route_evidence_uncertainty"]),
               run_command([sys.executable, "-m", "research_lab.test_calibrated_uncertainty"]),
               run_command([sys.executable, "-m", "research_lab.test_raw_outcome_calibration"]),
-              run_command([sys.executable, "-m", "research_lab.test_posterior_route_integration"])]
+              run_command([sys.executable, "-m", "research_lab.test_posterior_route_integration"]),
+              run_command([sys.executable, "-m", "research_lab.test_posterior_uncertainty_ranking"])]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "posterior_route_integration", "next_theme": "posterior_uncertainty_ranking", "checks": checks}
+                "stage": "posterior_uncertainty_ranking", "next_theme": "lab_dashboard_live_snapshot", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "latest.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUTPUT / "latest.md").write_text("# Warashibe AI Lab — Latest Run\n\n"
