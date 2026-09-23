@@ -35,7 +35,7 @@ def run_cycle():
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "posterior_uncertainty_ranking", "next_theme": "lab_dashboard_live_snapshot", "checks": checks}
+                "stage": "lab_dashboard_live_snapshot", "next_theme": "dashboard_history_metrics", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "latest.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUTPUT / "latest.md").write_text("# Warashibe AI Lab — Latest Run\n\n"
