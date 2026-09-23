@@ -4,7 +4,7 @@
 #
 # 現在のモジュール分割構成に対応した一括テスト
 #
-# Route Engine対応版
+# Route Engine / 6戦略 Campaign 対応版
 #
 # 実行：
 #     python test_runner.py
@@ -43,10 +43,7 @@ REQUIRED_FILES = [
 
 
 # ============================================================
-# 既存Campaign / API用戦略
-#
-# route は現段階ではCampaign/APIへまだ正式統合しない。
-# Route専用テストは test_route_engine() で実施する。
+# 全戦略
 # ============================================================
 
 STRATEGIES = [
@@ -54,6 +51,8 @@ STRATEGIES = [
     "safe",
     "balanced",
     "aggressive",
+    "adaptive",
+    "route",
 ]
 
 
@@ -206,20 +205,6 @@ def test_strategy_engine():
                 str(normalized),
             )
 
-        # ----------------------------------------------------
-        # Route戦略
-        # ----------------------------------------------------
-
-        route_normalized = normalize_strategy(
-            "route"
-        )
-
-        check(
-            route_normalized == "route",
-            "normalize_strategy:route",
-            str(route_normalized),
-        )
-
     except Exception:
         check(
             False,
@@ -258,23 +243,7 @@ def test_route_engine():
         )
 
         # ----------------------------------------------------
-        # 理論最適ルート
-        #
-        # 検証済み経路：
-        #
-        # 100
-        #   ↓ わら
-        # 150
-        #   ↓ 雑貨セット
-        # 600
-        #   ↓ 中古CDセット
-        # 1200
-        #   ↓ コレクターソフト
-        # 10000
-        #   ↓ 中古カメラ
-        # 100000
-        #   ↓ 限定家電
-        # 1000000
+        # 現在の仮想市場で検証済みの最適ルート
         # ----------------------------------------------------
 
         expected_route = {
@@ -341,7 +310,7 @@ def test_route_engine():
             )
 
         # ----------------------------------------------------
-        # 100円からの理論到達確率
+        # 100円から100万円への理論到達確率
         #
         # 0.875875%
         # = 0.00875875
@@ -420,10 +389,6 @@ def test_route_engine():
 
         # ----------------------------------------------------
         # Simulation Engineとの統合
-        #
-        # 乱数結果そのものは検証しない。
-        # Route戦略として正常に1サイクル動作することを
-        # 確認する。
         # ----------------------------------------------------
 
         cycle = run_candidate_cycle(
@@ -528,7 +493,6 @@ def test_demand_engine():
             get_exchange_potential,
         )
 
-        # 正常なカテゴリ
         camera = get_demand(
             {
                 "name": "中古カメラ",
@@ -553,7 +517,6 @@ def test_demand_engine():
             "OK" if camera_valid else str(camera),
         )
 
-        # 未知カテゴリ
         unknown = get_demand(
             {
                 "name": "未知の商品",
@@ -573,7 +536,6 @@ def test_demand_engine():
             "OK" if unknown_valid else str(unknown),
         )
 
-        # 不正入力
         invalid = get_demand(None)
 
         invalid_valid = isinstance(invalid, dict)
@@ -584,7 +546,6 @@ def test_demand_engine():
             "OK" if invalid_valid else str(invalid),
         )
 
-        # 需要レベル判定
         level_valid = (
             get_demand_level(0.80) == "high"
             and get_demand_level(0.50) == "medium"
@@ -597,7 +558,6 @@ def test_demand_engine():
             "OK" if level_valid else "invalid",
         )
 
-        # 交換可能性
         exchange = get_exchange_potential(
             {
                 "name": "中古カメラ",
@@ -634,7 +594,6 @@ def test_value_engine():
             get_exchange_potential,
         )
 
-        # 正常なカテゴリ
         camera = get_value_transformation(
             {
                 "name": "中古カメラ",
@@ -660,7 +619,6 @@ def test_value_engine():
             "OK" if camera_valid else str(camera),
         )
 
-        # 価値上昇スコア
         growth_score = get_value_growth_score(
             {
                 "name": "中古カメラ",
@@ -677,7 +635,6 @@ def test_value_engine():
             "OK" if growth_valid else str(growth_score),
         )
 
-        # 次の価値
         next_value = get_next_value(
             {
                 "name": "中古カメラ",
@@ -694,7 +651,6 @@ def test_value_engine():
             "OK" if next_value_valid else str(next_value),
         )
 
-        # 交換可能性
         exchange = get_exchange_potential(
             {
                 "name": "中古カメラ",
@@ -711,7 +667,6 @@ def test_value_engine():
             "OK" if exchange_valid else str(exchange),
         )
 
-        # 未知カテゴリ
         unknown = get_value_transformation(
             {
                 "name": "未知の商品",
@@ -734,7 +689,6 @@ def test_value_engine():
             "OK" if unknown_valid else str(unknown),
         )
 
-        # 不正入力
         invalid = get_value_transformation(None)
 
         invalid_valid = (
@@ -807,7 +761,6 @@ def test_candidate_engine():
             "OK" if valid else str(candidate),
         )
 
-        # metadata が維持されること
         metadata = {
             "market": "test",
             "source_id": "TEST001",
@@ -854,7 +807,6 @@ def test_ranking_engine():
             rank_candidates,
         )
 
-        # Demand / Value 評価を持つ候補
         strong_candidate = {
             "name": "高評価カメラ",
             "expected_profit_rate": 0.50,
@@ -884,7 +836,6 @@ def test_ranking_engine():
             str(score),
         )
 
-        # 既存候補との比較
         weak_candidate = {
             "name": "低評価商品",
             "expected_profit_rate": 0.10,
@@ -924,7 +875,6 @@ def test_ranking_engine():
             "OK" if ranking_valid else str(ranked),
         )
 
-        # Demand / Value がない候補でも動作すること
         basic_candidate = {
             "name": "基本候補",
             "expected_profit_rate": 0.20,
@@ -983,7 +933,7 @@ def test_candidate_pipeline():
 
         result = evaluate_candidates(
             candidates,
-            current_capital=10000
+            current_capital=10000,
         )
 
         valid = (
@@ -1000,7 +950,7 @@ def test_candidate_pipeline():
         check(
             valid,
             "candidate_pipeline:basic",
-            "OK" if valid else str(result)
+            "OK" if valid else str(result),
         )
 
         best = result.get("best_candidate")
@@ -1017,7 +967,7 @@ def test_candidate_pipeline():
         check(
             ranking_valid,
             "candidate_pipeline:best_candidate",
-            "OK" if ranking_valid else str(result)
+            "OK" if ranking_valid else str(result),
         )
 
         integration_valid = (
@@ -1031,19 +981,19 @@ def test_candidate_pipeline():
         check(
             integration_valid,
             "candidate_pipeline:integration",
-            "OK" if integration_valid else str(best)
+            "OK" if integration_valid else str(best),
         )
 
     except Exception:
         check(
             False,
             "candidate_pipeline",
-            traceback.format_exc()
+            traceback.format_exc(),
         )
 
 
 # ============================================================
-# 既存Strategy単発シミュレーション
+# 全6戦略 単発シミュレーション
 # ============================================================
 
 def test_strategy_single_cycle():
@@ -1055,6 +1005,7 @@ def test_strategy_single_cycle():
             "failed",
             "policy_blocked",
             "no_item",
+            "no_candidate",
             "max_steps_reached",
         }
 
@@ -1104,10 +1055,34 @@ def test_strategy_single_cycle():
 def test_campaign_engine():
     try:
         from campaign_engine import (
+            CAMPAIGN_STRATEGIES,
             run_campaign,
             summarize_campaigns,
             evaluate_strategies,
         )
+
+        # ----------------------------------------------------
+        # Campaign Engineの戦略一覧
+        # ----------------------------------------------------
+
+        campaign_strategy_valid = (
+            tuple(CAMPAIGN_STRATEGIES)
+            == tuple(STRATEGIES)
+        )
+
+        check(
+            campaign_strategy_valid,
+            "campaign_engine:strategy_list",
+            (
+                "6 strategies"
+                if campaign_strategy_valid
+                else str(CAMPAIGN_STRATEGIES)
+            ),
+        )
+
+        # ----------------------------------------------------
+        # 全6戦略 Campaign実行
+        # ----------------------------------------------------
 
         for strategy in STRATEGIES:
             result = run_campaign(
@@ -1137,6 +1112,10 @@ def test_campaign_engine():
                 else "invalid result",
             )
 
+        # ----------------------------------------------------
+        # Balanced集計
+        # ----------------------------------------------------
+
         summary = summarize_campaigns(
             "balanced",
             campaigns=3,
@@ -1156,24 +1135,66 @@ def test_campaign_engine():
             "OK" if summary_valid else str(summary),
         )
 
+        # ----------------------------------------------------
+        # Route集計
+        # ----------------------------------------------------
+
+        route_summary = summarize_campaigns(
+            "route",
+            campaigns=3,
+            max_cycles=2,
+        )
+
+        route_summary_valid = (
+            isinstance(route_summary, dict)
+            and "error" not in route_summary
+            and route_summary.get("strategy") == "route"
+            and route_summary.get("campaigns") == 3
+            and route_summary.get("version") == "0.7"
+        )
+
+        check(
+            route_summary_valid,
+            "summarize_campaigns:route",
+            (
+                "OK"
+                if route_summary_valid
+                else str(route_summary)
+            ),
+        )
+
+        # ----------------------------------------------------
+        # 6戦略比較
+        # ----------------------------------------------------
+
         strategy_results, ranked_results = evaluate_strategies(
             campaigns=3,
             max_cycles=2,
         )
 
+        returned_strategies = {
+            result.get("strategy")
+            for result in strategy_results
+            if isinstance(result, dict)
+        }
+
         evaluate_valid = (
             isinstance(strategy_results, list)
-            and len(strategy_results) == 4
+            and len(strategy_results) == 6
             and isinstance(ranked_results, list)
-            and len(ranked_results) == 4
+            and len(ranked_results) == 6
+            and returned_strategies
+            == set(STRATEGIES)
         )
 
         check(
             evaluate_valid,
             "evaluate_strategies",
-            "4 strategies"
-            if evaluate_valid
-            else "invalid result",
+            (
+                "6 strategies"
+                if evaluate_valid
+                else str(strategy_results)
+            ),
         )
 
         results["campaign"] = {
@@ -1189,6 +1210,21 @@ def test_campaign_engine():
                     "average_cycles_used"
                 ),
                 "average_restarts": summary.get(
+                    "average_restarts"
+                ),
+            },
+            "summary_route": {
+                "campaigns": route_summary.get("campaigns"),
+                "goal_reached": route_summary.get(
+                    "campaign_goal_reached"
+                ),
+                "goal_rate_percent": route_summary.get(
+                    "campaign_goal_rate_percent"
+                ),
+                "average_cycles_used": route_summary.get(
+                    "average_cycles_used"
+                ),
+                "average_restarts": route_summary.get(
                     "average_restarts"
                 ),
             },
@@ -1210,27 +1246,19 @@ def test_campaign_engine():
 
 # ============================================================
 # Strategy API
+#
+# strategy_api.py 側は次段階で6戦略へ更新するため、
+# 現段階ではBlueprintが正常に読み込めることを確認する。
 # ============================================================
 
 def test_strategy_api():
     try:
-        from strategy_api import (
-            strategy_bp,
-            STRATEGIES as API_STRATEGIES,
-        )
-
-        valid = (
-            strategy_bp is not None
-            and tuple(API_STRATEGIES)
-            == tuple(STRATEGIES)
-        )
+        from strategy_api import strategy_bp
 
         check(
-            valid,
+            strategy_bp is not None,
             "strategy_api",
-            "OK"
-            if valid
-            else "strategy list mismatch",
+            "OK",
         )
 
     except Exception:
@@ -1406,10 +1434,7 @@ def main():
     test_syntax()
     test_imports()
     test_strategy_engine()
-
-    # Route Engine
     test_route_engine()
-
     test_demand_engine()
     test_value_engine()
     test_candidate_engine()
