@@ -37,11 +37,12 @@ def run_cycle():
               run_command([sys.executable, "-m", "research_lab.test_dashboard_uncertainty"]),
               run_command([sys.executable, "-m", "research_lab.test_github_actions_bridge"]),
               run_command([sys.executable, "-m", "research_lab.test_live_outcome_store"]),
-              run_command([sys.executable, "-m", "research_lab.test_persisted_outcome_posterior_bridge"])]
+              run_command([sys.executable, "-m", "research_lab.test_persisted_outcome_posterior_bridge"]),
+              run_command([sys.executable, "-m", "research_lab.test_persisted_posterior_uncertainty_ranking"])]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "persisted_outcome_posterior_bridge", "next_theme": "persisted_posterior_uncertainty_ranking", "checks": checks}
+                "stage": "persisted_posterior_uncertainty_ranking", "next_theme": "outcome_learning_loop", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
