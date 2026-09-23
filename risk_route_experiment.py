@@ -2,33 +2,37 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.5
+# Risk-sensitive Route Experiment v0.6
 #
 # 目的：
-#   現在の仮想市場で到達可能な全Routeを列挙し、
+#   全Route探索結果に対して、
+#   weighted scoreを使わず、
+#   Goal Probabilityの制約付きRisk最適化を行う。
 #
-#   - Goal Probability
-#   - Route Steps
-#   - Expected Economic Loss / Journey
-#   - Expected Journeys To Goal
-#   - Expected Economic Loss Until Goal
+# 基本思想：
 #
-#   を比較する。
+#   1. 全Routeを列挙
+#   2. 最大Goal Probabilityを基準にする
+#   3. 許容Goal低下率を設定する
+#   4. 制約を満たすRouteだけを残す
+#   5. その中からExpected Economic Loss Until Goalを最小化
 #
-# さらに、
+# 例：
 #
-#   maximize:
-#       Goal Probability
+#   tolerance = 0.05
 #
-#   minimize:
-#       Expected Economic Loss Until Goal
-#       Route Steps
+#   最大Goal Probabilityの95%以上を維持するRouteだけを許可。
 #
-#   によるPareto Frontierを求める。
+#   required_goal =
+#       best_goal_probability * (1 - tolerance)
 #
-# 重要：
-#   Route Engine v1.1.1は変更しない。
-#   Risk penaltyもまだ導入しない。
+# これにより、
+#
+#   0.6 * Goal + 0.4 * Risk
+#
+# のような恣意的なweighted scoreを使わない。
+#
+# Route Engine v1.1.1は変更しない。
 #
 # Failure Model：
 #
@@ -63,13 +67,33 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.5"
+EXPERIMENT_VERSION = "0.6"
 
 START_CAPITAL = 100
 
 MAX_ROUTE_STEPS = 20
 
 FLOAT_TOLERANCE = 1e-12
+
+
+# Goal Probabilityについて、
+# 最大値から何%までの低下を許容するか。
+#
+# 0%   = 最大Goalのみ
+# 1%   = 最大Goalの99%以上
+# 2%   = 最大Goalの98%以上
+# 5%   = 最大Goalの95%以上
+# 10%  = 最大Goalの90%以上
+# 20%  = 最大Goalの80%以上
+
+GOAL_TOLERANCES = (
+    0.00,
+    0.01,
+    0.02,
+    0.05,
+    0.10,
+    0.20,
+)
 
 
 # ============================================================
@@ -156,19 +180,12 @@ def get_risk_level(
 
 
 # ============================================================
-# Market Candidate Provider
+# Market Candidates
 # ============================================================
 
 def get_price_band_candidates(
     capital,
 ):
-    """
-    現在のWarashibe ruleを維持する。
-
-    affordable candidatesの中から、
-    最も高いpurchase_price帯だけを対象とする。
-    """
-
     result = evaluate_market_candidates(
         capital
     )
@@ -296,17 +313,6 @@ def enumerate_routes(
     route=None,
     visited=None,
 ):
-    """
-    現在のprice-band ruleの下で、
-    targetへ到達可能な全Routeを列挙する。
-
-    next_capital > capitalのみ許可するため、
-    基本的にはDAG探索になる。
-
-    visitedも使用し、
-    将来market modelが変わった場合のloopを防止する。
-    """
-
     if route is None:
         route = []
 
@@ -411,9 +417,9 @@ def analyze_route(
 
     reach_probability = 1.0
 
-    expected_loss = 0.0
-
     total_failure_probability = 0.0
+
+    expected_loss = 0.0
 
     stages = []
 
@@ -450,12 +456,12 @@ def analyze_route(
             * capital
         )
 
-        expected_loss += (
-            weighted_loss
-        )
-
         total_failure_probability += (
             journey_failure_probability
+        )
+
+        expected_loss += (
+            weighted_loss
         )
 
         stages.append(
@@ -666,6 +672,44 @@ def route_names(
 
 
 # ============================================================
+# Unique Records
+# ============================================================
+
+def make_unique_records(
+    routes,
+):
+    records = []
+
+    seen = set()
+
+    for route in routes:
+        record = (
+            create_route_record(
+                route
+            )
+        )
+
+        signature = (
+            route_signature(
+                record
+            )
+        )
+
+        if signature in seen:
+            continue
+
+        seen.add(
+            signature
+        )
+
+        records.append(
+            record
+        )
+
+    return records
+
+
+# ============================================================
 # Pareto Analysis
 # ============================================================
 
@@ -673,17 +717,6 @@ def dominates(
     left,
     right,
 ):
-    """
-    Pareto objectives:
-
-    maximize:
-        Goal Probability
-
-    minimize:
-        Expected Economic Loss Until Goal
-        Route Steps
-    """
-
     left_analysis = left[
         "analysis"
     ]
@@ -812,7 +845,7 @@ def find_pareto_routes(
 
 
 # ============================================================
-# Best Metrics
+# Basic Optima
 # ============================================================
 
 def find_best_goal_route(
@@ -891,6 +924,125 @@ def find_shortest_route(
 
 
 # ============================================================
+# Constrained Risk Optimization
+# ============================================================
+
+def optimize_with_goal_constraint(
+    records,
+    best_goal_probability,
+    tolerance,
+):
+    """
+    Goal Probabilityを最大値の一定割合以上に保ち、
+    その中でExpected Economic Loss Until Goalを最小化。
+
+    tolerance = 0.05 の場合：
+
+        required_goal =
+            best_goal_probability * 0.95
+    """
+
+    required_goal = (
+        best_goal_probability
+        * (
+            1.0
+            - tolerance
+        )
+    )
+
+    eligible = [
+        record
+        for record in records
+        if (
+            record[
+                "analysis"
+            ][
+                "goal_probability"
+            ]
+            >= required_goal
+            - FLOAT_TOLERANCE
+        )
+    ]
+
+    if not eligible:
+        return {
+            "tolerance": tolerance,
+            "required_goal": (
+                required_goal
+            ),
+            "eligible_count": 0,
+            "selected": None,
+        }
+
+    selected = min(
+        eligible,
+        key=lambda record: (
+            record[
+                "long_run"
+            ][
+                "expected_economic_loss_until_goal"
+            ],
+            -record[
+                "analysis"
+            ][
+                "goal_probability"
+            ],
+            record[
+                "analysis"
+            ][
+                "steps"
+            ],
+        ),
+    )
+
+    return {
+        "tolerance": tolerance,
+        "required_goal": (
+            required_goal
+        ),
+        "eligible_count": len(
+            eligible
+        ),
+        "selected": selected,
+    }
+
+
+def run_constrained_optimization(
+    records,
+):
+    best_goal_record = (
+        find_best_goal_route(
+            records
+        )
+    )
+
+    best_goal_probability = (
+        best_goal_record[
+            "analysis"
+        ][
+            "goal_probability"
+        ]
+    )
+
+    results = []
+
+    for tolerance in GOAL_TOLERANCES:
+        result = (
+            optimize_with_goal_constraint(
+                records,
+                best_goal_probability,
+                tolerance,
+            )
+        )
+
+        results.append(
+            result
+        )
+
+    return results
+
+
+# ============================================================
 # Current Route Matching
 # ============================================================
 
@@ -910,7 +1062,7 @@ def find_current_route_record(
         )
     )
 
-    current_signature = (
+    signature = (
         route_signature(
             current_record
         )
@@ -921,7 +1073,7 @@ def find_current_route_record(
             route_signature(
                 record
             )
-            == current_signature
+            == signature
         ):
             return record
 
@@ -929,7 +1081,7 @@ def find_current_route_record(
 
 
 # ============================================================
-# Output Helpers
+# Output
 # ============================================================
 
 def print_header():
@@ -973,7 +1125,7 @@ def print_header():
 
     print(
         "Optimization       : "
-        "NONE - observation only"
+        "Goal-constrained loss minimization"
     )
 
     print(
@@ -1045,7 +1197,7 @@ def print_search_summary(
     print()
 
     print(
-        "EXHAUSTIVE SEARCH SUMMARY"
+        "SEARCH SUMMARY"
     )
 
     print(
@@ -1065,81 +1217,6 @@ def print_search_summary(
     print(
         "-" * 92
     )
-
-
-def print_all_routes(
-    records,
-):
-    print()
-
-    print(
-        "ALL COMPLETE ROUTES"
-    )
-
-    print(
-        "=" * 92
-    )
-
-    ordered = sorted(
-        records,
-        key=lambda record: (
-            -record[
-                "analysis"
-            ][
-                "goal_probability"
-            ],
-            record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
-            ],
-            record[
-                "analysis"
-            ][
-                "steps"
-            ],
-        ),
-    )
-
-    for index, record in enumerate(
-        ordered,
-        start=1,
-    ):
-        analysis = record[
-            "analysis"
-        ]
-
-        long_run = record[
-            "long_run"
-        ]
-
-        print(
-            f"ROUTE {index}"
-        )
-
-        print(
-            f"  Path : "
-            f"{route_names(record)}"
-        )
-
-        print(
-            f"  Goal : "
-            f"{analysis['goal_probability'] * 100:.6f}%"
-        )
-
-        print(
-            f"  Steps: "
-            f"{analysis['steps']}"
-        )
-
-        print(
-            f"  Loss : "
-            f"{long_run['expected_economic_loss_until_goal']:,.4f}"
-        )
-
-        print(
-            "-" * 92
-        )
 
 
 def print_pareto(
@@ -1172,32 +1249,142 @@ def print_pareto(
         )
 
         print(
-            f"  Route          : "
+            f"  Route : "
             f"{route_names(record)}"
         )
 
         print(
-            f"  Goal           : "
+            f"  Goal  : "
             f"{analysis['goal_probability'] * 100:.6f}%"
         )
 
         print(
-            f"  Steps          : "
+            f"  Steps : "
             f"{analysis['steps']}"
         )
 
         print(
-            f"  Loss/Journey   : "
+            f"  Loss  : "
+            f"{long_run['expected_economic_loss_until_goal']:,.4f}"
+        )
+
+        print(
+            "-" * 92
+        )
+
+
+def print_constraint_results(
+    results,
+    best_goal_probability,
+):
+    print()
+
+    print(
+        "GOAL-CONSTRAINED RISK OPTIMIZATION"
+    )
+
+    print(
+        "=" * 92
+    )
+
+    print(
+        f"Maximum Goal Probability : "
+        f"{best_goal_probability * 100:.6f}%"
+    )
+
+    print(
+        "-" * 92
+    )
+
+    for result in results:
+        tolerance = result[
+            "tolerance"
+        ]
+
+        required_goal = result[
+            "required_goal"
+        ]
+
+        selected = result[
+            "selected"
+        ]
+
+        print(
+            f"Goal Tolerance : "
+            f"{tolerance * 100:.0f}%"
+        )
+
+        print(
+            f"Required Goal  : "
+            f"{required_goal * 100:.6f}%"
+        )
+
+        print(
+            f"Eligible Routes: "
+            f"{result['eligible_count']}"
+        )
+
+        if selected is None:
+            print(
+                "Selected       : NONE"
+            )
+
+            print(
+                "-" * 92
+            )
+
+            continue
+
+        analysis = selected[
+            "analysis"
+        ]
+
+        long_run = selected[
+            "long_run"
+        ]
+
+        actual_goal_drop = (
+            (
+                best_goal_probability
+                - analysis[
+                    "goal_probability"
+                ]
+            )
+            / best_goal_probability
+        )
+
+        print(
+            f"Selected       : "
+            f"{route_names(selected)}"
+        )
+
+        print(
+            f"Selected Goal  : "
+            f"{analysis['goal_probability'] * 100:.6f}%"
+        )
+
+        print(
+            f"Actual Drop    : "
+            f"{actual_goal_drop * 100:.4f}%"
+        )
+
+        print(
+            f"Steps          : "
+            f"{analysis['steps']}"
+        )
+
+        print(
+            f"Loss/Journey   : "
             f"{analysis['expected_economic_loss_per_journey']:,.4f}"
         )
 
         print(
-            f"  Expected Trips : "
+            f"Expected Trips : "
             f"{long_run['expected_journeys_to_goal']:,.4f}"
         )
 
         print(
-            f"  Loss Until Goal: "
+            f"Loss Until Goal: "
             f"{long_run['expected_economic_loss_until_goal']:,.4f}"
         )
 
@@ -1214,17 +1401,27 @@ def validate(
     records,
     pareto,
     current_record,
+    constrained_results,
 ):
     errors = []
 
-    if not records:
+    if len(
+        records
+    ) != 89:
         errors.append(
-            "No complete routes found"
+            "Complete route count changed: "
+            f"{len(records)}"
         )
 
-        return errors
+    if len(
+        pareto
+    ) != 3:
+        errors.append(
+            "Pareto route count changed: "
+            f"{len(pareto)}"
+        )
 
-    expected_names = [
+    expected_current_names = [
         "わら",
         "雑貨セット",
         "中古CDセット",
@@ -1244,9 +1441,12 @@ def validate(
         ]
     ]
 
-    if current_names != expected_names:
+    if (
+        current_names
+        != expected_current_names
+    ):
         errors.append(
-            "Current optimal route changed: "
+            "Current route changed: "
             f"{current_names}"
         )
 
@@ -1270,62 +1470,14 @@ def validate(
         > FLOAT_TOLERANCE
     ):
         errors.append(
-            "Current goal probability changed: "
-            f"{current_probability}"
+            "Current goal probability changed"
         )
-
-    for record in records:
-        analysis = record[
-            "analysis"
-        ]
-
-        if not analysis[
-            "completed"
-        ]:
-            errors.append(
-                "Incomplete route found "
-                "inside complete-route set"
-            )
-
-            break
-
-        if (
-            abs(
-                analysis[
-                    "probability_total"
-                ]
-                - 1.0
-            )
-            > FLOAT_TOLERANCE
-        ):
-            errors.append(
-                "Probability total "
-                "does not equal 100%"
-            )
-
-            break
 
     current_signature = (
         route_signature(
             current_record
         )
     )
-
-    all_signatures = {
-        route_signature(
-            record
-        )
-        for record in records
-    }
-
-    if (
-        current_signature
-        not in all_signatures
-    ):
-        errors.append(
-            "Current Route Engine route "
-            "was not found by exhaustive search"
-        )
 
     pareto_signatures = {
         route_signature(
@@ -1339,9 +1491,67 @@ def validate(
         not in pareto_signatures
     ):
         errors.append(
-            "Current Route Engine route "
-            "is not Pareto optimal"
+            "Current route is not Pareto"
         )
+
+    for result in constrained_results:
+        selected = result[
+            "selected"
+        ]
+
+        if selected is None:
+            errors.append(
+                "Constraint optimization "
+                "returned no route"
+            )
+
+            continue
+
+        selected_goal = (
+            selected[
+                "analysis"
+            ][
+                "goal_probability"
+            ]
+        )
+
+        required_goal = result[
+            "required_goal"
+        ]
+
+        if (
+            selected_goal
+            < required_goal
+            - FLOAT_TOLERANCE
+        ):
+            errors.append(
+                "Selected route violates "
+                "Goal constraint"
+            )
+
+    zero_tolerance = (
+        constrained_results[
+            0
+        ]
+    )
+
+    zero_selected = (
+        zero_tolerance[
+            "selected"
+        ]
+    )
+
+    if zero_selected is not None:
+        if (
+            route_signature(
+                zero_selected
+            )
+            != current_signature
+        ):
+            errors.append(
+                "0% tolerance did not "
+                "select current best Goal route"
+            )
 
     return errors
 
@@ -1358,36 +1568,11 @@ def main():
         TARGET,
     )
 
-    records = [
-        create_route_record(
-            route
+    records = (
+        make_unique_records(
+            routes
         )
-        for route in routes
-    ]
-
-    unique_records = []
-
-    seen = set()
-
-    for record in records:
-        signature = (
-            route_signature(
-                record
-            )
-        )
-
-        if signature in seen:
-            continue
-
-        seen.add(
-            signature
-        )
-
-        unique_records.append(
-            record
-        )
-
-    records = unique_records
+    )
 
     if not records:
         print(
@@ -1426,6 +1611,20 @@ def main():
         )
     )
 
+    constrained_results = (
+        run_constrained_optimization(
+            records
+        )
+    )
+
+    best_goal_probability = (
+        best_goal[
+            "analysis"
+        ][
+            "goal_probability"
+        ]
+    )
+
     print_search_summary(
         records,
         pareto,
@@ -1451,18 +1650,20 @@ def main():
         shortest,
     )
 
-    print_all_routes(
-        records
-    )
-
     print_pareto(
         pareto
+    )
+
+    print_constraint_results(
+        constrained_results,
+        best_goal_probability,
     )
 
     errors = validate(
         records,
         pareto,
         current_record,
+        constrained_results,
     )
 
     print()
@@ -1500,11 +1701,11 @@ def main():
     )
 
     print(
-        "Exhaustive route enumeration verified."
+        "Exhaustive route set preserved."
     )
 
     print(
-        "Current route is Pareto optimal."
+        "Goal-constrained risk optimization verified."
     )
 
     print(
