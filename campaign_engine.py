@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v0.6
+# Warashibe AI v0.7
 # campaign_engine.py
 #
 # 役割：
@@ -13,11 +13,19 @@
 # 戦略：
 # ・strategy_engine.py
 #
+# Route：
+# ・route_engine.py
+#
 # 分析：
 # ・analysis_engine.py
 #
 # Web / Flask：
 # ・app.py
+#
+# v0.7:
+# ・adaptive 戦略を比較対象へ追加
+# ・route 戦略を比較対象へ追加
+# ・6戦略比較へ拡張
 # ============================================================
 
 from policy_engine import START_CAPITAL
@@ -35,11 +43,25 @@ from simulation_engine import run_cycle
 # 基本設定
 # ============================================================
 
-VERSION = "0.6"
+VERSION = "0.7"
 
 TARGET = 1_000_000
 
 MAX_CAMPAIGN_CYCLES = 10
+
+
+# ============================================================
+# Campaign比較対象戦略
+# ============================================================
+
+CAMPAIGN_STRATEGIES = (
+    "random",
+    "safe",
+    "balanced",
+    "aggressive",
+    "adaptive",
+    "route",
+)
 
 
 # ============================================================
@@ -114,6 +136,10 @@ def run_campaign(
 
     1回失敗するとSTART_CAPITALから
     仮想リスタートする。
+
+    route戦略の場合は、
+    simulation_engine.run_cycle() を経由して
+    Candidate方式のRoute Engineが使用される。
     """
 
     strategy = normalize_strategy(strategy)
@@ -611,17 +637,19 @@ def evaluate_strategies(
     max_cycles=MAX_CAMPAIGN_CYCLES
 ):
     """
-    4戦略を比較する。
+    6戦略を同一条件で比較する。
+
+    random
+    safe
+    balanced
+    aggressive
+    adaptive
+    route
     """
 
     strategy_results = []
 
-    for strategy in (
-        "random",
-        "safe",
-        "balanced",
-        "aggressive"
-    ):
+    for strategy in CAMPAIGN_STRATEGIES:
 
         result = summarize_campaigns(
             strategy,
