@@ -24,9 +24,11 @@ app = Flask(__name__)
 
 from candidate_api import candidate_bp
 from strategy_api import strategy_bp
+from research_lab.web import lab_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
+app.register_blueprint(lab_bp)
 
 
 # ============================================================
