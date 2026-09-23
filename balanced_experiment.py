@@ -5,7 +5,8 @@
 # Balanced v2 重み探索実験
 #
 # 目的：
-# Candidate score と成功率 confidence の重みを変えて、
+# Ranking Engine 通過後の Candidate score と
+# 成功率 confidence の重みを変えて、
 # 100万円到達率がどのように変化するか比較する。
 #
 # 実行：
@@ -38,6 +39,14 @@ SIMULATIONS = 10000
 # Balanced v2 重みパターン
 #
 # candidate_weight + confidence_weight = 1.0
+#
+# B0_current:
+#     現行 Balanced
+#     Candidate score が最も高い候補を選択
+#
+# B1～B10:
+#     Candidate score を 0～1 に正規化し、
+#     confidence と重み付き合成
 # ============================================================
 
 WEIGHT_PATTERNS = {
@@ -115,7 +124,9 @@ def select_current_balanced(candidates):
     """
     現行 Balanced の挙動を再現する。
 
-    Candidate score が最も高い候補を選ぶ。
+    Candidate score が最も高い候補を選択。
+    同点の場合は confidence、
+    さらに同点の場合は expected_sale_price を見る。
     """
 
     if not candidates:
@@ -150,6 +161,10 @@ def select_weighted_balanced(
 
     normalized_candidate_score と confidence を
     指定された重みで合成する。
+
+    balanced_v2_score =
+        normalized_candidate_score * candidate_weight
+        + confidence * confidence_weight
     """
 
     if not candidates:
@@ -162,7 +177,6 @@ def select_weighted_balanced(
     scored_candidates = []
 
     for candidate in normalized_candidates:
-
         normalized_score = float(
             candidate.get(
                 "normalized_candidate_score",
@@ -203,17 +217,23 @@ def select_weighted_balanced(
     return max(
         scored_candidates,
         key=lambda candidate: (
-            candidate.get(
-                "balanced_v2_score",
-                0,
+            float(
+                candidate.get(
+                    "balanced_v2_score",
+                    0,
+                )
             ),
-            candidate.get(
-                "confidence",
-                0,
+            float(
+                candidate.get(
+                    "confidence",
+                    0,
+                )
             ),
-            candidate.get(
-                "score",
-                0,
+            float(
+                candidate.get(
+                    "score",
+                    0,
+                )
             ),
         ),
     )
@@ -225,8 +245,20 @@ def select_weighted_balanced(
 
 def get_candidates_for_capital(capital):
     """
-    Candidate Pipeline を通した候補を取得し、
-    現在資本に最も近い価格帯だけ残す。
+    Candidate Pipeline を通した候補を取得する。
+
+    重要：
+    allowed ではなく ranked_candidates を使用する。
+
+    allowed は Ranking Engine 通過前なので
+    score が付いていない。
+
+    ranked_candidates は Ranking Engine 通過後なので
+    score / rank が付いている。
+
+    その後、Warashibeルールに従い、
+    現在資本で購入可能な中の
+    最も高い価格帯だけを残す。
     """
 
     result = evaluate_market_candidates(
@@ -234,7 +266,7 @@ def get_candidates_for_capital(capital):
     )
 
     candidates = result.get(
-        "allowed",
+        "ranked_candidates",
         []
     )
 
@@ -289,7 +321,6 @@ def run_experiment_cycle(weight_pattern):
         1,
         MAX_STEPS + 1,
     ):
-
         candidate = (
             select_experiment_candidate(
                 capital,
@@ -338,6 +369,12 @@ def run_experiment_cycle(weight_pattern):
             )
         )
 
+        normalized_candidate_score = (
+            candidate.get(
+                "normalized_candidate_score"
+            )
+        )
+
         balanced_v2_score = (
             candidate.get(
                 "balanced_v2_score"
@@ -367,6 +404,9 @@ def run_experiment_cycle(weight_pattern):
                 "confidence": confidence,
                 "candidate_score": (
                     candidate_score
+                ),
+                "normalized_candidate_score": (
+                    normalized_candidate_score
                 ),
                 "balanced_v2_score": (
                     balanced_v2_score
@@ -456,7 +496,6 @@ def run_pattern(
     results = []
 
     for _ in range(simulations):
-
         result = run_experiment_cycle(
             weight_pattern
         )
@@ -510,7 +549,6 @@ def run_pattern(
     failure_capitals = Counter()
 
     for result in results:
-
         if (
             result.get("status")
             != "failed"
@@ -656,7 +694,6 @@ def main():
         pattern_name,
         weight_pattern,
     ) in WEIGHT_PATTERNS.items():
-
         result = run_pattern(
             pattern_name,
             weight_pattern,
