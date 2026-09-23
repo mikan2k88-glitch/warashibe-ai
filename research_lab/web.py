@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, render_template_string
 
 from research_lab import LAB_VERSION
 from research_lab.config import LAB_BRANCH, PRODUCTION_BRANCH, RESEARCH_TRACKS
-from research_lab.dashboard_kpis import research_kpis
+from research_lab.dashboard_kpis import research_kpis, route_probability_series
 from research_lab.storage import ResearchRepository
 
 lab_bp = Blueprint("research_lab", __name__)
@@ -25,6 +25,7 @@ h1{margin:0 0 4px}.muted{color:#91a0b8}.grid{display:grid;grid-template-columns:
 .flow{display:flex;align-items:center;gap:10px;overflow:auto;padding:12px 0}.node{min-width:170px;background:#18243a;border:1px solid #304363;border-radius:12px;padding:14px}.arrow{font-size:24px;color:#607493}
 .bar{height:10px;background:#263550;border-radius:8px;overflow:hidden;margin-top:8px}.fill{height:100%;background:linear-gradient(90deg,#6ee7a8,#79a8ff)}
 .chart{display:flex;align-items:flex-end;gap:5px;height:130px;padding:14px 4px 4px}.col{flex:1;min-width:5px;background:linear-gradient(#79a8ff,#6ee7a8);border-radius:4px 4px 0 0;opacity:.9}.chartlabel{display:flex;justify-content:space-between;color:#91a0b8;font-size:12px}
+.probchart{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end;height:220px;padding-top:12px}.probgroup{height:100%;display:flex;align-items:end;justify-content:center;gap:5px;border-bottom:1px solid #304363}.pbar{width:28%;min-width:12px;border-radius:5px 5px 0 0}.current{background:#607493}.optimal{background:#6ee7a8}.plabel{text-align:center;color:#91a0b8;font-size:12px;margin-top:7px}.legend{display:flex;gap:18px;font-size:12px;color:#91a0b8;margin-top:12px}
 table{width:100%;border-collapse:collapse;background:#121b2d;border-radius:14px;overflow:hidden}th,td{padding:12px;text-align:left;border-bottom:1px solid #263550}th{color:#91a0b8}
 code{color:#b7c7ff}@media(max-width:700px){.wrap{padding:16px}th:nth-child(3),td:nth-child(3){display:none}}
 </style></head><body><div class="wrap">
@@ -42,6 +43,10 @@ code{color:#b7c7ff}@media(max-width:700px){.wrap{padding:16px}th:nth-child(3),td
 <div class="card"><div class="muted">BEST GOAL</div><div class="big ok">{{ "%.2f"|format(kpis.best_goal_probability_percent) }}%</div></div>
 <div class="card"><div class="muted">RECOVERY</div><div class="big">{{ "%.0f"|format(kpis.best_recovery_rate_percent) }}%</div></div>
 <div class="card"><div class="muted">TX | GOAL</div><div class="big">{{ "%.1f"|format(kpis.best_conditional_transactions) }}</div></div></div>
+<h2>Goal到達確率</h2><div class="card">
+<div class="muted">Recovery率別 · Current policy / Optimal policy</div>
+<div class="probchart">{% for p in probabilities %}<div><div class="probgroup"><div class="pbar current" title="Current {{ '%.2f'|format(p.current_goal_probability_percent) }}%" style="height:{{ p.current_goal_probability_percent }}%"></div><div class="pbar optimal" title="Optimal {{ '%.2f'|format(p.optimal_goal_probability_percent) }}%" style="height:{{ p.optimal_goal_probability_percent }}%"></div></div><div class="plabel">{{ "%.0f"|format(p.recovery_rate_percent) }}%</div></div>{% endfor %}</div>
+<div class="legend"><span>■ Current</span><span>■ Optimal</span><span>横軸: Recovery率</span></div></div>
 <h2>研究履歴</h2>
 <div class="card"><div class="muted">CHECK PASS RATE · 直近{{ history|length }}サイクル</div>
 {% if history %}<div class="chart">{% for h in history %}<div class="col" title="{{ h.generated_at }} · {{ h.check_percent }}%" style="height:{{ h.check_percent }}%"></div>{% endfor %}</div>
@@ -90,7 +95,7 @@ def dashboard():
     repository = _repo()
     return render_template_string(TEMPLATE, version=LAB_VERSION, production=PRODUCTION_BRANCH,
         branch=LAB_BRANCH, tracks=RESEARCH_TRACKS, stats=repository.stats(),
-        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis())
+        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis(), probabilities=route_probability_series())
 
 
 @lab_bp.route("/lab/api/status")
@@ -98,4 +103,4 @@ def status():
     repository = _repo()
     return jsonify({"lab_version": LAB_VERSION, "production_branch": PRODUCTION_BRANCH,
         "research_branch": LAB_BRANCH, "tracks": RESEARCH_TRACKS, "snapshot": _snapshot(),
-        "stats": repository.stats(), "kpis": research_kpis(), "history": _history(), "recent_experiments": repository.recent(20)})
+        "stats": repository.stats(), "kpis": research_kpis(), "route_probabilities": route_probability_series(), "history": _history(), "recent_experiments": repository.recent(20)})
