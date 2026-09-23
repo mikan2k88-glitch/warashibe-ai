@@ -4,7 +4,7 @@
 #
 # 現在のモジュール分割構成に対応した一括テスト
 #
-# Route Engine / 6戦略 Campaign / Route API 対応版
+# Route Engine v1.1 / Route Metrics / 6戦略 Campaign / Route API 対応版
 #
 # 実行：
 #     python test_runner.py
@@ -243,7 +243,7 @@ def test_route_engine():
         # ----------------------------------------------------
 
         check(
-            ROUTE_ENGINE_VERSION == "1.0",
+            ROUTE_ENGINE_VERSION == "1.1",
             "route_engine:version",
             str(ROUTE_ENGINE_VERSION),
         )
@@ -394,6 +394,69 @@ def test_route_engine():
         )
 
         # ----------------------------------------------------
+        # Route Engine v1.1 Metrics
+        # ----------------------------------------------------
+
+        metric_keys = (
+            "route_steps_to_target",
+            "route_capital_multiplier",
+            "route_expected_capital",
+            "route_demand_score",
+            "route_exchange_score",
+            "route_value_growth_score",
+            "route_value_exchange_potential",
+            "route_risk_level",
+        )
+
+        metrics_present = (
+            isinstance(direct_candidate, dict)
+            and all(
+                key in direct_candidate
+                for key in metric_keys
+            )
+        )
+
+        check(
+            metrics_present,
+            "route_engine:v1_1_metrics_present",
+            "OK" if metrics_present else str(direct_candidate),
+        )
+
+        metrics_valid = (
+            isinstance(direct_candidate, dict)
+            and direct_candidate.get("route_engine_version") == "1.1"
+            and direct_candidate.get("route_steps_to_target") == 6
+            and abs(float(direct_candidate.get("route_capital_multiplier", 0)) - 1.5) < 1e-12
+            and abs(float(direct_candidate.get("route_expected_capital", 0)) - 120.0) < 1e-12
+            and isinstance(direct_candidate.get("route_demand_score"), (int, float))
+            and isinstance(direct_candidate.get("route_exchange_score"), (int, float))
+            and isinstance(direct_candidate.get("route_value_growth_score"), (int, float))
+            and isinstance(direct_candidate.get("route_value_exchange_potential"), (int, float))
+            and isinstance(direct_candidate.get("route_risk_level"), str)
+        )
+
+        check(
+            metrics_valid,
+            "route_engine:v1_1_metrics_values",
+            "OK" if metrics_valid else str(direct_candidate),
+        )
+
+        regression_valid = (
+            direct_candidate.get("name") == "わら"
+            and direct_candidate.get("expected_sale_price") == 150
+            and abs(
+                direct_candidate.get("route_goal_probability", 0)
+                - 0.00875875
+            ) < 1e-12
+        )
+
+        check(
+            regression_valid,
+            "route_engine:v1_0_route_regression",
+            "0.875875% unchanged" if regression_valid else str(direct_candidate),
+        )
+
+        # ----------------------------------------------------
         # Simulation Engineとの統合
         # ----------------------------------------------------
 
@@ -464,7 +527,7 @@ def test_route_engine():
                 or trade.get(
                     "route_engine_version"
                 )
-                != "1.0"
+                != "1.1"
             ):
                 history_valid = False
                 break
