@@ -4,6 +4,8 @@
 #
 # 現在のモジュール分割構成に対応した一括テスト
 #
+# Route Engine対応版
+#
 # 実行：
 #     python test_runner.py
 #
@@ -27,6 +29,7 @@ REQUIRED_FILES = [
     "policy_engine.py",
     "analysis_engine.py",
     "strategy_engine.py",
+    "route_engine.py",
     "strategy_api.py",
     "candidate_api.py",
     "candidate_engine.py",
@@ -38,6 +41,13 @@ REQUIRED_FILES = [
     "value_engine.py",
 ]
 
+
+# ============================================================
+# 既存Campaign / API用戦略
+#
+# route は現段階ではCampaign/APIへまだ正式統合しない。
+# Route専用テストは test_route_engine() で実施する。
+# ============================================================
 
 STRATEGIES = [
     "random",
@@ -81,6 +91,10 @@ results = {
 }
 
 
+# ============================================================
+# 共通チェック
+# ============================================================
+
 def check(condition, name, detail=""):
     passed = bool(condition)
 
@@ -95,6 +109,10 @@ def check(condition, name, detail=""):
             f"{name}: {detail}"
         )
 
+
+# ============================================================
+# 構文チェック
+# ============================================================
 
 def test_syntax():
     for filename in REQUIRED_FILES:
@@ -128,12 +146,17 @@ def test_syntax():
             )
 
 
+# ============================================================
+# importチェック
+# ============================================================
+
 def test_imports():
     modules = [
         "market_engine",
         "policy_engine",
         "analysis_engine",
         "strategy_engine",
+        "route_engine",
         "simulation_engine",
         "campaign_engine",
         "candidate_engine",
@@ -166,6 +189,10 @@ def test_imports():
             )
 
 
+# ============================================================
+# Strategy Engine
+# ============================================================
+
 def test_strategy_engine():
     try:
         from strategy_engine import normalize_strategy
@@ -179,6 +206,20 @@ def test_strategy_engine():
                 str(normalized),
             )
 
+        # ----------------------------------------------------
+        # Route戦略
+        # ----------------------------------------------------
+
+        route_normalized = normalize_strategy(
+            "route"
+        )
+
+        check(
+            route_normalized == "route",
+            "normalize_strategy:route",
+            str(route_normalized),
+        )
+
     except Exception:
         check(
             False,
@@ -186,6 +227,298 @@ def test_strategy_engine():
             traceback.format_exc(),
         )
 
+
+# ============================================================
+# Route Engine
+# ============================================================
+
+def test_route_engine():
+    try:
+        from route_engine import (
+            ROUTE_ENGINE_VERSION,
+            calculate_goal_probability,
+            select_route_candidate,
+        )
+
+        from simulation_engine import (
+            TARGET,
+            evaluate_market_candidates,
+            select_candidate_item,
+            run_candidate_cycle,
+        )
+
+        # ----------------------------------------------------
+        # Route Engineバージョン
+        # ----------------------------------------------------
+
+        check(
+            ROUTE_ENGINE_VERSION == "1.0",
+            "route_engine:version",
+            str(ROUTE_ENGINE_VERSION),
+        )
+
+        # ----------------------------------------------------
+        # 理論最適ルート
+        #
+        # 検証済み経路：
+        #
+        # 100
+        #   ↓ わら
+        # 150
+        #   ↓ 雑貨セット
+        # 600
+        #   ↓ 中古CDセット
+        # 1200
+        #   ↓ コレクターソフト
+        # 10000
+        #   ↓ 中古カメラ
+        # 100000
+        #   ↓ 限定家電
+        # 1000000
+        # ----------------------------------------------------
+
+        expected_route = {
+            100: (
+                "わら",
+                150,
+            ),
+            150: (
+                "雑貨セット",
+                600,
+            ),
+            600: (
+                "中古CDセット",
+                1200,
+            ),
+            1200: (
+                "コレクターソフト",
+                10000,
+            ),
+            10000: (
+                "中古カメラ",
+                100000,
+            ),
+            100000: (
+                "限定家電",
+                1000000,
+            ),
+        }
+
+        for capital, (
+            expected_name,
+            expected_next,
+        ) in expected_route.items():
+
+            candidate = select_candidate_item(
+                capital,
+                "route",
+            )
+
+            valid = (
+                isinstance(candidate, dict)
+                and candidate.get("name")
+                == expected_name
+                and candidate.get(
+                    "expected_sale_price"
+                )
+                == expected_next
+                and isinstance(
+                    candidate.get(
+                        "route_goal_probability"
+                    ),
+                    (int, float),
+                )
+            )
+
+            check(
+                valid,
+                f"route_engine:capital_{capital}",
+                (
+                    "OK"
+                    if valid
+                    else str(candidate)
+                ),
+            )
+
+        # ----------------------------------------------------
+        # 100円からの理論到達確率
+        #
+        # 0.875875%
+        # = 0.00875875
+        # ----------------------------------------------------
+
+        theoretical_probability = (
+            calculate_goal_probability(
+                100,
+                TARGET,
+                evaluate_market_candidates,
+            )
+        )
+
+        theoretical_valid = (
+            abs(
+                theoretical_probability
+                - 0.00875875
+            )
+            < 1e-12
+        )
+
+        check(
+            theoretical_valid,
+            "route_engine:theoretical_goal_probability",
+            (
+                f"{theoretical_probability * 100:.6f}%"
+            ),
+        )
+
+        # ----------------------------------------------------
+        # Route Engine直接選択
+        # ----------------------------------------------------
+
+        direct_candidate = (
+            select_route_candidate(
+                capital=100,
+                target=TARGET,
+                candidate_provider=(
+                    evaluate_market_candidates
+                ),
+            )
+        )
+
+        direct_valid = (
+            isinstance(
+                direct_candidate,
+                dict,
+            )
+            and direct_candidate.get(
+                "name"
+            )
+            == "わら"
+            and direct_candidate.get(
+                "expected_sale_price"
+            )
+            == 150
+            and abs(
+                direct_candidate.get(
+                    "route_goal_probability",
+                    0,
+                )
+                - 0.00875875
+            )
+            < 1e-12
+        )
+
+        check(
+            direct_valid,
+            "route_engine:direct_selection",
+            (
+                "OK"
+                if direct_valid
+                else str(direct_candidate)
+            ),
+        )
+
+        # ----------------------------------------------------
+        # Simulation Engineとの統合
+        #
+        # 乱数結果そのものは検証しない。
+        # Route戦略として正常に1サイクル動作することを
+        # 確認する。
+        # ----------------------------------------------------
+
+        cycle = run_candidate_cycle(
+            "route"
+        )
+
+        cycle_valid = (
+            isinstance(cycle, dict)
+            and cycle.get("status")
+            in {
+                "goal_reached",
+                "failed",
+                "no_candidate",
+                "max_steps_reached",
+            }
+            and isinstance(
+                cycle.get("history"),
+                list,
+            )
+        )
+
+        check(
+            cycle_valid,
+            "run_candidate_cycle:route",
+            (
+                cycle.get(
+                    "status",
+                    "invalid",
+                )
+                if isinstance(
+                    cycle,
+                    dict,
+                )
+                else "invalid result"
+            ),
+        )
+
+        # ----------------------------------------------------
+        # Route情報が履歴へ保存されること
+        # ----------------------------------------------------
+
+        history = (
+            cycle.get(
+                "history",
+                [],
+            )
+            if isinstance(
+                cycle,
+                dict,
+            )
+            else []
+        )
+
+        history_valid = (
+            len(history) > 0
+        )
+
+        for trade in history:
+
+            if (
+                trade.get("strategy")
+                != "route"
+                or "route_goal_probability"
+                not in trade
+                or "route_future_probability"
+                not in trade
+                or trade.get(
+                    "route_engine_version"
+                )
+                != "1.0"
+            ):
+                history_valid = False
+                break
+
+        check(
+            history_valid,
+            "run_candidate_cycle:route_history",
+            (
+                "OK"
+                if history_valid
+                else str(history)
+            ),
+        )
+
+    except Exception:
+        check(
+            False,
+            "route_engine_tests",
+            traceback.format_exc(),
+        )
+
+
+# ============================================================
+# Demand Engine
+# ============================================================
 
 def test_demand_engine():
     try:
@@ -287,6 +620,10 @@ def test_demand_engine():
             traceback.format_exc(),
         )
 
+
+# ============================================================
+# Value Engine
+# ============================================================
 
 def test_value_engine():
     try:
@@ -420,6 +757,10 @@ def test_value_engine():
         )
 
 
+# ============================================================
+# Candidate Engine
+# ============================================================
+
 def test_candidate_engine():
     try:
         from candidate_engine import create_candidate
@@ -501,6 +842,10 @@ def test_candidate_engine():
             traceback.format_exc(),
         )
 
+
+# ============================================================
+# Ranking Engine
+# ============================================================
 
 def test_ranking_engine():
     try:
@@ -608,6 +953,9 @@ def test_ranking_engine():
         )
 
 
+# ============================================================
+# Candidate Pipeline
+# ============================================================
 
 def test_candidate_pipeline():
     try:
@@ -633,7 +981,10 @@ def test_candidate_pipeline():
             ),
         ]
 
-        result = evaluate_candidates(candidates, current_capital=10000)
+        result = evaluate_candidates(
+            candidates,
+            current_capital=10000
+        )
 
         valid = (
             isinstance(result, dict)
@@ -646,7 +997,11 @@ def test_candidate_pipeline():
             and result.get("best_candidate") is not None
         )
 
-        check(valid, "candidate_pipeline:basic", "OK" if valid else str(result))
+        check(
+            valid,
+            "candidate_pipeline:basic",
+            "OK" if valid else str(result)
+        )
 
         best = result.get("best_candidate")
         ranked = result.get("ranked_candidates", [])
@@ -659,7 +1014,11 @@ def test_candidate_pipeline():
             and ranked[0].get("rank") == 1
         )
 
-        check(ranking_valid, "candidate_pipeline:best_candidate", "OK" if ranking_valid else str(result))
+        check(
+            ranking_valid,
+            "candidate_pipeline:best_candidate",
+            "OK" if ranking_valid else str(result)
+        )
 
         integration_valid = (
             isinstance(best.get("demand"), dict)
@@ -669,10 +1028,23 @@ def test_candidate_pipeline():
             and isinstance(best.get("score"), (int, float))
         )
 
-        check(integration_valid, "candidate_pipeline:integration", "OK" if integration_valid else str(best))
+        check(
+            integration_valid,
+            "candidate_pipeline:integration",
+            "OK" if integration_valid else str(best)
+        )
 
     except Exception:
-        check(False, "candidate_pipeline", traceback.format_exc())
+        check(
+            False,
+            "candidate_pipeline",
+            traceback.format_exc()
+        )
+
+
+# ============================================================
+# 既存Strategy単発シミュレーション
+# ============================================================
 
 def test_strategy_single_cycle():
     try:
@@ -724,6 +1096,10 @@ def test_strategy_single_cycle():
             traceback.format_exc(),
         )
 
+
+# ============================================================
+# Campaign Engine
+# ============================================================
 
 def test_campaign_engine():
     try:
@@ -832,6 +1208,10 @@ def test_campaign_engine():
         )
 
 
+# ============================================================
+# Strategy API
+# ============================================================
+
 def test_strategy_api():
     try:
         from strategy_api import (
@@ -861,6 +1241,10 @@ def test_strategy_api():
         )
 
 
+# ============================================================
+# Candidate API
+# ============================================================
+
 def test_candidate_api():
     try:
         from candidate_api import candidate_bp
@@ -878,6 +1262,10 @@ def test_candidate_api():
             traceback.format_exc(),
         )
 
+
+# ============================================================
+# Flask API
+# ============================================================
 
 def test_flask_api():
     try:
@@ -934,6 +1322,9 @@ def test_flask_api():
         )
 
 
+# ============================================================
+# Candidate Evaluate API
+# ============================================================
 
 def test_candidate_evaluate_api():
     try:
@@ -1003,6 +1394,10 @@ def test_candidate_evaluate_api():
         }
 
 
+# ============================================================
+# Main
+# ============================================================
+
 def main():
     print("=" * 60)
     print("Warashibe AI 現行構成 一括テスト")
@@ -1011,6 +1406,10 @@ def main():
     test_syntax()
     test_imports()
     test_strategy_engine()
+
+    # Route Engine
+    test_route_engine()
+
     test_demand_engine()
     test_value_engine()
     test_candidate_engine()
