@@ -2,48 +2,58 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.7
+# Risk-sensitive Route Experiment v0.8
 #
-# Recovery / Salvage Value Sensitivity Analysis
+# Recovery Transition Model
 #
 # 目的：
 #
-#   Failure = 全損
+#   v0.7まではRecovery ValueをEconomic Lossの軽減にのみ
+#   使用していた。
 #
-# という現在の単純モデルを拡張し、
+#   v0.8では失敗時のRecovery Capitalを実際の次状態として扱う。
 #
-#   failure_loss
-#       = capital * (1 - recovery_rate)
+#   Action:
 #
-# としてRecovery Rateの影響を観察する。
+#       success ->
+#           expected_sale_price
 #
-# このv0.7ではRecovery Rateは全商品共通。
+#       failure ->
+#           capital * recovery_rate
 #
-#   0%
-#   25%
-#   50%
-#   75%
-#   90%
+#   Recovery Capitalから再び市場探索を行う。
 #
-# を比較する。
+#   したがって状態遷移は：
+#
+#       V(capital)
+#           =
+#           max_action [
+#               p_success * V(success_capital)
+#               +
+#               p_failure * V(recovery_capital)
+#           ]
+#
+#   target以上：
+#
+#       V(capital) = 1
+#
+#   購入可能Candidateなし：
+#
+#       V(capital) = 0
+#
+#   success/failureによって以前の状態へ戻る可能性があるため、
+#   単純な再帰DPではなくValue Iterationを使用する。
 #
 # 重要：
 #
-#   この実験ではRecovery Capitalを次の取引へ
-#   再投入しない。
-#
-#   Goal Probabilityは従来モデルのまま。
-#
-#   Recovery RateはEconomic Lossだけに作用する。
-#
-# これはTransition Modelではなく、
-# Economic Loss Sensitivity Analysisである。
-#
-# Route Engine v1.1.1は変更しない。
+#   ・Recovery Rateはまだ全商品共通
+#   ・取引手数料なし
+#   ・時間コストなし
+#   ・商品別Recoveryなし
+#   ・Route Engine v1.1.1は変更しない
+#   ・実験のみ
 #
 # ============================================================
-
-import math
 
 from candidate_strategy_adapter import (
     filter_by_price_band,
@@ -60,13 +70,15 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.7"
+EXPERIMENT_VERSION = "0.8"
 
 START_CAPITAL = 100
 
-MAX_ROUTE_STEPS = 20
-
 FLOAT_TOLERANCE = 1e-12
+
+VALUE_ITERATION_TOLERANCE = 1e-14
+
+MAX_VALUE_ITERATIONS = 100000
 
 
 RECOVERY_RATES = (
@@ -96,6 +108,22 @@ def to_float(
         return default
 
 
+def normalize_capital(
+    capital,
+):
+    value = to_float(
+        capital
+    )
+
+    if value <= 0:
+        return 0.0
+
+    return round(
+        value,
+        8,
+    )
+
+
 # ============================================================
 # Candidate Helpers
 # ============================================================
@@ -118,56 +146,43 @@ def get_success_probability(
     )
 
 
-def get_next_capital(
+def get_success_capital(
     candidate,
 ):
-    return to_float(
+    return normalize_capital(
         candidate.get(
             "expected_sale_price"
         )
     )
 
 
-def get_risk_level(
+def get_purchase_price(
     candidate,
 ):
-    route_risk = candidate.get(
-        "route_risk_level"
-    )
-
-    if route_risk is not None:
-        return str(
-            route_risk
+    return normalize_capital(
+        candidate.get(
+            "purchase_price"
         )
-
-    risk = candidate.get(
-        "risk",
-        {},
     )
-
-    if isinstance(
-        risk,
-        dict,
-    ):
-        risk_level = risk.get(
-            "risk_level"
-        )
-
-        if risk_level is not None:
-            return str(
-                risk_level
-            )
-
-    return "unknown"
 
 
 # ============================================================
-# Market Candidates
+# Candidate Provider
 # ============================================================
 
 def get_price_band_candidates(
     capital,
 ):
+    capital = normalize_capital(
+        capital
+    )
+
+    if capital <= 0:
+        return []
+
+    if capital >= TARGET:
+        return []
+
     result = evaluate_market_candidates(
         capital
     )
@@ -203,13 +218,25 @@ def get_price_band_candidates(
         ):
             continue
 
-        next_capital = (
-            get_next_capital(
+        purchase_price = (
+            get_purchase_price(
                 candidate
             )
         )
 
-        if next_capital <= capital:
+        success_capital = (
+            get_success_capital(
+                candidate
+            )
+        )
+
+        if purchase_price <= 0:
+            continue
+
+        if purchase_price > capital:
+            continue
+
+        if success_capital <= capital:
             continue
 
         valid.append(
@@ -220,182 +247,15 @@ def get_price_band_candidates(
 
 
 # ============================================================
-# Current Route
+# Recovery Transition
 # ============================================================
 
-def build_current_route(
-    start_capital,
-    target,
-):
-    route = []
-
-    capital = to_float(
-        start_capital
-    )
-
-    visited = set()
-
-    for _ in range(
-        MAX_ROUTE_STEPS
-    ):
-        if capital >= target:
-            break
-
-        if capital <= 0:
-            break
-
-        if capital in visited:
-            break
-
-        visited.add(
-            capital
-        )
-
-        candidate = (
-            select_route_candidate(
-                capital=capital,
-                target=target,
-                candidate_provider=(
-                    evaluate_market_candidates
-                ),
-            )
-        )
-
-        if not isinstance(
-            candidate,
-            dict,
-        ):
-            break
-
-        next_capital = (
-            get_next_capital(
-                candidate
-            )
-        )
-
-        if next_capital <= capital:
-            break
-
-        route.append(
-            candidate
-        )
-
-        capital = next_capital
-
-    return route
-
-
-# ============================================================
-# Exhaustive Route Search
-# ============================================================
-
-def enumerate_routes(
+def get_recovery_capital(
     capital,
-    target,
-    route=None,
-    visited=None,
+    recovery_rate,
 ):
-    if route is None:
-        route = []
-
-    if visited is None:
-        visited = set()
-
-    capital = to_float(
+    capital = normalize_capital(
         capital
-    )
-
-    if capital >= target:
-        return [
-            list(
-                route
-            )
-        ]
-
-    if capital <= 0:
-        return []
-
-    if len(
-        route
-    ) >= MAX_ROUTE_STEPS:
-        return []
-
-    if capital in visited:
-        return []
-
-    next_visited = set(
-        visited
-    )
-
-    next_visited.add(
-        capital
-    )
-
-    candidates = (
-        get_price_band_candidates(
-            capital
-        )
-    )
-
-    if not candidates:
-        return []
-
-    routes = []
-
-    for candidate in candidates:
-        next_capital = (
-            get_next_capital(
-                candidate
-            )
-        )
-
-        if next_capital <= capital:
-            continue
-
-        next_route = (
-            list(
-                route
-            )
-            + [
-                candidate
-            ]
-        )
-
-        if next_capital >= target:
-            routes.append(
-                next_route
-            )
-
-            continue
-
-        child_routes = (
-            enumerate_routes(
-                next_capital,
-                target,
-                route=next_route,
-                visited=next_visited,
-            )
-        )
-
-        routes.extend(
-            child_routes
-        )
-
-    return routes
-
-
-# ============================================================
-# Route Analysis
-# ============================================================
-
-def analyze_route(
-    start_capital,
-    route,
-    target,
-    recovery_rate=0.0,
-):
-    capital = to_float(
-        start_capital
     )
 
     recovery_rate = max(
@@ -408,455 +268,669 @@ def analyze_route(
         ),
     )
 
-    reach_probability = 1.0
+    return normalize_capital(
+        capital
+        * recovery_rate
+    )
 
-    total_failure_probability = 0.0
 
-    expected_loss = 0.0
+# ============================================================
+# Reachable State Discovery
+# ============================================================
 
-    stages = []
+def discover_states(
+    start_capital,
+    recovery_rate,
+):
+    start_capital = normalize_capital(
+        start_capital
+    )
 
-    completed = False
+    pending = [
+        start_capital
+    ]
 
-    for step, candidate in enumerate(
-        route,
-        start=1,
-    ):
-        success_probability = (
-            get_success_probability(
-                candidate
+    discovered = set()
+
+    transitions = {}
+
+    while pending:
+        capital = normalize_capital(
+            pending.pop()
+        )
+
+        if capital in discovered:
+            continue
+
+        discovered.add(
+            capital
+        )
+
+        if capital >= TARGET:
+            transitions[
+                capital
+            ] = []
+
+            continue
+
+        candidates = (
+            get_price_band_candidates(
+                capital
             )
         )
 
-        failure_probability = (
-            1.0
-            - success_probability
-        )
+        state_actions = []
 
-        next_capital = (
-            get_next_capital(
-                candidate
+        for candidate in candidates:
+            success_capital = (
+                get_success_capital(
+                    candidate
+                )
             )
-        )
 
-        journey_failure_probability = (
-            reach_probability
-            * failure_probability
-        )
+            recovery_capital = (
+                get_recovery_capital(
+                    capital,
+                    recovery_rate,
+                )
+            )
 
-        recovery_value = (
-            capital
-            * recovery_rate
-        )
+            success_probability = (
+                get_success_probability(
+                    candidate
+                )
+            )
 
-        failure_loss = (
-            capital
-            - recovery_value
-        )
-
-        weighted_loss = (
-            journey_failure_probability
-            * failure_loss
-        )
-
-        total_failure_probability += (
-            journey_failure_probability
-        )
-
-        expected_loss += (
-            weighted_loss
-        )
-
-        stages.append(
-            {
-                "step": step,
-                "capital": capital,
+            action = {
                 "name": candidate.get(
                     "name"
                 ),
-                "next_capital": (
-                    next_capital
-                ),
+                "candidate": candidate,
                 "success_probability": (
                     success_probability
                 ),
                 "failure_probability": (
-                    failure_probability
+                    1.0
+                    - success_probability
                 ),
-                "reach_probability": (
-                    reach_probability
+                "success_capital": (
+                    success_capital
                 ),
-                "journey_failure_probability": (
-                    journey_failure_probability
-                ),
-                "recovery_rate": (
-                    recovery_rate
-                ),
-                "recovery_value": (
-                    recovery_value
-                ),
-                "failure_loss": (
-                    failure_loss
-                ),
-                "weighted_loss": (
-                    weighted_loss
-                ),
-                "risk_level": (
-                    get_risk_level(
-                        candidate
-                    )
+                "recovery_capital": (
+                    recovery_capital
                 ),
             }
+
+            state_actions.append(
+                action
+            )
+
+            if (
+                success_capital
+                not in discovered
+            ):
+                pending.append(
+                    success_capital
+                )
+
+            if (
+                recovery_capital
+                not in discovered
+            ):
+                pending.append(
+                    recovery_capital
+                )
+
+        transitions[
+            capital
+        ] = state_actions
+
+    return (
+        discovered,
+        transitions,
+    )
+
+
+# ============================================================
+# Value Iteration
+# ============================================================
+
+def solve_reachability(
+    start_capital,
+    recovery_rate,
+):
+    (
+        states,
+        transitions,
+    ) = discover_states(
+        start_capital,
+        recovery_rate,
+    )
+
+    values = {}
+
+    for capital in states:
+        if capital >= TARGET:
+            values[
+                capital
+            ] = 1.0
+
+        else:
+            values[
+                capital
+            ] = 0.0
+
+    policy = {}
+
+    converged = False
+
+    iterations = 0
+
+    final_delta = None
+
+    for iteration in range(
+        1,
+        MAX_VALUE_ITERATIONS + 1,
+    ):
+        new_values = dict(
+            values
         )
 
-        reach_probability *= (
-            success_probability
-        )
+        new_policy = {}
 
-        capital = next_capital
+        max_delta = 0.0
 
-        if capital >= target:
-            completed = True
+        for capital in states:
+            if capital >= TARGET:
+                new_values[
+                    capital
+                ] = 1.0
+
+                continue
+
+            actions = transitions.get(
+                capital,
+                [],
+            )
+
+            if not actions:
+                new_values[
+                    capital
+                ] = 0.0
+
+                continue
+
+            best_value = -1.0
+
+            best_action = None
+
+            for action in actions:
+                success_probability = (
+                    action[
+                        "success_probability"
+                    ]
+                )
+
+                failure_probability = (
+                    action[
+                        "failure_probability"
+                    ]
+                )
+
+                success_capital = (
+                    action[
+                        "success_capital"
+                    ]
+                )
+
+                recovery_capital = (
+                    action[
+                        "recovery_capital"
+                    ]
+                )
+
+                success_value = (
+                    1.0
+                    if success_capital >= TARGET
+                    else values.get(
+                        success_capital,
+                        0.0,
+                    )
+                )
+
+                recovery_value = (
+                    1.0
+                    if recovery_capital >= TARGET
+                    else values.get(
+                        recovery_capital,
+                        0.0,
+                    )
+                )
+
+                action_value = (
+                    success_probability
+                    * success_value
+                    +
+                    failure_probability
+                    * recovery_value
+                )
+
+                if (
+                    action_value
+                    > best_value
+                    + FLOAT_TOLERANCE
+                ):
+                    best_value = (
+                        action_value
+                    )
+
+                    best_action = action
+
+                elif (
+                    abs(
+                        action_value
+                        - best_value
+                    )
+                    <= FLOAT_TOLERANCE
+                    and best_action is not None
+                ):
+                    current_success = (
+                        success_probability
+                    )
+
+                    best_success = (
+                        best_action[
+                            "success_probability"
+                        ]
+                    )
+
+                    if (
+                        current_success
+                        > best_success
+                        + FLOAT_TOLERANCE
+                    ):
+                        best_value = (
+                            action_value
+                        )
+
+                        best_action = action
+
+            if best_value < 0:
+                best_value = 0.0
+
+            new_values[
+                capital
+            ] = best_value
+
+            if best_action is not None:
+                new_policy[
+                    capital
+                ] = best_action
+
+            delta = abs(
+                new_values[
+                    capital
+                ]
+                - values.get(
+                    capital,
+                    0.0,
+                )
+            )
+
+            if delta > max_delta:
+                max_delta = delta
+
+        values = new_values
+
+        policy = new_policy
+
+        iterations = iteration
+
+        final_delta = max_delta
+
+        if (
+            max_delta
+            < VALUE_ITERATION_TOLERANCE
+        ):
+            converged = True
             break
 
-        if capital <= 0:
-            break
-
-    if completed:
-        goal_probability = (
-            reach_probability
-        )
-
-    else:
-        goal_probability = 0.0
+    start_value = values.get(
+        normalize_capital(
+            start_capital
+        ),
+        0.0,
+    )
 
     return {
-        "completed": completed,
-        "steps": len(
-            stages
-        ),
-        "goal_probability": (
-            goal_probability
-        ),
-        "failure_probability": (
-            1.0
-            - goal_probability
-        ),
-        "observed_failure_probability": (
-            total_failure_probability
-        ),
-        "probability_total": (
-            total_failure_probability
-            + goal_probability
-        ),
         "recovery_rate": (
             recovery_rate
         ),
-        "expected_economic_loss_per_journey": (
-            expected_loss
+        "states": states,
+        "transitions": transitions,
+        "values": values,
+        "policy": policy,
+        "start_value": (
+            start_value
         ),
-        "stages": stages,
+        "iterations": (
+            iterations
+        ),
+        "final_delta": (
+            final_delta
+        ),
+        "converged": (
+            converged
+        ),
     }
 
 
 # ============================================================
-# Long-run Metrics
+# Current Route Engine Policy
 # ============================================================
 
-def calculate_long_run_metrics(
-    analysis,
+def get_current_route_action(
+    capital,
 ):
-    p = analysis[
-        "goal_probability"
-    ]
-
-    if p <= 0:
-        return {
-            "expected_journeys_to_goal": (
-                math.inf
+    candidate = (
+        select_route_candidate(
+            capital=capital,
+            target=TARGET,
+            candidate_provider=(
+                evaluate_market_candidates
             ),
-            "expected_failures_before_goal": (
-                math.inf
-            ),
-            "conditional_loss_given_failure": (
-                math.inf
-            ),
-            "expected_economic_loss_until_goal": (
-                math.inf
-            ),
-        }
-
-    expected_journeys = (
-        1.0
-        / p
-    )
-
-    expected_failures = (
-        (
-            1.0
-            - p
         )
-        / p
     )
 
-    loss_per_journey = (
-        analysis[
-            "expected_economic_loss_per_journey"
-        ]
-    )
-
-    failure_probability = (
-        1.0
-        - p
-    )
-
-    if failure_probability > 0:
-        conditional_loss_given_failure = (
-            loss_per_journey
-            / failure_probability
-        )
-
-    else:
-        conditional_loss_given_failure = 0.0
-
-    expected_loss_until_goal = (
-        loss_per_journey
-        / p
-    )
+    if not isinstance(
+        candidate,
+        dict,
+    ):
+        return None
 
     return {
-        "expected_journeys_to_goal": (
-            expected_journeys
-        ),
-        "expected_failures_before_goal": (
-            expected_failures
-        ),
-        "conditional_loss_given_failure": (
-            conditional_loss_given_failure
-        ),
-        "expected_economic_loss_until_goal": (
-            expected_loss_until_goal
-        ),
-    }
-
-
-# ============================================================
-# Route Records
-# ============================================================
-
-def create_route_record(
-    route,
-    recovery_rate=0.0,
-):
-    analysis = (
-        analyze_route(
-            START_CAPITAL,
-            route,
-            TARGET,
-            recovery_rate,
-        )
-    )
-
-    long_run = (
-        calculate_long_run_metrics(
-            analysis
-        )
-    )
-
-    return {
-        "route": route,
-        "analysis": analysis,
-        "long_run": long_run,
-    }
-
-
-def route_signature(
-    record,
-):
-    return tuple(
-        (
-            stage[
-                "capital"
-            ],
-            stage[
-                "name"
-            ],
-            stage[
-                "next_capital"
-            ],
-        )
-        for stage in record[
-            "analysis"
-        ][
-            "stages"
-        ]
-    )
-
-
-def route_names(
-    record,
-):
-    return " -> ".join(
-        stage[
+        "name": candidate.get(
             "name"
-        ]
-        for stage in record[
-            "analysis"
-        ][
-            "stages"
-        ]
+        ),
+        "candidate": candidate,
+        "success_probability": (
+            get_success_probability(
+                candidate
+            )
+        ),
+        "failure_probability": (
+            1.0
+            - get_success_probability(
+                candidate
+            )
+        ),
+        "success_capital": (
+            get_success_capital(
+                candidate
+            )
+        ),
+    }
+
+
+# ============================================================
+# Fixed-policy Reachability
+# ============================================================
+
+def solve_current_policy(
+    start_capital,
+    recovery_rate,
+):
+    (
+        states,
+        transitions,
+    ) = discover_states(
+        start_capital,
+        recovery_rate,
     )
 
+    values = {}
 
-def make_unique_records(
-    routes,
-    recovery_rate=0.0,
-):
-    records = []
+    for capital in states:
+        if capital >= TARGET:
+            values[
+                capital
+            ] = 1.0
 
-    seen = set()
+        else:
+            values[
+                capital
+            ] = 0.0
 
-    for route in routes:
-        record = (
-            create_route_record(
-                route,
-                recovery_rate,
-            )
-        )
+    policy = {}
 
-        signature = (
-            route_signature(
-                record
-            )
-        )
-
-        if signature in seen:
+    for capital in states:
+        if capital >= TARGET:
             continue
 
-        seen.add(
-            signature
+        actions = transitions.get(
+            capital,
+            [],
         )
 
-        records.append(
-            record
+        if not actions:
+            continue
+
+        selected = (
+            get_current_route_action(
+                capital
+            )
         )
 
-    return records
+        if selected is None:
+            continue
 
+        selected_name = selected.get(
+            "name"
+        )
 
-# ============================================================
-# Basic Optima
-# ============================================================
+        matching = None
 
-def find_best_goal_route(
-    records,
-):
-    return max(
-        records,
-        key=lambda record: (
-            record[
-                "analysis"
-            ][
-                "goal_probability"
-            ],
-            -record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
-            ],
+        for action in actions:
+            if (
+                action.get(
+                    "name"
+                )
+                == selected_name
+            ):
+                matching = action
+                break
+
+        if matching is not None:
+            policy[
+                capital
+            ] = matching
+
+    converged = False
+
+    iterations = 0
+
+    final_delta = None
+
+    for iteration in range(
+        1,
+        MAX_VALUE_ITERATIONS + 1,
+    ):
+        new_values = dict(
+            values
+        )
+
+        max_delta = 0.0
+
+        for capital in states:
+            if capital >= TARGET:
+                new_values[
+                    capital
+                ] = 1.0
+
+                continue
+
+            action = policy.get(
+                capital
+            )
+
+            if action is None:
+                new_values[
+                    capital
+                ] = 0.0
+
+                continue
+
+            p = action[
+                "success_probability"
+            ]
+
+            q = action[
+                "failure_probability"
+            ]
+
+            success_capital = action[
+                "success_capital"
+            ]
+
+            recovery_capital = action[
+                "recovery_capital"
+            ]
+
+            success_value = (
+                1.0
+                if success_capital >= TARGET
+                else values.get(
+                    success_capital,
+                    0.0,
+                )
+            )
+
+            recovery_value = (
+                1.0
+                if recovery_capital >= TARGET
+                else values.get(
+                    recovery_capital,
+                    0.0,
+                )
+            )
+
+            new_value = (
+                p
+                * success_value
+                +
+                q
+                * recovery_value
+            )
+
+            new_values[
+                capital
+            ] = new_value
+
+            delta = abs(
+                new_value
+                - values.get(
+                    capital,
+                    0.0,
+                )
+            )
+
+            if delta > max_delta:
+                max_delta = delta
+
+        values = new_values
+
+        iterations = iteration
+
+        final_delta = max_delta
+
+        if (
+            max_delta
+            < VALUE_ITERATION_TOLERANCE
+        ):
+            converged = True
+            break
+
+    return {
+        "recovery_rate": (
+            recovery_rate
         ),
-    )
-
-
-def find_lowest_loss_route(
-    records,
-):
-    return min(
-        records,
-        key=lambda record: (
-            record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
-            ],
-            -record[
-                "analysis"
-            ][
-                "goal_probability"
-            ],
+        "states": states,
+        "transitions": transitions,
+        "values": values,
+        "policy": policy,
+        "start_value": values.get(
+            normalize_capital(
+                start_capital
+            ),
+            0.0,
         ),
-    )
+        "iterations": (
+            iterations
+        ),
+        "final_delta": (
+            final_delta
+        ),
+        "converged": (
+            converged
+        ),
+    }
 
 
 # ============================================================
-# Recovery Sensitivity
+# Policy Display
 # ============================================================
 
-def analyze_recovery_scenarios(
-    routes,
+def get_policy_rows(
+    result,
 ):
-    results = []
+    rows = []
 
-    for recovery_rate in RECOVERY_RATES:
-        records = (
-            make_unique_records(
-                routes,
-                recovery_rate,
-            )
-        )
+    policy = result[
+        "policy"
+    ]
 
-        best_goal = (
-            find_best_goal_route(
-                records
-            )
-        )
+    values = result[
+        "values"
+    ]
 
-        lowest_loss = (
-            find_lowest_loss_route(
-                records
-            )
-        )
+    for capital in sorted(
+        policy.keys()
+    ):
+        action = policy[
+            capital
+        ]
 
-        results.append(
+        rows.append(
             {
-                "recovery_rate": (
-                    recovery_rate
+                "capital": (
+                    capital
                 ),
-                "records": records,
-                "best_goal": (
-                    best_goal
+                "name": action[
+                    "name"
+                ],
+                "success_probability": (
+                    action[
+                        "success_probability"
+                    ]
                 ),
-                "lowest_loss": (
-                    lowest_loss
+                "success_capital": (
+                    action[
+                        "success_capital"
+                    ]
+                ),
+                "recovery_capital": (
+                    action[
+                        "recovery_capital"
+                    ]
+                ),
+                "value": values.get(
+                    capital,
+                    0.0,
                 ),
             }
         )
 
-    return results
-
-
-# ============================================================
-# Current Route Recovery Analysis
-# ============================================================
-
-def analyze_current_route_recovery(
-    current_route,
-):
-    results = []
-
-    for recovery_rate in RECOVERY_RATES:
-        record = (
-            create_route_record(
-                current_route,
-                recovery_rate,
-            )
-        )
-
-        results.append(
-            record
-        )
-
-    return results
+    return rows
 
 
 # ============================================================
@@ -898,121 +972,103 @@ def print_header():
     )
 
     print(
-        "Search             : "
-        "Exhaustive Route Enumeration"
+        "Model              : "
+        "Recovery Transition"
     )
 
     print(
-        "Experiment         : "
-        "Recovery / Salvage Sensitivity"
+        "Solver             : "
+        "Value Iteration"
     )
 
     print(
-        "Goal Model         : "
+        "Production Engine  : "
         "UNCHANGED"
     )
 
     print(
-        "Recovery Transition: "
-        "DISABLED"
+        "=" * 92
+    )
+
+
+def print_summary(
+    results,
+):
+    print()
+
+    print(
+        "RECOVERY TRANSITION SUMMARY"
     )
 
     print(
         "=" * 92
     )
 
-
-def print_current_route(
-    current_route,
-):
-    record = (
-        create_route_record(
-            current_route,
-            0.0,
-        )
-    )
-
-    print()
-
-    print(
-        "CURRENT ROUTE"
-    )
-
-    print(
-        "-" * 92
-    )
-
-    print(
-        f"Route : "
-        f"{route_names(record)}"
-    )
-
-    print(
-        f"Goal  : "
-        f"{record['analysis']['goal_probability'] * 100:.6f}%"
-    )
-
-    print(
-        f"Steps : "
-        f"{record['analysis']['steps']}"
-    )
-
-    print(
-        "-" * 92
-    )
-
-
-def print_current_route_recovery(
-    records,
-):
-    print()
-
-    print(
-        "CURRENT ROUTE - RECOVERY SENSITIVITY"
-    )
-
-    print(
-        "=" * 92
-    )
-
-    for record in records:
-        analysis = record[
-            "analysis"
+    for item in results:
+        recovery_rate = item[
+            "recovery_rate"
         ]
 
-        long_run = record[
-            "long_run"
+        current = item[
+            "current"
         ]
 
-        recovery_rate = (
-            analysis[
-                "recovery_rate"
+        optimal = item[
+            "optimal"
+        ]
+
+        improvement = (
+            optimal[
+                "start_value"
+            ]
+            - current[
+                "start_value"
             ]
         )
 
         print(
-            f"Recovery Rate  : "
+            f"Recovery Rate       : "
             f"{recovery_rate * 100:.0f}%"
         )
 
         print(
-            f"Goal           : "
-            f"{analysis['goal_probability'] * 100:.6f}%"
+            f"Reachable States    : "
+            f"{len(optimal['states'])}"
         )
 
         print(
-            f"Loss/Journey   : "
-            f"{analysis['expected_economic_loss_per_journey']:,.4f}"
+            f"Current Policy Goal : "
+            f"{current['start_value'] * 100:.6f}%"
         )
 
         print(
-            f"Loss/Failure   : "
-            f"{long_run['conditional_loss_given_failure']:,.4f}"
+            f"Optimal Policy Goal : "
+            f"{optimal['start_value'] * 100:.6f}%"
         )
 
         print(
-            f"Loss Until Goal: "
-            f"{long_run['expected_economic_loss_until_goal']:,.4f}"
+            f"Improvement         : "
+            f"{improvement * 100:.6f} pp"
+        )
+
+        print(
+            f"Current Iterations  : "
+            f"{current['iterations']}"
+        )
+
+        print(
+            f"Optimal Iterations  : "
+            f"{optimal['iterations']}"
+        )
+
+        print(
+            f"Current Converged   : "
+            f"{current['converged']}"
+        )
+
+        print(
+            f"Optimal Converged   : "
+            f"{optimal['converged']}"
         )
 
         print(
@@ -1020,89 +1076,67 @@ def print_current_route_recovery(
         )
 
 
-def print_global_recovery_results(
-    scenario_results,
+def print_policy(
+    title,
+    result,
 ):
     print()
 
     print(
-        "ALL ROUTES - RECOVERY SENSITIVITY"
+        title
     )
 
     print(
         "=" * 92
     )
 
-    for scenario in scenario_results:
-        recovery_rate = (
-            scenario[
-                "recovery_rate"
-            ]
-        )
+    print(
+        f"Recovery Rate : "
+        f"{result['recovery_rate'] * 100:.0f}%"
+    )
 
-        best_goal = (
-            scenario[
-                "best_goal"
-            ]
-        )
+    print(
+        f"Start Goal    : "
+        f"{result['start_value'] * 100:.6f}%"
+    )
 
-        lowest_loss = (
-            scenario[
-                "lowest_loss"
-            ]
-        )
+    print(
+        f"States        : "
+        f"{len(result['states'])}"
+    )
 
+    print(
+        f"Iterations    : "
+        f"{result['iterations']}"
+    )
+
+    print(
+        "-" * 92
+    )
+
+    rows = get_policy_rows(
+        result
+    )
+
+    for row in rows:
         print(
-            f"RECOVERY RATE : "
-            f"{recovery_rate * 100:.0f}%"
+            f"Capital "
+            f"{row['capital']:>10,.2f} "
+            f"| "
+            f"{row['name']:<12} "
+            f"| p="
+            f"{row['success_probability'] * 100:>6.2f}% "
+            f"| success="
+            f"{row['success_capital']:>10,.2f} "
+            f"| recovery="
+            f"{row['recovery_capital']:>10,.2f} "
+            f"| V="
+            f"{row['value'] * 100:>9.6f}%"
         )
 
-        print(
-            f"Complete Routes: "
-            f"{len(scenario['records'])}"
-        )
-
-        print(
-            "Best Goal Route"
-        )
-
-        print(
-            f"  Route : "
-            f"{route_names(best_goal)}"
-        )
-
-        print(
-            f"  Goal  : "
-            f"{best_goal['analysis']['goal_probability'] * 100:.6f}%"
-        )
-
-        print(
-            f"  Loss  : "
-            f"{best_goal['long_run']['expected_economic_loss_until_goal']:,.4f}"
-        )
-
-        print(
-            "Lowest Loss Route"
-        )
-
-        print(
-            f"  Route : "
-            f"{route_names(lowest_loss)}"
-        )
-
-        print(
-            f"  Goal  : "
-            f"{lowest_loss['analysis']['goal_probability'] * 100:.6f}%"
-        )
-
-        print(
-            f"  Loss  : "
-            f"{lowest_loss['long_run']['expected_economic_loss_until_goal']:,.4f}"
-        )
-
-        print(
-            "-" * 92
-        )
+    print(
+        "-" * 92
+    )
 
 
 # ============================================================
@@ -1110,188 +1144,151 @@ def print_global_recovery_results(
 # ============================================================
 
 def validate(
-    routes,
-    current_route,
-    current_recovery_results,
-    scenario_results,
+    results,
 ):
     errors = []
 
     if len(
-        routes
-    ) != 89:
-        errors.append(
-            "Complete route count changed: "
-            f"{len(routes)}"
-        )
-
-    expected_names = [
-        "わら",
-        "雑貨セット",
-        "中古CDセット",
-        "コレクターソフト",
-        "中古カメラ",
-        "限定家電",
-    ]
-
-    baseline_record = (
-        create_route_record(
-            current_route,
-            0.0,
-        )
-    )
-
-    current_names = [
-        stage[
-            "name"
-        ]
-        for stage in baseline_record[
-            "analysis"
-        ][
-            "stages"
-        ]
-    ]
-
-    if current_names != expected_names:
-        errors.append(
-            "Current route changed: "
-            f"{current_names}"
-        )
-
-    expected_goal = (
-        0.00875875
-    )
-
-    actual_goal = (
-        baseline_record[
-            "analysis"
-        ][
-            "goal_probability"
-        ]
-    )
-
-    if (
-        abs(
-            actual_goal
-            - expected_goal
-        )
-        > FLOAT_TOLERANCE
+        results
+    ) != len(
+        RECOVERY_RATES
     ):
         errors.append(
-            "Current goal probability changed"
+            "Recovery scenario count mismatch"
         )
 
-    expected_baseline_loss = (
-        418753.2468
-    )
+    baseline = None
 
-    actual_baseline_loss = (
-        baseline_record[
-            "long_run"
-        ][
-            "expected_economic_loss_until_goal"
+    for item in results:
+        recovery_rate = item[
+            "recovery_rate"
         ]
-    )
 
-    if (
-        abs(
-            actual_baseline_loss
-            - expected_baseline_loss
-        )
-        > 0.01
-    ):
+        current = item[
+            "current"
+        ]
+
+        optimal = item[
+            "optimal"
+        ]
+
+        if not current[
+            "converged"
+        ]:
+            errors.append(
+                f"Current policy did not converge "
+                f"at recovery={recovery_rate}"
+            )
+
+        if not optimal[
+            "converged"
+        ]:
+            errors.append(
+                f"Optimal policy did not converge "
+                f"at recovery={recovery_rate}"
+            )
+
+        if (
+            optimal[
+                "start_value"
+            ]
+            + FLOAT_TOLERANCE
+            < current[
+                "start_value"
+            ]
+        ):
+            errors.append(
+                f"Optimal policy worse than current "
+                f"at recovery={recovery_rate}"
+            )
+
+        if (
+            current[
+                "start_value"
+            ]
+            < -FLOAT_TOLERANCE
+            or current[
+                "start_value"
+            ]
+            > 1.0
+            + FLOAT_TOLERANCE
+        ):
+            errors.append(
+                "Invalid current probability"
+            )
+
+        if (
+            optimal[
+                "start_value"
+            ]
+            < -FLOAT_TOLERANCE
+            or optimal[
+                "start_value"
+            ]
+            > 1.0
+            + FLOAT_TOLERANCE
+        ):
+            errors.append(
+                "Invalid optimal probability"
+            )
+
+        if (
+            abs(
+                recovery_rate
+            )
+            <= FLOAT_TOLERANCE
+        ):
+            baseline = item
+
+    if baseline is None:
         errors.append(
-            "0% recovery baseline loss changed: "
-            f"{actual_baseline_loss}"
+            "0% recovery baseline missing"
         )
 
-    baseline_goal = (
-        baseline_record[
-            "analysis"
-        ][
-            "goal_probability"
-        ]
-    )
+    else:
+        expected_baseline = (
+            0.00875875
+        )
 
-    baseline_loss = (
-        baseline_record[
-            "long_run"
-        ][
-            "expected_economic_loss_until_goal"
-        ]
-    )
-
-    for record in current_recovery_results:
-        recovery_rate = (
-            record[
-                "analysis"
+        current_baseline = (
+            baseline[
+                "current"
             ][
-                "recovery_rate"
+                "start_value"
             ]
         )
 
-        goal = (
-            record[
-                "analysis"
+        optimal_baseline = (
+            baseline[
+                "optimal"
             ][
-                "goal_probability"
-            ]
-        )
-
-        loss = (
-            record[
-                "long_run"
-            ][
-                "expected_economic_loss_until_goal"
+                "start_value"
             ]
         )
 
         if (
             abs(
-                goal
-                - baseline_goal
+                current_baseline
+                - expected_baseline
             )
-            > FLOAT_TOLERANCE
+            > 1e-10
         ):
             errors.append(
-                "Recovery changed Goal Probability"
+                "0% current-policy baseline changed: "
+                f"{current_baseline}"
             )
-
-            break
-
-        expected_loss = (
-            baseline_loss
-            * (
-                1.0
-                - recovery_rate
-            )
-        )
 
         if (
             abs(
-                loss
-                - expected_loss
+                optimal_baseline
+                - expected_baseline
             )
-            > 0.01
+            > 1e-10
         ):
             errors.append(
-                "Recovery loss scaling failed "
-                f"at {recovery_rate}"
+                "0% optimal-policy baseline changed: "
+                f"{optimal_baseline}"
             )
-
-            break
-
-    for scenario in scenario_results:
-        if len(
-            scenario[
-                "records"
-            ]
-        ) != 89:
-            errors.append(
-                "Scenario route count changed"
-            )
-
-            break
 
     return errors
 
@@ -1303,56 +1300,75 @@ def validate(
 def main():
     print_header()
 
-    routes = (
-        enumerate_routes(
-            START_CAPITAL,
-            TARGET,
-        )
-    )
+    results = []
 
-    if not routes:
-        print(
-            "No complete routes found."
+    for recovery_rate in RECOVERY_RATES:
+        current = (
+            solve_current_policy(
+                START_CAPITAL,
+                recovery_rate,
+            )
         )
 
-        raise SystemExit(1)
-
-    current_route = (
-        build_current_route(
-            START_CAPITAL,
-            TARGET,
+        optimal = (
+            solve_reachability(
+                START_CAPITAL,
+                recovery_rate,
+            )
         )
-    )
 
-    current_recovery_results = (
-        analyze_current_route_recovery(
-            current_route
+        results.append(
+            {
+                "recovery_rate": (
+                    recovery_rate
+                ),
+                "current": current,
+                "optimal": optimal,
+            }
         )
+
+    print_summary(
+        results
     )
 
-    scenario_results = (
-        analyze_recovery_scenarios(
-            routes
-        )
-    )
+    # RecoveryによってPolicyがどう変わるかを見るため、
+    # 50%と90%だけ詳細表示する。
 
-    print_current_route(
-        current_route
-    )
+    for item in results:
+        recovery_rate = item[
+            "recovery_rate"
+        ]
 
-    print_current_route_recovery(
-        current_recovery_results
-    )
+        if (
+            abs(
+                recovery_rate
+                - 0.50
+            )
+            <= FLOAT_TOLERANCE
+        ):
+            print_policy(
+                "OPTIMAL POLICY - 50% RECOVERY",
+                item[
+                    "optimal"
+                ],
+            )
 
-    print_global_recovery_results(
-        scenario_results
-    )
+        if (
+            abs(
+                recovery_rate
+                - 0.90
+            )
+            <= FLOAT_TOLERANCE
+        ):
+            print_policy(
+                "OPTIMAL POLICY - 90% RECOVERY",
+                item[
+                    "optimal"
+                ],
+            )
 
     errors = validate(
-        routes,
-        current_route,
-        current_recovery_results,
-        scenario_results,
+        results
     )
 
     print()
@@ -1386,19 +1402,20 @@ def main():
     )
 
     print(
-        "Current Route Engine behavior unchanged."
+        "Route Engine v1.1.1 unchanged."
     )
 
     print(
-        "Recovery sensitivity model verified."
+        "0% recovery baseline preserved."
     )
 
     print(
-        "Goal Probability intentionally unchanged."
+        "Recovery transition reachability solved."
     )
 
     print(
-        "Recovery transition intentionally disabled."
+        "Optimal policy dominates or equals "
+        "current policy."
     )
 
     print(
