@@ -19,11 +19,12 @@ def run_command(args):
 
 def run_cycle():
     checks = [run_command([sys.executable, "-m", "research_lab.test_lab"]),
-              run_command([sys.executable, "-m", "research_lab.test_storage"])]
+              run_command([sys.executable, "-m", "research_lab.test_storage"]),
+              run_command([sys.executable, "-m", "research_lab.speed_experiment"])]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "autonomous_lab_foundation", "next_theme": "speed_metrics", "checks": checks}
+                "stage": "speed_metrics", "next_theme": "transaction_costs", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "latest.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUTPUT / "latest.md").write_text("# Warashibe AI Lab — Latest Run\n\n"
