@@ -1,4 +1,31 @@
-from flask import Blueprint, jsonify, request, render_template_string
+# ============================================================
+# Warashibe AI
+# strategy_api.py
+#
+# v1.2
+#
+# 役割：
+# ・戦略系API
+# ・単発シミュレーション
+# ・キャンペーンシミュレーション
+# ・戦略比較
+# ・人間向け戦略レポート
+#
+# 対応戦略：
+# ・random
+# ・safe
+# ・balanced
+# ・aggressive
+# ・adaptive
+# ・route
+# ============================================================
+
+from flask import (
+    Blueprint,
+    jsonify,
+    request,
+    render_template_string,
+)
 
 from market_engine import MARKET
 from policy_engine import POLICY_VERSION, START_CAPITAL
@@ -15,13 +42,19 @@ from campaign_engine import (
 )
 
 
-VERSION = "1.1"
+# ============================================================
+# 基本設定
+# ============================================================
+
+VERSION = "1.2"
 
 STRATEGIES = (
     "random",
     "safe",
     "balanced",
     "aggressive",
+    "adaptive",
+    "route",
 )
 
 
@@ -36,6 +69,10 @@ strategy_bp = Blueprint(
 # ============================================================
 
 def get_strategy():
+    """
+    URLクエリからstrategyを取得して正規化する。
+    """
+
     strategy = request.args.get(
         "strategy",
         "random"
@@ -53,6 +90,11 @@ def get_bounded_int(
     minimum,
     maximum
 ):
+    """
+    URLクエリから整数値を取得し、
+    指定範囲内か検証する。
+    """
+
     value = request.args.get(name)
 
     if value is None:
@@ -60,6 +102,7 @@ def get_bounded_int(
 
     try:
         value = int(value)
+
     except (ValueError, TypeError):
         return None
 
@@ -70,10 +113,16 @@ def get_bounded_int(
 
 
 def strategy_error():
+    """
+    不正なstrategy指定時の共通エラー。
+    """
+
     return jsonify({
         "error": (
             "strategy が不正です。"
-            "使用可能: random, safe, balanced, aggressive"
+            "使用可能: "
+            "random, safe, balanced, aggressive, "
+            "adaptive, route"
         )
     }), 400
 
@@ -82,6 +131,11 @@ def strategy_error():
 # /journey
 #
 # 1回のわらしべ挑戦
+#
+# 例：
+#
+# /journey?strategy=route
+# /journey?strategy=adaptive
 # ============================================================
 
 @strategy_bp.route("/journey")
@@ -108,6 +162,10 @@ def journey():
 # /simulate
 #
 # 単体シミュレーション
+#
+# 例：
+#
+# /simulate?strategy=route&simulations=10000
 # ============================================================
 
 @strategy_bp.route("/simulate")
@@ -217,7 +275,7 @@ def simulate():
 # 例：
 #
 # /campaign/simulate
-#     ?strategy=balanced
+#     ?strategy=route
 #     &campaigns=1000
 #     &max_cycles=10
 #
@@ -275,7 +333,15 @@ def campaign_simulate():
 # ============================================================
 # /strategy/recommendation
 #
-# 4戦略を比較
+# 6戦略を比較
+#
+# random
+# safe
+# balanced
+# aggressive
+# adaptive
+# route
+#
 # 内部連携向けJSON
 # ============================================================
 
@@ -342,6 +408,8 @@ def strategy_recommendation():
 # /strategy/report
 #
 # 人間向け戦略レポート
+#
+# 6戦略比較
 # ============================================================
 
 @strategy_bp.route("/strategy/report")
