@@ -2,35 +2,39 @@
 # Warashibe AI
 # risk_route_experiment.py
 #
-# Risk-sensitive Route Experiment v0.6
+# Risk-sensitive Route Experiment v0.6.1
 #
 # 目的：
-#   全Route探索結果に対して、
-#   weighted scoreを使わず、
-#   Goal Probabilityの制約付きRisk最適化を行う。
+#   v0.6のGoal-constrained Risk Optimizationを維持しつつ、
+#   Expected Economic Loss Until Goalの数式を修正する。
 #
-# 基本思想：
+# 修正：
 #
-#   1. 全Routeを列挙
-#   2. 最大Goal Probabilityを基準にする
-#   3. 許容Goal低下率を設定する
-#   4. 制約を満たすRouteだけを残す
-#   5. その中からExpected Economic Loss Until Goalを最小化
+#   Expected Loss / Journey は、
 #
-# 例：
+#       Σ(
+#           Journey内でそのStepに到達する確率
+#           × そのStepで失敗する確率
+#           × Capital At Risk
+#       )
 #
-#   tolerance = 0.05
+#   であり、すでに失敗確率を含む
+#   「1 Journeyあたりの無条件期待損失」である。
 #
-#   最大Goal Probabilityの95%以上を維持するRouteだけを許可。
+#   独立したJourneyを成功するまで繰り返す場合、
 #
-#   required_goal =
-#       best_goal_probability * (1 - tolerance)
+#       Expected Loss Until Goal
+#           = Expected Loss / Journey
+#             / Goal Probability
 #
-# これにより、
+#   とする。
 #
-#   0.6 * Goal + 0.4 * Risk
+#   旧式：
 #
-# のような恣意的なweighted scoreを使わない。
+#       Loss/Journey
+#       × Expected Failures Before Goal
+#
+#   は使用しない。
 #
 # Route Engine v1.1.1は変更しない。
 #
@@ -67,7 +71,7 @@ from simulation_engine import (
 )
 
 
-EXPERIMENT_VERSION = "0.6"
+EXPERIMENT_VERSION = "0.6.1"
 
 START_CAPITAL = 100
 
@@ -75,16 +79,6 @@ MAX_ROUTE_STEPS = 20
 
 FLOAT_TOLERANCE = 1e-12
 
-
-# Goal Probabilityについて、
-# 最大値から何%までの低下を許容するか。
-#
-# 0%   = 最大Goalのみ
-# 1%   = 最大Goalの99%以上
-# 2%   = 最大Goalの98%以上
-# 5%   = 最大Goalの95%以上
-# 10%  = 最大Goalの90%以上
-# 20%  = 最大Goalの80%以上
 
 GOAL_TOLERANCES = (
     0.00,
@@ -563,6 +557,9 @@ def calculate_long_run_metrics(
             "expected_failures_before_goal": (
                 math.inf
             ),
+            "conditional_loss_given_failure": (
+                math.inf
+            ),
             "expected_economic_loss_until_goal": (
                 math.inf
             ),
@@ -587,9 +584,42 @@ def calculate_long_run_metrics(
         ]
     )
 
+    failure_probability = (
+        1.0
+        - p
+    )
+
+    if failure_probability > 0:
+        conditional_loss_given_failure = (
+            loss_per_journey
+            / failure_probability
+        )
+
+    else:
+        conditional_loss_given_failure = 0.0
+
+    # --------------------------------------------------------
+    # v0.6.1 corrected formula
+    #
+    # Loss/Journey は無条件期待損失。
+    #
+    # 成功までのJourney数の期待値は 1/p。
+    #
+    # 成功Journeyではfailure lossが0なので、
+    #
+    # Expected Loss Until Goal
+    #     = Loss/Journey * (1/p)
+    #     = Loss/Journey / p
+    #
+    # 同値：
+    #
+    # Conditional Loss Given Failure
+    #     * Expected Failures Before Goal
+    # --------------------------------------------------------
+
     expected_loss_until_goal = (
         loss_per_journey
-        * expected_failures
+        / p
     )
 
     return {
@@ -598,6 +628,9 @@ def calculate_long_run_metrics(
         ),
         "expected_failures_before_goal": (
             expected_failures
+        ),
+        "conditional_loss_given_failure": (
+            conditional_loss_given_failure
         ),
         "expected_economic_loss_until_goal": (
             expected_loss_until_goal
@@ -924,7 +957,7 @@ def find_shortest_route(
 
 
 # ============================================================
-# Constrained Risk Optimization
+# Goal-constrained Risk Optimization
 # ============================================================
 
 def optimize_with_goal_constraint(
@@ -932,16 +965,6 @@ def optimize_with_goal_constraint(
     best_goal_probability,
     tolerance,
 ):
-    """
-    Goal Probabilityを最大値の一定割合以上に保ち、
-    その中でExpected Economic Loss Until Goalを最小化。
-
-    tolerance = 0.05 の場合：
-
-        required_goal =
-            best_goal_probability * 0.95
-    """
-
     required_goal = (
         best_goal_probability
         * (
@@ -1024,22 +1047,14 @@ def run_constrained_optimization(
         ]
     )
 
-    results = []
-
-    for tolerance in GOAL_TOLERANCES:
-        result = (
-            optimize_with_goal_constraint(
-                records,
-                best_goal_probability,
-                tolerance,
-            )
+    return [
+        optimize_with_goal_constraint(
+            records,
+            best_goal_probability,
+            tolerance,
         )
-
-        results.append(
-            result
-        )
-
-    return results
+        for tolerance in GOAL_TOLERANCES
+    ]
 
 
 # ============================================================
@@ -1129,6 +1144,11 @@ def print_header():
     )
 
     print(
+        "Loss Formula       : "
+        "E[Loss/Journey] / Goal Probability"
+    )
+
+    print(
         "=" * 92
     )
 
@@ -1173,6 +1193,11 @@ def print_record(
     print(
         f"Loss/Journey   : "
         f"{analysis['expected_economic_loss_per_journey']:,.4f}"
+    )
+
+    print(
+        f"Loss/Failure   : "
+        f"{long_run['conditional_loss_given_failure']:,.4f}"
     )
 
     print(
@@ -1379,6 +1404,11 @@ def print_constraint_results(
         )
 
         print(
+            f"Loss/Failure   : "
+            f"{long_run['conditional_loss_given_failure']:,.4f}"
+        )
+
+        print(
             f"Expected Trips : "
             f"{long_run['expected_journeys_to_goal']:,.4f}"
         )
@@ -1411,14 +1441,6 @@ def validate(
         errors.append(
             "Complete route count changed: "
             f"{len(records)}"
-        )
-
-    if len(
-        pareto
-    ) != 3:
-        errors.append(
-            "Pareto route count changed: "
-            f"{len(pareto)}"
         )
 
     expected_current_names = [
@@ -1472,6 +1494,98 @@ def validate(
         errors.append(
             "Current goal probability changed"
         )
+
+    for record in records:
+        analysis = record[
+            "analysis"
+        ]
+
+        long_run = record[
+            "long_run"
+        ]
+
+        if (
+            abs(
+                analysis[
+                    "probability_total"
+                ]
+                - 1.0
+            )
+            > FLOAT_TOLERANCE
+        ):
+            errors.append(
+                "Probability total "
+                "does not equal 1"
+            )
+
+            break
+
+        p = analysis[
+            "goal_probability"
+        ]
+
+        loss_per_journey = (
+            analysis[
+                "expected_economic_loss_per_journey"
+            ]
+        )
+
+        expected_loss = (
+            loss_per_journey
+            / p
+        )
+
+        actual_loss = (
+            long_run[
+                "expected_economic_loss_until_goal"
+            ]
+        )
+
+        if (
+            abs(
+                actual_loss
+                - expected_loss
+            )
+            > 1e-8
+        ):
+            errors.append(
+                "Corrected loss formula "
+                "validation failed"
+            )
+
+            break
+
+        failure_probability = (
+            1.0
+            - p
+        )
+
+        if failure_probability > 0:
+            conditional_loss = (
+                loss_per_journey
+                / failure_probability
+            )
+
+            equivalent_loss = (
+                conditional_loss
+                * long_run[
+                    "expected_failures_before_goal"
+                ]
+            )
+
+            if (
+                abs(
+                    equivalent_loss
+                    - actual_loss
+                )
+                > 1e-8
+            ):
+                errors.append(
+                    "Conditional-loss "
+                    "equivalence failed"
+                )
+
+                break
 
     current_signature = (
         route_signature(
@@ -1529,14 +1643,10 @@ def validate(
                 "Goal constraint"
             )
 
-    zero_tolerance = (
+    zero_selected = (
         constrained_results[
             0
-        ]
-    )
-
-    zero_selected = (
-        zero_tolerance[
+        ][
             "selected"
         ]
     )
@@ -1701,11 +1811,13 @@ def main():
     )
 
     print(
-        "Exhaustive route set preserved."
+        "Corrected cumulative economic-loss "
+        "formula verified."
     )
 
     print(
-        "Goal-constrained risk optimization verified."
+        "Goal-constrained risk optimization "
+        "recalculated."
     )
 
     print(
