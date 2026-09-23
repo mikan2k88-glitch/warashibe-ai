@@ -4,7 +4,7 @@
 #
 # 現在のモジュール分割構成に対応した一括テスト
 #
-# Route Engine / 6戦略 Campaign 対応版
+# Route Engine / 6戦略 Campaign / Route API 対応版
 #
 # 実行：
 #     python test_runner.py
@@ -60,10 +60,16 @@ API_TESTS = [
     ("/", "home"),
     ("/docs", "docs"),
     ("/journey?strategy=balanced", "journey"),
+    ("/journey?strategy=route", "journey_route"),
     ("/simulate?strategy=balanced&simulations=3", "simulate"),
+    ("/simulate?strategy=route&simulations=3", "simulate_route"),
     (
         "/campaign/simulate?strategy=balanced&campaigns=100&max_cycles=2",
         "campaign_simulate",
+    ),
+    (
+        "/campaign/simulate?strategy=route&campaigns=3&max_cycles=2",
+        "campaign_simulate_route",
     ),
     (
         "/strategy/recommendation?campaigns=100&max_cycles=2",
@@ -1247,18 +1253,47 @@ def test_campaign_engine():
 # ============================================================
 # Strategy API
 #
-# strategy_api.py 側は次段階で6戦略へ更新するため、
-# 現段階ではBlueprintが正常に読み込めることを確認する。
+# strategy_api.py v1.2
+# 6戦略が正式公開されていることを確認する。
 # ============================================================
 
 def test_strategy_api():
     try:
-        from strategy_api import strategy_bp
+        from strategy_api import (
+            VERSION as STRATEGY_API_VERSION,
+            STRATEGIES as API_STRATEGIES,
+            strategy_bp,
+        )
 
         check(
             strategy_bp is not None,
             "strategy_api",
             "OK",
+        )
+
+        version_valid = (
+            STRATEGY_API_VERSION == "1.2"
+        )
+
+        check(
+            version_valid,
+            "strategy_api:version",
+            str(STRATEGY_API_VERSION),
+        )
+
+        strategies_valid = (
+            tuple(API_STRATEGIES)
+            == tuple(STRATEGIES)
+        )
+
+        check(
+            strategies_valid,
+            "strategy_api:strategy_list",
+            (
+                "6 strategies"
+                if strategies_valid
+                else str(API_STRATEGIES)
+            ),
         )
 
     except Exception:
