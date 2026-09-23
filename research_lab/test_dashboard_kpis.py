@@ -1,6 +1,6 @@
 """Tests for dashboard research KPIs."""
 
-from research_lab.dashboard_kpis import research_kpis
+from research_lab.dashboard_kpis import research_kpis, route_probability_series
 
 
 def run():
@@ -10,6 +10,10 @@ def run():
     assert k["best_goal_probability_percent"] >= k["baseline_goal_probability_percent"]
     assert k["best_conditional_transactions"] > 0
     assert k["scenario_count"] >= 1
+    series = route_probability_series()
+    assert len(series) == k["scenario_count"]
+    assert series[0]["recovery_rate_percent"] == 0
+    assert all(0 <= x["optimal_goal_probability_percent"] <= 100 for x in series)
 
 
 if __name__ == "__main__":
