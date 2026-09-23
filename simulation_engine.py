@@ -1,16 +1,20 @@
 # ============================================================
-# Warashibe AI v0.9
+# Warashibe AI v1.0
 # simulation_engine.py
 #
 # 役割：
 # ・1回のわらしべ挑戦
 # ・Candidate方式の実験
+# ・Route Ranking方式の実験
 #
 # キャンペーン：
 # ・campaign_engine.py
 #
 # 戦略：
 # ・strategy_engine.py
+#
+# Route：
+# ・route_engine.py
 #
 # Candidate評価：
 # ・market_candidate_adapter.py
@@ -34,6 +38,8 @@ from market_candidate_adapter import market_items_to_candidates
 from candidate_pipeline import evaluate_candidates
 from candidate_strategy_adapter import select_candidate
 
+from route_engine import select_route_candidate
+
 from analysis_engine import (
     create_analysis_stats,
     update_analysis_stats,
@@ -56,7 +62,7 @@ from strategy_engine import (
 # 基本設定
 # ============================================================
 
-VERSION = "0.9"
+VERSION = "1.0"
 
 TARGET = 1_000_000
 
@@ -72,8 +78,11 @@ def evaluate_market_candidates(capital):
     仮想市場の商品をCandidate形式へ変換し、
     Candidate Pipelineで評価する。
 
-    既存のsimulation_engineの
-    商品選択ロジックは変更しない。
+    既存のsimulation_engineの商品選択ロジックは
+    通常戦略について維持する。
+
+    Route戦略では、この関数をcandidate_providerとして
+    route_engine.pyへ渡す。
     """
 
     candidates = market_items_to_candidates(
@@ -96,6 +105,10 @@ def select_candidate_item(capital, strategy):
     現在資本に近い価格帯を優先したうえで
     Strategyに応じて1商品を選択する。
 
+    route戦略の場合は、
+    route_engine.pyを使用して
+    最終TARGET到達確率が最大となる候補を選択する。
+
     既存のrun_cycle()とは分離する。
     """
 
@@ -105,6 +118,21 @@ def select_candidate_item(capital, strategy):
 
     if strategy is None:
         return None
+
+    # ========================================================
+    # Route戦略
+    # ========================================================
+
+    if strategy == "route":
+        return select_route_candidate(
+            capital=capital,
+            target=TARGET,
+            candidate_provider=evaluate_market_candidates,
+        )
+
+    # ========================================================
+    # 既存戦略
+    # ========================================================
 
     effective_strategy = get_adaptive_strategy(
         capital
@@ -146,6 +174,10 @@ def run_candidate_cycle(
     Candidate Pipelineで評価し、
     現在資本に最も近い価格帯へ絞り込み、
     Strategyにより次の商品を選択する。
+
+    route戦略では、
+    最終TARGET到達確率が最大となる
+    Route Ranking候補を選択する。
 
     失敗：
         status = failed
@@ -207,7 +239,9 @@ def run_candidate_cycle(
                 "steps": step - 1,
                 "history": history,
                 "failure_reason": "no_candidate",
-                "analysis_stats": finalize_analysis_stats(analysis_stats),
+                "analysis_stats": finalize_analysis_stats(
+                    analysis_stats
+                ),
             }
 
         # ----------------------------------------------------
@@ -287,6 +321,41 @@ def run_candidate_cycle(
             )
 
         # ----------------------------------------------------
+        # Route情報
+        # ----------------------------------------------------
+
+        if strategy == "route":
+
+            trade["route_goal_probability"] = (
+                candidate.get(
+                    "route_goal_probability",
+                    0
+                )
+            )
+
+            trade["route_goal_probability_percent"] = round(
+                candidate.get(
+                    "route_goal_probability",
+                    0
+                ) * 100,
+                6
+            )
+
+            trade["route_future_probability"] = (
+                candidate.get(
+                    "route_future_probability",
+                    0
+                )
+            )
+
+            trade["route_engine_version"] = (
+                candidate.get(
+                    "route_engine_version",
+                    ""
+                )
+            )
+
+        # ----------------------------------------------------
         # 成功
         # ----------------------------------------------------
 
@@ -326,7 +395,9 @@ def run_candidate_cycle(
                             history
                         ),
                     "analysis_stats":
-                        finalize_analysis_stats(analysis_stats),
+                        finalize_analysis_stats(
+                            analysis_stats
+                        ),
                 }
 
         # ----------------------------------------------------
@@ -356,7 +427,9 @@ def run_candidate_cycle(
                 "history": history,
                 "failure_reason": "trade_failed",
                 "analysis_stats":
-                    finalize_analysis_stats(analysis_stats),
+                    finalize_analysis_stats(
+                        analysis_stats
+                    ),
             }
 
     # ========================================================
@@ -376,7 +449,9 @@ def run_candidate_cycle(
         "history": history,
         "failure_reason": "max_steps_reached",
         "analysis_stats":
-            finalize_analysis_stats(analysis_stats),
+            finalize_analysis_stats(
+                analysis_stats
+            ),
     }
 
 
@@ -467,6 +542,10 @@ def run_cycle(
     1回分のわらしべ挑戦を実行する。
 
     既存のシミュレーションルールを維持する。
+
+    注意：
+    route戦略はCandidate Pipelineを必要とするため、
+    run_candidate_cycle()側で使用する。
     """
 
     strategy = normalize_strategy(
@@ -481,6 +560,16 @@ def run_cycle(
             "history": [],
             "failure_reason": "invalid_strategy",
         }
+
+    # ========================================================
+    # RouteはCandidate方式専用
+    # ========================================================
+
+    if strategy == "route":
+        return run_candidate_cycle(
+            strategy,
+            analysis_stats
+        )
 
     capital = START_CAPITAL
     history = []
@@ -624,7 +713,9 @@ def run_cycle(
                             history
                         ),
                     "analysis_stats":
-                        finalize_analysis_stats(analysis_stats),
+                        finalize_analysis_stats(
+                            analysis_stats
+                        ),
                 }
 
         else:
@@ -651,7 +742,9 @@ def run_cycle(
                 "failure_reason":
                     "trade_failed",
                 "analysis_stats":
-                    finalize_analysis_stats(analysis_stats),
+                    finalize_analysis_stats(
+                        analysis_stats
+                    ),
             }
 
     update_analysis_stats(
