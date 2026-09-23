@@ -26,11 +26,12 @@ def run_cycle():
               run_command([sys.executable, "-m", "research_lab.test_real_market_source"]),
               run_command([sys.executable, "-m", "research_lab.test_market_evidence"]),
               run_command([sys.executable, "-m", "research_lab.test_evidence_candidate_pipeline"]),
-              run_command([sys.executable, "-m", "research_lab.test_real_market_route_bridge"])]
+              run_command([sys.executable, "-m", "research_lab.test_real_market_route_bridge"]),
+              run_command([sys.executable, "-m", "research_lab.test_route_evidence_uncertainty"])]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "real_market_route_bridge", "next_theme": "route_evidence_uncertainty", "checks": checks}
+                "stage": "route_evidence_uncertainty", "next_theme": "calibrated_uncertainty_sets", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "latest.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUTPUT / "latest.md").write_text("# Warashibe AI Lab — Latest Run\n\n"
