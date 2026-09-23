@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, render_template_string
 
 from research_lab import LAB_VERSION
 from research_lab.config import LAB_BRANCH, PRODUCTION_BRANCH, RESEARCH_TRACKS
+from research_lab.dashboard_kpis import research_kpis
 from research_lab.storage import ResearchRepository
 
 lab_bp = Blueprint("research_lab", __name__)
@@ -36,6 +37,11 @@ code{color:#b7c7ff}@media(max-width:700px){.wrap{padding:16px}th:nth-child(3),td
 </div>
 <div class="card"><div class="muted">研究フロー</div><div class="flow"><div class="node">Evidence</div><div class="arrow">→</div><div class="node">Raw outcomes</div><div class="arrow">→</div><div class="node">Bayesian posterior</div><div class="arrow">→</div><div class="node">Route uncertainty</div><div class="arrow">→</div><div class="node">Ranking</div></div></div>
 <div class="grid"><div class="card"><div class="muted">安定版</div><div class="big">{{ production }}</div></div><div class="card"><div class="muted">研究版</div><div class="big">{{ branch }}</div></div><div class="card"><div class="muted">記録済み実験</div><div class="big">{{ stats.total }}</div></div><div class="card"><div class="muted">最終更新</div><div>{{ snapshot.generated_at }}</div></div></div>
+<h2>研究KPI</h2><div class="grid">
+<div class="card"><div class="muted">BASELINE GOAL</div><div class="big">{{ "%.4f"|format(kpis.baseline_goal_probability_percent) }}%</div></div>
+<div class="card"><div class="muted">BEST GOAL</div><div class="big ok">{{ "%.2f"|format(kpis.best_goal_probability_percent) }}%</div></div>
+<div class="card"><div class="muted">RECOVERY</div><div class="big">{{ "%.0f"|format(kpis.best_recovery_rate_percent) }}%</div></div>
+<div class="card"><div class="muted">TX | GOAL</div><div class="big">{{ "%.1f"|format(kpis.best_conditional_transactions) }}</div></div></div>
 <h2>研究履歴</h2>
 <div class="card"><div class="muted">CHECK PASS RATE · 直近{{ history|length }}サイクル</div>
 {% if history %}<div class="chart">{% for h in history %}<div class="col" title="{{ h.generated_at }} · {{ h.check_percent }}%" style="height:{{ h.check_percent }}%"></div>{% endfor %}</div>
@@ -84,7 +90,7 @@ def dashboard():
     repository = _repo()
     return render_template_string(TEMPLATE, version=LAB_VERSION, production=PRODUCTION_BRANCH,
         branch=LAB_BRANCH, tracks=RESEARCH_TRACKS, stats=repository.stats(),
-        experiments=repository.recent(20), snapshot=_snapshot(), history=_history())
+        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis())
 
 
 @lab_bp.route("/lab/api/status")
@@ -92,4 +98,4 @@ def status():
     repository = _repo()
     return jsonify({"lab_version": LAB_VERSION, "production_branch": PRODUCTION_BRANCH,
         "research_branch": LAB_BRANCH, "tracks": RESEARCH_TRACKS, "snapshot": _snapshot(),
-        "stats": repository.stats(), "history": _history(), "recent_experiments": repository.recent(20)})
+        "stats": repository.stats(), "kpis": research_kpis(), "history": _history(), "recent_experiments": repository.recent(20)})
