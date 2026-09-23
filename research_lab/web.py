@@ -12,6 +12,7 @@ from research_lab.dashboard_kpis import research_kpis, route_probability_series
 from research_lab.dashboard_uncertainty import demo_uncertainty_metrics
 from research_lab.storage import ResearchRepository
 from research_lab.github_actions_bridge import live_snapshot, workflow_runs
+from research_lab.live_outcome_store import OutcomeStore
 
 lab_bp = Blueprint("research_lab", __name__)
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,7 +50,7 @@ code{color:#b7c7ff}@media(max-width:700px){.wrap{padding:16px}th:nth-child(3),td
 <div class="muted">Recovery率別 · Current policy / Optimal policy</div>
 <div class="probchart">{% for p in probabilities %}<div><div class="probgroup"><div class="pbar current" title="Current {{ '%.2f'|format(p.current_goal_probability_percent) }}%" style="height:{{ p.current_goal_probability_percent }}%"></div><div class="pbar optimal" title="Optimal {{ '%.2f'|format(p.optimal_goal_probability_percent) }}%" style="height:{{ p.optimal_goal_probability_percent }}%"></div></div><div class="plabel">{{ "%.0f"|format(p.recovery_rate_percent) }}%</div></div>{% endfor %}</div>
 <div class="legend"><span>■ Current</span><span>■ Optimal</span><span>横軸: Recovery率</span></div></div>
-<h2>不確実性モニター</h2><div class="grid">
+<h2>不確実性モニター</h2><div class="card"><div class="muted">OUTCOME DATA MODE</div><div class="big">{{ outcome_stats.mode|upper }}</div><div class="muted">{{ outcome_stats.total }} outcomes · {{ outcome_stats.opportunities }} opportunities</div></div><div class="grid">
 <div class="card"><div class="muted">PRIOR</div><div class="big">{{ "%.1f"|format(uncertainty.prior_probability_percent) }}%</div></div>
 <div class="card"><div class="muted">POSTERIOR</div><div class="big">{{ "%.1f"|format(uncertainty.posterior_probability_percent) }}%</div></div>
 <div class="card"><div class="muted">CONSERVATIVE</div><div class="big warn">{{ "%.1f"|format(uncertainty.conservative_probability_percent) }}%</div></div>
@@ -114,7 +115,7 @@ def dashboard():
     repository = _repo()
     return render_template_string(TEMPLATE, version=LAB_VERSION, production=PRODUCTION_BRANCH,
         branch=LAB_BRANCH, tracks=RESEARCH_TRACKS, stats=repository.stats(),
-        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis(), probabilities=route_probability_series(), uncertainty=demo_uncertainty_metrics())
+        experiments=repository.recent(20), snapshot=_snapshot(), history=_history(), kpis=research_kpis(), probabilities=route_probability_series(), uncertainty=demo_uncertainty_metrics(), outcome_stats=OutcomeStore().stats())
 
 
 @lab_bp.route("/lab/api/status")
@@ -122,4 +123,4 @@ def status():
     repository = _repo()
     return jsonify({"lab_version": LAB_VERSION, "production_branch": PRODUCTION_BRANCH,
         "research_branch": LAB_BRANCH, "tracks": RESEARCH_TRACKS, "snapshot": _snapshot(),
-        "stats": repository.stats(), "kpis": research_kpis(), "route_probabilities": route_probability_series(), "uncertainty": demo_uncertainty_metrics(), "history": _history(), "recent_experiments": repository.recent(20)})
+        "stats": repository.stats(), "kpis": research_kpis(), "route_probabilities": route_probability_series(), "uncertainty": demo_uncertainty_metrics(), "outcome_store": OutcomeStore().stats(), "history": _history(), "recent_experiments": repository.recent(20)})
