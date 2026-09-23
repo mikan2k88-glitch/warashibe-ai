@@ -2,7 +2,7 @@
 # Warashibe AI
 # route_engine.py
 #
-# Route Engine v1.1
+# Route Engine v1.1.1
 #
 # 目的：
 #
@@ -29,7 +29,7 @@ from candidate_strategy_adapter import (
 )
 
 
-ROUTE_ENGINE_VERSION = "1.1"
+ROUTE_ENGINE_VERSION = "1.1.1"
 
 
 # ============================================================
@@ -167,7 +167,18 @@ def get_value_exchange_potential(candidate):
 # ============================================================
 
 def get_risk_level(candidate):
-    risk_level = candidate.get(
+    risk = candidate.get(
+        "risk",
+        {},
+    )
+
+    if not isinstance(
+        risk,
+        dict,
+    ):
+        return "unknown"
+
+    risk_level = risk.get(
         "risk_level"
     )
 
@@ -549,6 +560,7 @@ def calculate_route_steps_to_target(
 
         if future_steps is None:
             steps = None
+
         else:
             steps = (
                 1
