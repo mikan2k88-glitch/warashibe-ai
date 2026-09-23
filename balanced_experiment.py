@@ -5,14 +5,20 @@
 # Balanced v2 重み探索実験
 #
 # 目的：
-# Ranking Engine 通過後の Candidate score と
-# 成功率 confidence の重みを変えて、
-# 100万円到達率がどのように変化するか比較する。
+#
+# B0:
+#     現在の Warashibe AI 本体の Balanced を
+#     select_candidate_item() 経由で直接実行する。
+#
+# B1～B10:
+#     Ranking Engine 通過後の Candidate score と
+#     confidence を重み付きで合成する
+#     Balanced v2 を実験する。
 #
 # 実行：
 #     python balanced_experiment.py
 #
-# 既存ファイルは変更しません。
+# 既存の本体ファイルは変更しない。
 # ============================================================
 
 import random
@@ -23,9 +29,12 @@ from simulation_engine import (
     TARGET,
     MAX_STEPS,
     evaluate_market_candidates,
+    select_candidate_item,
 )
 
-from candidate_strategy_adapter import filter_by_price_band
+from candidate_strategy_adapter import (
+    filter_by_price_band,
+)
 
 
 # ============================================================
@@ -41,12 +50,10 @@ SIMULATIONS = 10000
 # candidate_weight + confidence_weight = 1.0
 #
 # B0_current:
-#     現行 Balanced
-#     Candidate score が最も高い候補を選択
+#     現行本体 Balanced
 #
 # B1～B10:
-#     Candidate score を 0～1 に正規化し、
-#     confidence と重み付き合成
+#     Candidate score と confidence の重み付き合成
 # ============================================================
 
 WEIGHT_PATTERNS = {
@@ -71,12 +78,13 @@ WEIGHT_PATTERNS = {
 def normalize_candidate_scores(candidates):
     """
     同じ価格帯の候補について、
-    Candidate score を 0.0 ～ 1.0 に正規化する。
+    Ranking Engine の Candidate score を
+    0.0 ～ 1.0 に正規化する。
 
-    最大スコア候補 = 1.0
-    最小スコア候補 = 0.0
+    最大スコア = 1.0
+    最小スコア = 0.0
 
-    全候補が同点の場合は 0.5 とする。
+    全候補が同点の場合は 0.5。
     """
 
     if not candidates:
@@ -96,7 +104,10 @@ def normalize_candidate_scores(candidates):
         item = dict(candidate)
 
         score = float(
-            candidate.get("score", 0)
+            candidate.get(
+                "score",
+                0,
+            )
         )
 
         if maximum == minimum:
@@ -107,9 +118,9 @@ def normalize_candidate_scores(candidates):
                 / (maximum - minimum)
             )
 
-        item["normalized_candidate_score"] = (
-            normalized_score
-        )
+        item[
+            "normalized_candidate_score"
+        ] = normalized_score
 
         normalized.append(item)
 
@@ -117,34 +128,37 @@ def normalize_candidate_scores(candidates):
 
 
 # ============================================================
-# 現行 Balanced 選択
+# Balanced v2 用 Candidate 取得
 # ============================================================
 
-def select_current_balanced(candidates):
+def get_ranked_candidates_for_capital(
+    capital,
+):
     """
-    現行 Balanced の挙動を再現する。
+    Balanced v2 専用。
 
-    Candidate score が最も高い候補を選択。
-    同点の場合は confidence、
-    さらに同点の場合は expected_sale_price を見る。
+    Candidate Pipeline の ranked_candidates を取得し、
+    Warashibeルールに従って
+    現在資本で購入可能な最高価格帯だけ残す。
+
+    B0_current ではこの関数を使用しない。
     """
 
-    if not candidates:
-        return None
-
-    return max(
-        candidates,
-        key=lambda candidate: (
-            float(candidate.get("score", 0)),
-            float(candidate.get("confidence", 0)),
-            float(
-                candidate.get(
-                    "expected_sale_price",
-                    0,
-                )
-            ),
-        ),
+    result = evaluate_market_candidates(
+        capital
     )
+
+    candidates = result.get(
+        "ranked_candidates",
+        [],
+    )
+
+    candidates = filter_by_price_band(
+        candidates,
+        capital,
+    )
+
+    return candidates
 
 
 # ============================================================
@@ -157,21 +171,26 @@ def select_weighted_balanced(
     confidence_weight,
 ):
     """
-    Balanced v2
+    Balanced v2。
 
-    normalized_candidate_score と confidence を
-    指定された重みで合成する。
+    Candidate score を正規化した値と
+    confidence を合成する。
 
     balanced_v2_score =
-        normalized_candidate_score * candidate_weight
-        + confidence * confidence_weight
+        normalized_candidate_score
+        * candidate_weight
+        +
+        confidence
+        * confidence_weight
     """
 
     if not candidates:
         return None
 
     normalized_candidates = (
-        normalize_candidate_scores(candidates)
+        normalize_candidate_scores(
+            candidates
+        )
     )
 
     scored_candidates = []
@@ -194,23 +213,24 @@ def select_weighted_balanced(
         balanced_score = (
             normalized_score
             * candidate_weight
-            + confidence
+            +
+            confidence
             * confidence_weight
         )
 
         item = dict(candidate)
 
-        item["balanced_v2_score"] = (
-            balanced_score
-        )
+        item[
+            "balanced_v2_score"
+        ] = balanced_score
 
-        item["candidate_weight"] = (
-            candidate_weight
-        )
+        item[
+            "candidate_weight"
+        ] = candidate_weight
 
-        item["confidence_weight"] = (
-            confidence_weight
-        )
+        item[
+            "confidence_weight"
+        ] = confidence_weight
 
         scored_candidates.append(item)
 
@@ -240,67 +260,51 @@ def select_weighted_balanced(
 
 
 # ============================================================
-# 指定資本で候補取得
-# ============================================================
-
-def get_candidates_for_capital(capital):
-    """
-    Candidate Pipeline を通した候補を取得する。
-
-    重要：
-    allowed ではなく ranked_candidates を使用する。
-
-    allowed は Ranking Engine 通過前なので
-    score が付いていない。
-
-    ranked_candidates は Ranking Engine 通過後なので
-    score / rank が付いている。
-
-    その後、Warashibeルールに従い、
-    現在資本で購入可能な中の
-    最も高い価格帯だけを残す。
-    """
-
-    result = evaluate_market_candidates(
-        capital
-    )
-
-    candidates = result.get(
-        "ranked_candidates",
-        []
-    )
-
-    candidates = filter_by_price_band(
-        candidates,
-        capital,
-    )
-
-    return candidates
-
-
-# ============================================================
-# 候補選択
+# 実験候補選択
 # ============================================================
 
 def select_experiment_candidate(
     capital,
     weight_pattern,
 ):
-    candidates = get_candidates_for_capital(
-        capital
+    """
+    B0:
+        Warashibe AI 本体の Balanced を直接呼ぶ。
+
+    B1～B10:
+        Balanced v2 の実験ロジックを使用。
+    """
+
+    # --------------------------------------------------------
+    # B0 = 現行本体 Balanced
+    # --------------------------------------------------------
+
+    if weight_pattern is None:
+        return select_candidate_item(
+            capital,
+            "balanced",
+        )
+
+    # --------------------------------------------------------
+    # B1～B10 = Balanced v2
+    # --------------------------------------------------------
+
+    candidates = (
+        get_ranked_candidates_for_capital(
+            capital
+        )
     )
 
     if not candidates:
         return None
 
-    # B0 = 現行 Balanced
-    if weight_pattern is None:
-        return select_current_balanced(
-            candidates
-        )
+    candidate_weight = (
+        weight_pattern[0]
+    )
 
-    candidate_weight = weight_pattern[0]
-    confidence_weight = weight_pattern[1]
+    confidence_weight = (
+        weight_pattern[1]
+    )
 
     return select_weighted_balanced(
         candidates,
@@ -313,7 +317,9 @@ def select_experiment_candidate(
 # 1サイクル
 # ============================================================
 
-def run_experiment_cycle(weight_pattern):
+def run_experiment_cycle(
+    weight_pattern,
+):
     capital = START_CAPITAL
     history = []
 
@@ -362,10 +368,9 @@ def run_experiment_cycle(weight_pattern):
             )
         )
 
-        candidate_score = float(
+        candidate_score = (
             candidate.get(
-                "score",
-                0,
+                "score"
             )
         )
 
@@ -389,7 +394,9 @@ def run_experiment_cycle(weight_pattern):
         )
 
         if success:
-            capital = expected_sale_price
+            capital = (
+                expected_sale_price
+            )
         else:
             capital = 0
 
@@ -397,7 +404,9 @@ def run_experiment_cycle(weight_pattern):
             {
                 "step": step,
                 "selected_item": name,
-                "purchase_price": purchase_price,
+                "purchase_price": (
+                    purchase_price
+                ),
                 "expected_sale_price": (
                     expected_sale_price
                 ),
@@ -451,7 +460,9 @@ def run_experiment_cycle(weight_pattern):
 # ============================================================
 
 def get_max_capital(result):
-    values = [START_CAPITAL]
+    values = [
+        START_CAPITAL
+    ]
 
     for trade in result.get(
         "history",
@@ -495,12 +506,18 @@ def run_pattern(
 ):
     results = []
 
-    for _ in range(simulations):
-        result = run_experiment_cycle(
-            weight_pattern
+    for _ in range(
+        simulations
+    ):
+        result = (
+            run_experiment_cycle(
+                weight_pattern
+            )
         )
 
-        results.append(result)
+        results.append(
+            result
+        )
 
     goals = sum(
         result.get("status")
@@ -531,7 +548,9 @@ def run_pattern(
 
     average_max_capital = (
         sum(
-            get_max_capital(result)
+            get_max_capital(
+                result
+            )
             for result in results
         )
         / simulations
@@ -604,12 +623,16 @@ def run_pattern(
 def print_result(result):
     print()
     print("=" * 70)
-    print(result["pattern"])
+    print(
+        result["pattern"]
+    )
     print("=" * 70)
 
     print(
         "goal_reached=",
-        result["goal_reached"],
+        result[
+            "goal_reached"
+        ],
     )
 
     print(
@@ -622,7 +645,9 @@ def print_result(result):
 
     print(
         "average_steps=",
-        result["average_steps"],
+        result[
+            "average_steps"
+        ],
     )
 
     print(
@@ -633,11 +658,15 @@ def print_result(result):
     )
 
     print()
-    print("成功ルート TOP 3")
+    print(
+        "成功ルート TOP 3"
+    )
 
-    routes = result[
-        "successful_routes"
-    ].most_common(3)
+    routes = (
+        result[
+            "successful_routes"
+        ].most_common(3)
+    )
 
     if routes:
         for route, count in routes:
@@ -647,14 +676,20 @@ def print_result(result):
                 route,
             )
     else:
-        print("成功ルートなし")
+        print(
+            "成功ルートなし"
+        )
 
     print()
-    print("失敗資本")
+    print(
+        "失敗資本"
+    )
 
-    failure_capitals = result[
-        "failure_capitals"
-    ]
+    failure_capitals = (
+        result[
+            "failure_capitals"
+        ]
+    )
 
     if failure_capitals:
         for capital in sorted(
@@ -669,7 +704,9 @@ def print_result(result):
                 "回",
             )
     else:
-        print("失敗なし")
+        print(
+            "失敗なし"
+        )
 
 
 # ============================================================
@@ -700,9 +737,13 @@ def main():
             SIMULATIONS,
         )
 
-        summaries.append(result)
+        summaries.append(
+            result
+        )
 
-        print_result(result)
+        print_result(
+            result
+        )
 
     print()
     print("=" * 70)
