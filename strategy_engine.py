@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v0.8
+# Warashibe AI v0.9
 # strategy_engine.py
 #
 # 役割：
@@ -11,6 +11,10 @@
 # ・Adaptive戦略の資本帯判定
 # ・戦略に応じた商品選択
 # ・戦略比較結果から推奨戦略を作成
+#
+# v0.9:
+# ・route 戦略を追加
+# ・Routeの商品選択は route_engine.py が担当
 # ============================================================
 
 import random
@@ -22,6 +26,7 @@ SUPPORTED_STRATEGIES = {
     "balanced",
     "aggressive",
     "adaptive",
+    "route",
 }
 
 
@@ -31,6 +36,7 @@ STRATEGY_LABELS = {
     "balanced": "バランス",
     "aggressive": "アグレッシブ",
     "adaptive": "アダプティブ",
+    "route": "ルート",
 }
 
 
@@ -107,13 +113,13 @@ def get_adaptive_strategy(capital):
     現在資本に応じて戦略を自動切り替えする。
 
     第1段階：
-        100〜999円      -> balanced
+        100〜999円       -> balanced
     第2段階：
-        1,000〜9,999円  -> safe
+        1,000〜9,999円   -> safe
     第3段階：
         10,000〜99,999円 -> aggressive
     第4段階：
-        100,000円以上   -> aggressive
+        100,000円以上    -> aggressive
     """
 
     try:
@@ -131,6 +137,16 @@ def get_adaptive_strategy(capital):
 
 
 def select_item(items, strategy):
+    """
+    通常戦略の商品選択。
+
+    route 戦略の商品選択は、
+    最終目標・現在資本・Candidate Pipeline全体を
+    必要とするため、この関数では処理しない。
+
+    route の実処理は route_engine.py が担当する。
+    """
+
     if not items:
         return None
 
@@ -140,6 +156,9 @@ def select_item(items, strategy):
         return None
 
     if strategy == "adaptive":
+        return None
+
+    if strategy == "route":
         return None
 
     if strategy == "random":
@@ -242,6 +261,9 @@ def _get_risk_level(result):
 
     if strategy == "adaptive":
         return "可変"
+
+    if strategy == "route":
+        return "経路最適化"
 
     return "中"
 
