@@ -26,3 +26,25 @@ def calculate_gtin_check_digit(body: str) -> str:
 def is_valid_gtin(value: object) -> bool:
     gtin = normalize_gtin(value)
     return bool(gtin) and calculate_gtin_check_digit(gtin[:-1]) == gtin[-1]
+
+
+def normalize_isbn(value: object) -> str:
+    """Normalize ISBN-10/13 text; separators are ignored, other characters fail."""
+    text = str(value).strip().replace("-", "").replace(" ", "")
+    if len(text) == 10 and text[:9].isascii() and text[:9].isdigit() and (text[-1].isdigit() or text[-1] in "Xx"):
+        return text[:9] + text[-1].upper()
+    if len(text) == 13 and text.isascii() and text.isdigit():
+        return text
+    return ""
+
+
+def is_valid_isbn(value: object) -> bool:
+    """Validate ISBN-10 or ISBN-13 check digits offline."""
+    isbn = normalize_isbn(value)
+    if len(isbn) == 10:
+        total = sum((10 - i) * (10 if ch == "X" else int(ch)) for i, ch in enumerate(isbn))
+        return total % 11 == 0
+    if len(isbn) == 13:
+        total = sum(int(ch) * (1 if i % 2 == 0 else 3) for i, ch in enumerate(isbn[:12]))
+        return str((-total) % 10) == isbn[-1]
+    return False
