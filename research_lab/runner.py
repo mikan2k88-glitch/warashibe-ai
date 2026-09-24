@@ -38,13 +38,13 @@ def run_cycle():
         "research_lab.test_identity_aware_evidence_grouping", "research_lab.test_identifier_validation",
         "research_lab.test_validated_identity_resolution", "research_lab.test_isbn_identifier_validation",
         "research_lab.test_identifier_conflict_resolution", "research_lab.test_conflict_aware_evidence_grouping", "research_lab.test_market_estimate_quality_gate", "research_lab.test_quality_gated_candidate_pipeline", "research_lab.test_end_to_end_market_decision_pipeline", "research_lab.test_multi_provider_market_snapshot",
-        "research_lab.test_multi_provider_decision_pipeline", "research_lab.test_market_snapshot_freshness", "research_lab.test_freshness_gated_multi_provider_decision", "research_lab.test_decision_outcome_learning_bridge", "research_lab.test_closed_loop_market_learning_cycle", "research_lab.test_closed_loop_observability", "research_lab.test_ebay_browse_adapter", "research_lab.test_ebay_browse_transport", "research_lab.test_ebay_browse_response_mapping", "research_lab.test_ebay_browse_ingestion_bridge", "research_lab.test_supabase_runtime_smoke", "research_lab.test_supabase_keepalive_scheduler", "research_lab.test_supabase_schema_contract", "research_lab.test_supabase_schema_migration_plan", "research_lab.test_supabase_schema_sql_rendering",
+        "research_lab.test_multi_provider_decision_pipeline", "research_lab.test_market_snapshot_freshness", "research_lab.test_freshness_gated_multi_provider_decision", "research_lab.test_decision_outcome_learning_bridge", "research_lab.test_closed_loop_market_learning_cycle", "research_lab.test_closed_loop_observability", "research_lab.test_ebay_browse_adapter", "research_lab.test_ebay_browse_transport", "research_lab.test_ebay_browse_response_mapping", "research_lab.test_ebay_browse_ingestion_bridge", "research_lab.test_supabase_runtime_smoke", "research_lab.test_supabase_keepalive_scheduler", "research_lab.test_supabase_schema_contract", "research_lab.test_supabase_schema_migration_plan", "research_lab.test_supabase_schema_sql_rendering", "research_lab.test_supabase_schema_policy_contract",
     ]
     checks = [run_command([sys.executable, "-m", module]) for module in modules]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "supabase_schema_sql_rendering", "next_theme": "supabase_schema_policy_contract", "checks": checks}
+                "stage": "supabase_schema_policy_contract", "next_theme": "supabase_client_integration_design", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
