@@ -23,7 +23,7 @@ def controller_budget_adapter_snapshot(snapshot):
     return {
         "version": ADAPTER_SNAPSHOT_VERSION,
         "local_planning_permitted": permitted,
-        "adapter_valid": validation["valid"],
+        "adapter_valid": validation["valid"] and isinstance(snapshot, dict),
         "adapter_reason": adapter["reason"],
         "validation_reason": validation["reason"],
         "external_action_authorized": False,
