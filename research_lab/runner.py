@@ -44,7 +44,7 @@ def run_cycle():
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "autonomous_research_orchestrator_execution_layer_executor_boundary_validation", "next_theme": "human_gate_execution_layer_executor_activation_review", "checks": checks}
+                "stage": "human_gate_execution_layer_executor_activation_review_approved", "next_theme": "autonomous_research_orchestrator_execution_layer_executor_activation_design", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
