@@ -22,6 +22,12 @@ def run_tests():
     assert near_limit["cycles_after"] == 10
     assert near_limit["executor_activation_safe"] is True
 
+    exhausted = validate_cycle_accounting(10)
+    assert exhausted["valid"] is False
+    assert exhausted["cycles_after"] == 10
+    assert exhausted["expected_cycles_after"] == 11
+    assert exhausted["executor_activation_safe"] is False
+
 
 if __name__ == "__main__":
     run_tests()
