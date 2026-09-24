@@ -37,13 +37,13 @@ def run_cycle():
         "research_lab.test_evidence_grouping", "research_lab.test_market_identity_resolution",
         "research_lab.test_identity_aware_evidence_grouping", "research_lab.test_identifier_validation",
         "research_lab.test_validated_identity_resolution", "research_lab.test_isbn_identifier_validation",
-        "research_lab.test_identifier_conflict_resolution",
+        "research_lab.test_identifier_conflict_resolution", "research_lab.test_conflict_aware_evidence_grouping",
     ]
     checks = [run_command([sys.executable, "-m", module]) for module in modules]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "identifier_conflict_resolution", "next_theme": "conflict_aware_evidence_grouping", "checks": checks}
+                "stage": "conflict_aware_evidence_grouping", "next_theme": "market_estimate_quality_gate", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
