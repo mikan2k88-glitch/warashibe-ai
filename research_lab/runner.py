@@ -19,34 +19,25 @@ def run_command(args):
 
 
 def run_cycle():
-    checks = [run_command([sys.executable, "-m", "research_lab.test_lab"]),
-              run_command([sys.executable, "-m", "research_lab.test_storage"]),
-              run_command([sys.executable, "-m", "research_lab.speed_experiment"]),
-              run_command([sys.executable, "-m", "research_lab.transaction_cost_experiment"]),
-              run_command([sys.executable, "-m", "research_lab.test_real_market"]),
-              run_command([sys.executable, "-m", "research_lab.test_real_market_source"]),
-              run_command([sys.executable, "-m", "research_lab.test_market_evidence"]),
-              run_command([sys.executable, "-m", "research_lab.test_evidence_candidate_pipeline"]),
-              run_command([sys.executable, "-m", "research_lab.test_real_market_route_bridge"]),
-              run_command([sys.executable, "-m", "research_lab.test_route_evidence_uncertainty"]),
-              run_command([sys.executable, "-m", "research_lab.test_calibrated_uncertainty"]),
-              run_command([sys.executable, "-m", "research_lab.test_raw_outcome_calibration"]),
-              run_command([sys.executable, "-m", "research_lab.test_posterior_route_integration"]),
-              run_command([sys.executable, "-m", "research_lab.test_posterior_uncertainty_ranking"]),
-              run_command([sys.executable, "-m", "research_lab.test_dashboard_kpis"]),
-              run_command([sys.executable, "-m", "research_lab.test_dashboard_uncertainty"]),
-              run_command([sys.executable, "-m", "research_lab.test_github_actions_bridge"]),
-              run_command([sys.executable, "-m", "research_lab.test_live_outcome_store"]),
-              run_command([sys.executable, "-m", "research_lab.test_persisted_outcome_posterior_bridge"]),
-              run_command([sys.executable, "-m", "research_lab.test_persisted_posterior_uncertainty_ranking"]),
-              run_command([sys.executable, "-m", "research_lab.test_outcome_learning_loop"]),
-              run_command([sys.executable, "-m", "research_lab.test_outcome_repository"]),
-              run_command([sys.executable, "-m", "research_lab.test_supabase_outcome_repository"]),
-              run_command([sys.executable, "-m", "research_lab.test_outcome_repository_factory"])]
+    modules = [
+        "research_lab.test_lab", "research_lab.test_storage", "research_lab.speed_experiment",
+        "research_lab.transaction_cost_experiment", "research_lab.test_real_market",
+        "research_lab.test_real_market_source", "research_lab.test_market_evidence",
+        "research_lab.test_evidence_candidate_pipeline", "research_lab.test_real_market_route_bridge",
+        "research_lab.test_route_evidence_uncertainty", "research_lab.test_calibrated_uncertainty",
+        "research_lab.test_raw_outcome_calibration", "research_lab.test_posterior_route_integration",
+        "research_lab.test_posterior_uncertainty_ranking", "research_lab.test_dashboard_kpis",
+        "research_lab.test_dashboard_uncertainty", "research_lab.test_github_actions_bridge",
+        "research_lab.test_live_outcome_store", "research_lab.test_persisted_outcome_posterior_bridge",
+        "research_lab.test_persisted_posterior_uncertainty_ranking", "research_lab.test_outcome_learning_loop",
+        "research_lab.test_outcome_repository", "research_lab.test_supabase_outcome_repository",
+        "research_lab.test_outcome_repository_factory", "research_lab.test_repository_learning_loop_injection",
+    ]
+    checks = [run_command([sys.executable, "-m", module]) for module in modules]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "repository_backend_selection", "next_theme": "repository_learning_loop_injection", "checks": checks}
+                "stage": "repository_learning_loop_injection", "next_theme": "repository_observability", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
