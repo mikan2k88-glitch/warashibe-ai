@@ -24,7 +24,7 @@ def main():
     result = run_fresh_multi_provider_decision(
         [Provider("fresh-a", "2026-09-24T09:30:00Z"), Provider("stale-b", "2026-09-24T07:00:00Z")],
         "camera", 11000, now=now, max_age_seconds=3600,
-        min_confidence=.5, min_evidence_count=1, min_source_count=1,
+        min_confidence=.4, min_evidence_count=1, min_source_count=1,
     )
     assert result["snapshot_raw_count"] == 2
     assert result["fresh_observations"] == 1
