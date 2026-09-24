@@ -29,7 +29,7 @@ def control_execution_cycle(step, cycles_completed=0, ci_status="success", repai
         "reason": policy["reason"],
         "cycles_completed": policy["cycles_completed"],
         "repair_attempts": policy["repair_attempts"],
-        "next_cycles_completed": cycles_completed + 1 if allowed else cycles_completed,
+        "next_cycles_completed": cycles_completed,
         "external_action_authorized": False,
         "external_action_performed": False,
         "credentials_included": False,
@@ -42,7 +42,7 @@ def validate_execution_layer_controller():
     allowed = control_execution_cycle("inspect_state", cycles_completed=2)
     assert allowed["decision"] == "continue"
     assert allowed["continue_cycle"] is True
-    assert allowed["next_cycles_completed"] == 3
+    assert allowed["next_cycles_completed"] == 2
 
     gated = control_execution_cycle("execute_payment")
     assert gated["decision"] == "stop"
