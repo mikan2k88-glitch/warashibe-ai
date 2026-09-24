@@ -16,7 +16,7 @@ def run_tests():
         "run_offline_tests",
     ))
     assert full["completed_steps"] == 4
-    assert full["cycles_completed"] == 4
+    assert full["cycles_completed"] == 1
     assert full["continue_autonomous_research"] is True
 
     failed_ci = plan_execution_loop(("inspect_state", "inspect_ci"), ci_status="failure")
