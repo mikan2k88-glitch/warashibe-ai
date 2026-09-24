@@ -7,7 +7,7 @@ matches remain separate; no AI/fuzzy guess is allowed to merge market evidence.
 import re
 import unicodedata
 
-from research_lab.identifier_validation import is_valid_gtin, normalize_gtin
+from research_lab.identifier_validation import is_valid_gtin, normalize_gtin, is_valid_isbn, normalize_isbn
 from research_lab.real_market_schema import MarketObservation
 
 IDENTITY_VERSION = "0.2"
@@ -27,10 +27,12 @@ def identity_key(observation: MarketObservation) -> tuple[str, str, str]:
         value = metadata.get(field)
         if value not in (None, "") and is_valid_gtin(value):
             return ("gtin", normalize_gtin(value), observation.currency.upper())
-    for field in ("isbn", "model_number"):
-        value = metadata.get(field)
-        if value not in (None, ""):
-            return (field, normalize_identity_text(value), observation.currency.upper())
+    value = metadata.get("isbn")
+    if value not in (None, "") and is_valid_isbn(value):
+        return ("isbn", normalize_isbn(value), observation.currency.upper())
+    value = metadata.get("model_number")
+    if value not in (None, ""):
+        return ("model_number", normalize_identity_text(value), observation.currency.upper())
     return (
         "text",
         normalize_identity_text(observation.name) + ":" + normalize_identity_text(observation.category),
