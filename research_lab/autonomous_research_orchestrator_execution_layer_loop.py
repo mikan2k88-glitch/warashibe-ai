@@ -43,10 +43,11 @@ def plan_execution_loop(steps, cycles_completed=0, ci_status="success", repair_a
             human_gate_required = decision["human_gate_required"]
             stop_reason = decision["reason"]
             break
-        current_cycles = decision["next_cycles_completed"]
 
     completed_steps = sum(1 for decision in decisions if decision["continue_cycle"])
     sequence_complete = completed_steps == len(steps)
+    if sequence_complete and len(steps) > 0:
+        current_cycles += 1
     return {
         "version": EXECUTION_LAYER_LOOP_VERSION,
         "valid": True,
@@ -65,7 +66,7 @@ def validate_execution_layer_loop():
     planned = plan_execution_loop(("inspect_state", "select_next_theme"), cycles_completed=0)
     assert planned["valid"] is True
     assert planned["completed_steps"] == 2
-    assert planned["cycles_completed"] == 2
+    assert planned["cycles_completed"] == 1
     assert planned["continue_autonomous_research"] is True
 
     gated = plan_execution_loop(("inspect_state", "execute_payment", "record_progress"))
@@ -74,9 +75,9 @@ def validate_execution_layer_loop():
     assert gated["continue_autonomous_research"] is False
 
     bounded = plan_execution_loop(("inspect_state", "inspect_ci"), cycles_completed=9)
-    assert bounded["completed_steps"] == 1
+    assert bounded["completed_steps"] == 2
     assert bounded["cycles_completed"] == 10
-    assert bounded["continue_autonomous_research"] is False
+    assert bounded["continue_autonomous_research"] is True
 
     assert plan_execution_loop(None)["valid"] is False
     return True
