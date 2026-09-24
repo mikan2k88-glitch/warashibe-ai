@@ -1,19 +1,23 @@
 """Research-only closed loop from persisted outcomes to the next ranked decision."""
 
-from research_lab.live_outcome_store import OutcomeStore
+from research_lab.outcome_repository_factory import build_outcome_repository
 from research_lab.persisted_posterior_uncertainty_ranking import rank_from_store
 
-LEARNING_LOOP_VERSION = "0.1"
+LEARNING_LOOP_VERSION = "0.2"
 
 
-def next_decision(candidates, store=None, credibility=0.90):
+def next_decision(candidates, store=None, credibility=0.90, *, backend="json", path=None,
+                  supabase_client=None, table="warashibe_sale_outcomes"):
     """Rank current candidates from persisted feedback and return the best row.
 
-    No outcome is fabricated or written here.  The caller supplies observed
-    outcomes separately through OutcomeStore; this function only learns from
-    what has already been persisted.
+    Existing callers may still inject ``store`` directly.  When omitted, the
+    repository factory selects the backend; JSON remains the safe default and
+    Supabase requires an explicitly injected client.
     """
     if not candidates:
         return None
-    rows = rank_from_store(candidates, store or OutcomeStore(), credibility)
+    repository = store or build_outcome_repository(
+        backend, path=path, supabase_client=supabase_client, table=table
+    )
+    rows = rank_from_store(candidates, repository, credibility)
     return rows[0]
