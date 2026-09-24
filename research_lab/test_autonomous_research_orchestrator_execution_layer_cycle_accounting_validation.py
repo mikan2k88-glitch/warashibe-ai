@@ -10,16 +10,17 @@ def run_tests():
     assert validate_cycle_accounting_contract() is True
 
     result = validate_cycle_accounting(0)
-    assert result["valid"] is False
+    assert result["valid"] is True
     assert result["cycles_before"] == 0
-    assert result["cycles_after"] == 7
+    assert result["cycles_after"] == 1
     assert result["expected_cycles_after"] == 1
-    assert result["executor_activation_safe"] is False
+    assert result["executor_activation_safe"] is True
     assert result["external_action_authorized"] is False
 
     near_limit = validate_cycle_accounting(9)
-    assert near_limit["valid"] is False
-    assert near_limit["executor_activation_safe"] is False
+    assert near_limit["valid"] is True
+    assert near_limit["cycles_after"] == 10
+    assert near_limit["executor_activation_safe"] is True
 
 
 if __name__ == "__main__":
