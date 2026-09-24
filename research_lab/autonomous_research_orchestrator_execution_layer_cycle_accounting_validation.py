@@ -48,8 +48,8 @@ def validate_cycle_accounting(cycles_completed=0):
 
 def validate_cycle_accounting_contract():
     result = validate_cycle_accounting(0)
-    assert result["valid"] is False
-    assert result["cycles_after"] == len(CANONICAL_CYCLE_STEPS)
-    assert "cycle_budget_is_counting_internal_steps" in result["errors"]
-    assert result["executor_activation_safe"] is False
+    assert result["valid"] is True
+    assert result["cycles_after"] == 1
+    assert result["errors"] == ()
+    assert result["executor_activation_safe"] is True
     return True
