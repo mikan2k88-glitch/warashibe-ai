@@ -40,11 +40,12 @@ def run_cycle():
               run_command([sys.executable, "-m", "research_lab.test_persisted_outcome_posterior_bridge"]),
               run_command([sys.executable, "-m", "research_lab.test_persisted_posterior_uncertainty_ranking"]),
               run_command([sys.executable, "-m", "research_lab.test_outcome_learning_loop"]),
-              run_command([sys.executable, "-m", "research_lab.test_outcome_repository"])]
+              run_command([sys.executable, "-m", "research_lab.test_outcome_repository"]),
+              run_command([sys.executable, "-m", "research_lab.test_supabase_outcome_repository"])]
     passed = all(check["returncode"] == 0 for check in checks)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
-                "stage": "storage_repository_abstraction", "next_theme": "supabase_repository_adapter_contract", "checks": checks}
+                "stage": "supabase_repository_adapter_contract", "next_theme": "repository_backend_selection", "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
