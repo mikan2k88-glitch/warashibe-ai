@@ -5,6 +5,7 @@ from research_lab.autonomous_research_orchestrator_execution_layer_executor_acti
 )
 from research_lab.autonomous_research_orchestrator_execution_layer_executor_activation_controller_validation import (
     validate_executor_activation_controller_output,
+    validate_executor_activation_readiness,
 )
 
 
@@ -35,6 +36,15 @@ def run_tests():
     assert validate_executor_activation_controller_output(tampered)["valid"] is False
 
     assert validate_executor_activation_controller_output(None)["valid"] is False
+
+    readiness = validate_executor_activation_readiness()
+    assert readiness["valid"] is True
+    assert readiness["ready_for_bounded_executor"] is True
+    assert readiness["cycle_budget_limit"] == 10
+    assert readiness["first_cycle_after"] == 1
+    assert readiness["last_cycle_after"] == 10
+    assert readiness["exhausted_cycle_after"] == 10
+    assert readiness["external_action_authorized"] is False
 
 
 if __name__ == "__main__":
