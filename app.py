@@ -1,5 +1,7 @@
 from flask import Flask
 
+from research_lab.supabase_keepalive_scheduler import maybe_run_keepalive
+
 
 
 
@@ -29,6 +31,11 @@ from research_lab.web import lab_bp
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
 app.register_blueprint(lab_bp)
+
+
+@app.before_request
+def research_keepalive():
+    maybe_run_keepalive()
 
 
 # ============================================================
