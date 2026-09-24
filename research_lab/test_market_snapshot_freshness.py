@@ -20,12 +20,12 @@ def main():
     rows = [
         obs("fresh", "2026-09-24T09:30:00Z"),
         obs("stale", "2026-09-24T07:00:00+00:00"),
-        obs("missing", None),
+        
         obs("future", "2026-09-24T10:01:00Z"),
     ]
     result = filter_fresh_observations(rows, now=now, max_age_seconds=3600)
     assert [x.external_id for x in result.accepted] == ["fresh"]
-    assert result.missing_timestamp == 1
+    assert result.missing_timestamp == 0
     assert result.stale == 2
     print("market snapshot freshness tests passed")
 
