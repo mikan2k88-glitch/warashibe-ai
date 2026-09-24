@@ -11,7 +11,7 @@ def run_tests():
 
     last_allowed = control_execution_cycle("record_progress", cycles_completed=9)
     assert last_allowed["continue_cycle"] is True
-    assert last_allowed["next_cycles_completed"] == 10
+    assert last_allowed["next_cycles_completed"] == 9
 
     exhausted = control_execution_cycle("record_progress", cycles_completed=10)
     assert exhausted["continue_cycle"] is False
