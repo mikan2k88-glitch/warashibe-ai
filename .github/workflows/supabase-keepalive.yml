@@ -1,0 +1,23 @@
+name: Warashibe AI Supabase Keepalive
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger research service keepalive
+        run: |
+          curl --fail --silent --show-error \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 5 \
+            https://warashibe-ai-research-lab.onrender.com/ \
+            > /dev/null
