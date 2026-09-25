@@ -15,6 +15,7 @@ from research_lab.real_world_candidate_scoring_design import (
     score_candidate,
 )
 from real_world_policy_bridge import evaluate_real_world_policy
+from real_world_route_bridge import evaluate_real_world_routes
 
 REAL_WORLD_ENGINE_VERSION = "0.1"
 
@@ -71,7 +72,7 @@ def prepare_real_world_candidate(candidate):
     }
 
 
-def select_real_world_candidate(candidates):
+def select_real_world_candidate(candidates, route_ladder=None, target_jpy=1_000_000):
     ranked = rank_candidates(candidates)
     if not ranked:
         return {
@@ -83,9 +84,37 @@ def select_real_world_candidate(candidates):
             "commerce_authorized": False,
         }
 
-    selected = ranked[0]
+    scoring_by_item_id = {
+        row.get("item_id"): row.get("scoring", {})
+        for row in ranked
+        if row.get("item_id")
+    }
+    initial_capital = (
+        ranked[0]["purchase_price_jpy"]
+        + ranked[0]["estimated_fees_jpy"]
+        + ranked[0]["estimated_shipping_jpy"]
+    )
+    route = evaluate_real_world_routes(
+        initial_capital,
+        ranked,
+        scoring_by_item_id=scoring_by_item_id,
+        route_ladder=route_ladder,
+        target_jpy=target_jpy,
+    )
+
+    if route["route_data_complete"] and route["candidates"]:
+        best_route = route["candidates"][0]
+        selected_id = best_route.get("item_id")
+        selected = next(
+            (row for row in ranked if row.get("item_id") == selected_id),
+            ranked[0],
+        )
+    else:
+        selected = ranked[0]
+
     prepared = prepare_real_world_candidate(selected)
     prepared["ranked_count"] = len(ranked)
+    prepared["route"] = route
     return prepared
 
 
@@ -100,6 +129,7 @@ def build_real_world_engine_snapshot():
             "core_boundary_validation",
             "policy_validation",
             "candidate_scoring",
+            "route_evaluation",
             "single_candidate_selection",
             "prepare_human_gate",
             "stop_before_external_action",
