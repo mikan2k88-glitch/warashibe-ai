@@ -15,10 +15,12 @@ from research_lab.github_actions_bridge import live_snapshot, workflow_runs
 from research_lab.live_outcome_store import OutcomeStore
 from research_lab.outcome_learning_loop import repository_observability
 from research_lab.closed_loop_observability import empty_closed_loop_observability
+from research_lab.gemini_live_probe import run_live_probe
 
 lab_bp = Blueprint("research_lab", __name__)
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = Path(os.environ.get("WARASHIBE_LAB_OUTPUT", ROOT / "research_output"))
+_GEMINI_PROBE_RESULT = None
 
 TEMPLATE = """<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -128,3 +130,11 @@ def status():
     return jsonify({"lab_version": LAB_VERSION, "production_branch": PRODUCTION_BRANCH,
         "research_branch": LAB_BRANCH, "tracks": RESEARCH_TRACKS, "snapshot": _snapshot(),
         "stats": repository.stats(), "kpis": research_kpis(), "route_probabilities": route_probability_series(), "uncertainty": demo_uncertainty_metrics(), "outcome_store": OutcomeStore().stats(), "repository": repository_observability(), "closed_loop": empty_closed_loop_observability(), "history": _history(), "recent_experiments": repository.recent(20)})
+
+
+@lab_bp.route("/lab/internal/gemini-probe-once")
+def gemini_probe_once():
+    global _GEMINI_PROBE_RESULT
+    if _GEMINI_PROBE_RESULT is None:
+        _GEMINI_PROBE_RESULT = run_live_probe()
+    return jsonify(_GEMINI_PROBE_RESULT)
