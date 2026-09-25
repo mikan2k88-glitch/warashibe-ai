@@ -20,6 +20,8 @@ def run_tests():
     assert review["secret_access_authorized"] is False
     assert review["commerce_authorized"] is False
     assert review["production_change_authorized"] is False
+    assert review["main_code_changes_allowed"] is True
+    assert review["main_branch_write_requires_human_gate"] is True
     assert review["main_branch_change_authorized"] is False
     assert review["external_action_authorized"] is False
 
