@@ -5,7 +5,7 @@ This module defines what Codex may change, how it must validate work, and
 where it must stop. It does not invoke Codex or any external executor.
 """
 
-CODEX_MILESTONE_EXECUTOR_DESIGN_VERSION = "0.1"
+CODEX_MILESTONE_EXECUTOR_DESIGN_VERSION = "0.2"
 
 MILESTONE_ID = "sandbox_external_integration"
 
@@ -14,10 +14,9 @@ MILESTONE_GOAL = (
     "to_stripe_sandbox_event_to_ephemeral_ledger"
 )
 
-ALLOWED_BRANCHES = ("research-lab",)
+ALLOWED_BRANCHES = ("research-lab", "main")
 
 FORBIDDEN_OPERATIONS = (
-    "modify_main_branch",
     "modify_production_configuration",
     "read_or_modify_secrets",
     "invoke_live_gemini_without_gate",
@@ -72,7 +71,7 @@ def build_codex_milestone_contract():
             "select_smallest_missing_theme",
             "prepare_change",
             "run_offline_tests",
-            "commit_research_lab_only",
+            "commit_orchestrator_authorized_branch",
             "inspect_ci",
             "repair_once_if_needed",
             "record_progress",
@@ -84,13 +83,15 @@ def build_codex_milestone_contract():
             "live_external_api_call",
             "commerce_action",
             "production_change",
-            "main_branch_change",
+            "main_branch_write",
         ),
         "codex_invocation_authorized": False,
         "network_execution_authorized": False,
         "secret_access_authorized": False,
         "commerce_authorized": False,
         "production_change_authorized": False,
+        "main_code_changes_allowed": True,
+        "main_branch_write_requires_human_gate": True,
         "main_branch_change_authorized": False,
         "external_action_authorized": False,
     }
@@ -121,7 +122,7 @@ def validate_codex_milestone_contract():
     contract = build_codex_milestone_contract()
     assert contract["mode"] == "design_only"
     assert contract["executor"] == "codex"
-    assert contract["allowed_branches"] == ("research-lab",)
+    assert contract["allowed_branches"] == ("research-lab", "main")
     assert contract["execution_limits"]["max_cycles"] == 10
     assert contract["execution_limits"]["max_repairs_per_cycle"] == 1
     assert contract["execution_limits"]["require_ci_green_before_next_cycle"] is True
@@ -131,6 +132,8 @@ def validate_codex_milestone_contract():
     assert contract["secret_access_authorized"] is False
     assert contract["commerce_authorized"] is False
     assert contract["production_change_authorized"] is False
+    assert contract["main_code_changes_allowed"] is True
+    assert contract["main_branch_write_requires_human_gate"] is True
     assert contract["main_branch_change_authorized"] is False
     assert contract["external_action_authorized"] is False
     return True
