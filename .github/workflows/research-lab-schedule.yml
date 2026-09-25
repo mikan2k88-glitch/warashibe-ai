@@ -1,0 +1,42 @@
+name: Warashibe AI Research Lab Schedule
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: warashibe-ai-research-lab
+  cancel-in-progress: false
+
+jobs:
+  research-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          ref: research-lab
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run research cycle
+        run: python -m research_lab.runner
+
+      - name: Upload research snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-lab-schedule-${{ github.run_id }}
+          path: research_output/
+          retention-days: 30
