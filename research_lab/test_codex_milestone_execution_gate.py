@@ -20,11 +20,14 @@ def run_tests():
     assert approved["blockers"] == ()
     assert approved["approval_scope"] == "single_bounded_milestone_execution"
     assert approved["approval_reusable"] is False
-    assert approved["allowed_branch"] == "research-lab"
+    assert approved["allowed_branches"] == ("research-lab", "main")
+    assert approved["repository_code_scope"] == "all_repository_code"
     assert approved["network_execution_authorized"] is False
     assert approved["secret_access_authorized"] is False
     assert approved["commerce_authorized"] is False
     assert approved["production_change_authorized"] is False
+    assert approved["main_code_changes_allowed"] is True
+    assert approved["main_branch_write_requires_human_gate"] is True
     assert approved["main_branch_change_authorized"] is False
     assert approved["live_external_api_authorized"] is False
 
