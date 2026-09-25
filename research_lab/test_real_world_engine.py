@@ -33,6 +33,8 @@ def run_tests():
     strong = _candidate("fast-safe", 2600, 4300, 200, 200, 5, 2400)
     prepared = prepare_real_world_candidate(strong)
     assert prepared["status"] == "ready_for_human_gate"
+    assert prepared["policy"]["allowed"] is True
+    assert prepared["policy"]["allocated_capital_jpy"] == 3000
     assert prepared["human_gate_required"] is True
     assert prepared["execution_authorized"] is False
     assert prepared["commerce_authorized"] is False
