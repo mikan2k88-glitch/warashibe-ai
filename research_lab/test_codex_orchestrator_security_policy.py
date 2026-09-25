@@ -33,7 +33,28 @@ def run_tests():
         ),
     }
     main = validate_orchestrator_code_task(main_task)
-    assert main["valid"] is True
+    assert main["valid"] is False
+    assert "human_gate_required_for_main_write" in main["errors"]
+
+    approved_main = validate_orchestrator_code_task(
+        dict(main_task, human_gate_approved=True)
+    )
+    assert approved_main["valid"] is True
+
+    generic_main = validate_orchestrator_code_task(
+        dict(main_task, requested_capabilities=("edit_code_files",))
+    )
+    assert "human_gate_required_for_main_write" in generic_main["errors"]
+
+    mislabeled_main = validate_orchestrator_code_task(
+        dict(research_task, requested_capabilities=("modify_main_branch_code",))
+    )
+    assert "human_gate_required_for_main_write" in mislabeled_main["errors"]
+
+    main_read = validate_orchestrator_code_task(
+        dict(main_task, requested_capabilities=("inspect_repository",))
+    )
+    assert main_read["valid"] is True
 
     no_orchestrator = dict(main_task, orchestrator_authorized=False)
     rejected = validate_orchestrator_code_task(no_orchestrator)

@@ -25,6 +25,17 @@ CODE_CAPABILITIES = (
     "report_test_results",
 )
 
+CODE_WRITE_CAPABILITIES = (
+    "create_code_files",
+    "edit_code_files",
+    "delete_code_files",
+    "refactor_code",
+    "modify_tests",
+    "modify_ci_code",
+    "modify_main_branch_code",
+    "prepare_commit",
+)
+
 SENSITIVE_NON_CODE_CAPABILITIES = (
     "read_secrets",
     "write_secrets",
@@ -84,6 +95,12 @@ def validate_orchestrator_code_task(task):
 
     if sensitive and task.get("human_gate_approved") is not True:
         errors.append("human_gate_required_for_sensitive_action")
+    main_write = "modify_main_branch_code" in requested or (
+        task.get("branch") == "main"
+        and any(item in CODE_WRITE_CAPABILITIES for item in requested)
+    )
+    if main_write and task.get("human_gate_approved") is not True:
+        errors.append("human_gate_required_for_main_write")
     if unknown:
         errors.append("unknown_capability_requested")
 

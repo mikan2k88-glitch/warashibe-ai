@@ -49,7 +49,10 @@ def run_tests():
         acceptance_checks=("offline_tests_green",),
     )
     main_valid = validate_codex_task_envelope(main_envelope)
-    assert main_valid["valid"] is True
+    assert main_valid["valid"] is False
+    assert "human_gate_required_for_main_write" in main_valid["errors"]
+    main_envelope["human_gate_approved"] = True
+    assert validate_codex_task_envelope(main_envelope)["valid"] is True
     assert main_valid["branch"] == "main"
 
     sensitive = build_codex_task_envelope(

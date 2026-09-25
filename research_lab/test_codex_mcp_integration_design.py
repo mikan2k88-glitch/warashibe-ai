@@ -41,7 +41,11 @@ def run_tests():
     assert valid["requires_live_codex_gate"] is True
 
     main = validate_codex_mcp_task(_valid_task("main"))
-    assert main["valid"] is True
+    assert main["valid"] is False
+    assert "human_gate_required_for_main_write" in main["errors"]
+    approved_main = _valid_task("main")
+    approved_main["human_gate_approved"] = True
+    assert validate_codex_mcp_task(approved_main)["valid"] is True
 
     denied = _valid_task("main")
     denied["orchestrator_authorized"] = False

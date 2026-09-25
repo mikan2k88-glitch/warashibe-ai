@@ -72,7 +72,8 @@ def run_tests():
         ),
         acceptance_checks=("offline_tests_green",),
     )
-    assert main_ready["status"] == "codex_task_ready"
+    assert main_ready["status"] == "codex_task_rejected"
+    assert "human_gate_required_for_main_write" in main_ready["codex_task_validation"]["errors"]
     assert main_ready["codex_task"]["branch"] == "main"
 
     escalated = process_gemini_assignment(

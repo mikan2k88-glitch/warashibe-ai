@@ -101,13 +101,19 @@ def evaluate_activation_gate(snapshot):
 
     blockers = []
 
-    if snapshot.get("all_design_gates_green") is not True:
+    def gates_green(field, required):
+        gates = snapshot.get(field)
+        return isinstance(gates, dict) and all(
+            gates.get(name) is True for name in required
+        )
+
+    if not gates_green("design_gates", REQUIRED_DESIGN_GATES):
         blockers.append("design_gates_not_green")
 
-    if snapshot.get("all_safety_gates_green") is not True:
+    if not gates_green("safety_gates", SAFETY_GATES):
         blockers.append("safety_gates_not_green")
 
-    if snapshot.get("all_live_gates_green") is not True:
+    if not gates_green("live_gates", REQUIRED_LIVE_GATES):
         blockers.append("live_connectors_not_ready")
 
     if snapshot.get("explicit_human_approval") is not True:
@@ -118,12 +124,13 @@ def evaluate_activation_gate(snapshot):
     return {
         "approved": approved,
         "blockers": tuple(blockers),
-        "reason": "activation_gate_clear" if approved else "activation_blocked",
+        "reason": "design_gate_clear_not_live_authority" if approved else "activation_blocked",
         "approval_scope": (
             "scheduled_supervisor_runtime_activation" if approved else None
         ),
         "approval_reusable": False,
-        "activation_authorized": approved,
+        "evidence_verified": False,
+        "activation_authorized": False,
         "scheduled_runtime_active": False,
         "external_action_authorized": False,
     }

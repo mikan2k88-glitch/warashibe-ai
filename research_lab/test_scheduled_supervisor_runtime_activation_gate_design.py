@@ -43,9 +43,20 @@ def run_tests():
         "scheduled_supervisor_runtime_activation"
     )
     assert approved_result["approval_reusable"] is False
-    assert approved_result["activation_authorized"] is True
+    assert approved_result["activation_authorized"] is False
+    assert approved_result["evidence_verified"] is False
     assert approved_result["scheduled_runtime_active"] is False
     assert approved_result["external_action_authorized"] is False
+
+    forged = {
+        "all_design_gates_green": True,
+        "all_safety_gates_green": True,
+        "all_live_gates_green": True,
+        "explicit_human_approval": True,
+    }
+    forged_result = evaluate_activation_gate(forged)
+    assert forged_result["approved"] is False
+    assert forged_result["activation_authorized"] is False
 
     design = build_activation_gate_design()
     assert design["explicit_human_approval_required"] is True

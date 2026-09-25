@@ -105,13 +105,20 @@ def evaluate_closed_loop(
     )
 
     if gemini.get("status") != "codex_task_ready":
+        validation = gemini.get("codex_task_validation") or {}
+        human_gate_pending = (
+            "human_gate_required_for_main_write" in validation.get("errors", ())
+        )
         return {
             "status": "gemini_terminal",
             "supervisor": supervisor,
             "assignment": assignment,
             "gemini": gemini,
             "codex_review": None,
-            "next_action": gemini.get("status"),
+            "next_action": (
+                "request_main_write_gate" if human_gate_pending
+                else gemini.get("status")
+            ),
             "external_action_authorized": False,
         }
 
