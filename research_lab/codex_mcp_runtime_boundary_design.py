@@ -1,17 +1,23 @@
 """Runtime boundary contract for future Codex MCP execution.
 
-This module defines connection, workspace, task payload, and result-envelope
-requirements. It performs no MCP connection and invokes no Codex process.
+All repository code, including main, may be modified when explicitly authorized
+by the Warashibe Orchestrator. Sensitive non-code actions remain separately
+gated. This module performs no MCP connection and invokes no Codex process.
 """
 
-CODEX_MCP_RUNTIME_BOUNDARY_VERSION = "0.1"
+from research_lab.codex_orchestrator_security_policy import (
+    CODE_BRANCHES,
+    validate_orchestrator_code_task,
+)
+
+CODEX_MCP_RUNTIME_BOUNDARY_VERSION = "0.2"
 
 REQUIRED_RUNTIME_STATE = (
     "latest_ci_green",
-    "research_lab_branch_confirmed",
-    "bounded_workspace_ready",
+    "repository_workspace_ready",
     "codex_mcp_server_ready",
     "single_task_payload_ready",
+    "orchestrator_security_ready",
     "human_gate_approved",
 )
 
@@ -20,15 +26,16 @@ REQUIRED_TASK_FIELDS = (
     "cycle_id",
     "task_id",
     "goal",
-    "allowed_branch",
-    "allowed_paths",
+    "branch",
     "requested_capabilities",
     "max_repairs",
+    "orchestrator_authorized",
 )
 
 REQUIRED_RESULT_FIELDS = (
     "task_id",
     "status",
+    "branch",
     "changed_files",
     "test_command",
     "test_passed",
@@ -50,14 +57,11 @@ def build_runtime_boundary():
         "version": CODEX_MCP_RUNTIME_BOUNDARY_VERSION,
         "mode": "design_only",
         "transport": "mcp_stdio_or_local_managed_transport",
-        "workspace_scope": "bounded_repository_workspace",
-        "allowed_branch": "research-lab",
-        "allowed_path_prefixes": (
-            "research_lab/",
-            "real_world_engine.py",
-            "real_world_api.py",
-            "warashibe_core_mode.py",
-        ),
+        "workspace_scope": "entire_repository_codebase",
+        "allowed_code_branches": CODE_BRANCHES,
+        "allowed_path_scope": "all_repository_code",
+        "security_owner": "warashibe_orchestrator",
+        "main_code_changes_allowed": True,
         "single_task_per_invocation": True,
         "max_repairs_per_cycle": 1,
         "require_clean_task_envelope": True,
@@ -66,20 +70,13 @@ def build_runtime_boundary():
         "require_diff_summary": True,
         "require_changed_file_list": True,
         "require_ci_green_before_next_task": True,
-        "stop_on_human_gate": True,
+        "stop_on_orchestrator_denial": True,
         "stop_on_policy_violation": True,
         "stop_on_unknown_status": True,
-        "network_default": "deny",
-        "secret_default": "deny",
-        "commerce_default": "deny",
+        "sensitive_non_code_actions_require_human_gate": True,
         "codex_mcp_connect_authorized": False,
         "codex_process_start_authorized": False,
         "workspace_write_authorized": False,
-        "network_execution_authorized": False,
-        "secret_access_authorized": False,
-        "commerce_authorized": False,
-        "production_change_authorized": False,
-        "main_branch_change_authorized": False,
         "external_action_authorized": False,
     }
 
@@ -117,39 +114,20 @@ def validate_task_envelope(task):
         if field not in task:
             errors.append(f"missing_{field}")
 
-    if task.get("allowed_branch") != "research-lab":
-        errors.append("branch_not_allowed")
-
     if task.get("max_repairs") != 1:
         errors.append("invalid_max_repairs")
-
-    allowed_paths = task.get("allowed_paths")
-    if not isinstance(allowed_paths, (list, tuple)) or not allowed_paths:
-        errors.append("invalid_allowed_paths")
-    else:
-        boundary = build_runtime_boundary()
-        prefixes = boundary["allowed_path_prefixes"]
-        for path in allowed_paths:
-            if not isinstance(path, str) or not path:
-                errors.append("invalid_allowed_path_item")
-                continue
-            if not any(
-                path == prefix or path.startswith(prefix)
-                for prefix in prefixes
-            ):
-                errors.append("path_outside_boundary")
-
-    requested = task.get("requested_capabilities")
-    if not isinstance(requested, (list, tuple)) or not requested:
-        errors.append("invalid_requested_capabilities")
 
     goal = task.get("goal")
     if not isinstance(goal, str) or not goal.strip():
         errors.append("invalid_goal")
 
+    security = validate_orchestrator_code_task(task)
+    errors.extend(security.get("errors", ()))
+
     return {
         "valid": not errors,
         "errors": tuple(dict.fromkeys(errors)),
+        "code_write_scope": security.get("code_write_scope"),
     }
 
 
@@ -169,6 +147,9 @@ def validate_result_envelope(result):
     status = result.get("status")
     if status not in ALLOWED_STATUSES:
         errors.append("unsupported_status")
+
+    if result.get("branch") not in CODE_BRANCHES:
+        errors.append("branch_not_allowed")
 
     changed_files = result.get("changed_files")
     if not isinstance(changed_files, (list, tuple)):
@@ -202,19 +183,19 @@ def validate_result_envelope(result):
 def validate_codex_mcp_runtime_boundary():
     boundary = build_runtime_boundary()
     assert boundary["mode"] == "design_only"
-    assert boundary["allowed_branch"] == "research-lab"
+    assert boundary["workspace_scope"] == "entire_repository_codebase"
+    assert boundary["allowed_code_branches"] == ("research-lab", "main")
+    assert boundary["allowed_path_scope"] == "all_repository_code"
+    assert boundary["security_owner"] == "warashibe_orchestrator"
+    assert boundary["main_code_changes_allowed"] is True
     assert boundary["single_task_per_invocation"] is True
     assert boundary["max_repairs_per_cycle"] == 1
     assert boundary["require_ci_green_before_next_task"] is True
-    assert boundary["stop_on_human_gate"] is True
+    assert boundary["stop_on_orchestrator_denial"] is True
     assert boundary["stop_on_policy_violation"] is True
+    assert boundary["sensitive_non_code_actions_require_human_gate"] is True
     assert boundary["codex_mcp_connect_authorized"] is False
     assert boundary["codex_process_start_authorized"] is False
     assert boundary["workspace_write_authorized"] is False
-    assert boundary["network_execution_authorized"] is False
-    assert boundary["secret_access_authorized"] is False
-    assert boundary["commerce_authorized"] is False
-    assert boundary["production_change_authorized"] is False
-    assert boundary["main_branch_change_authorized"] is False
     assert boundary["external_action_authorized"] is False
     return True
