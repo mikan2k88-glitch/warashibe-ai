@@ -8,17 +8,17 @@ from research_lab.codex_mcp_integration_design import (
 )
 
 
-def _valid_task():
+def _valid_task(branch="research-lab"):
     return {
         "milestone_id": "sandbox_external_integration",
         "cycle_id": "cycle-001",
         "task_id": "task-001",
-        "allowed_branch": "research-lab",
+        "branch": branch,
         "max_repairs": 1,
-        "human_gate_required": True,
+        "orchestrator_authorized": True,
         "requested_capabilities": (
             "inspect_repository",
-            "edit_research_lab_files",
+            "edit_code_files",
             "run_offline_tests",
             "report_diff_summary",
         ),
@@ -29,33 +29,31 @@ def run_tests():
     assert validate_codex_mcp_integration_design() is True
 
     contract = build_codex_mcp_request_contract()
-    assert contract["allowed_branch"] == "research-lab"
-    assert contract["workspace_policy"] == "bounded_workspace_write"
-    assert contract["mcp_connection_authorized"] is False
-    assert contract["main_branch_change_authorized"] is False
+    assert contract["allowed_code_branches"] == ("research-lab", "main")
+    assert contract["repository_code_scope"] == "all_repository_code"
+    assert contract["workspace_policy"] == "repository_wide_code_write"
+    assert contract["security_owner"] == "warashibe_orchestrator"
+    assert contract["main_code_changes_allowed"] is True
 
     valid = validate_codex_mcp_task(_valid_task())
     assert valid["valid"] is True
     assert valid["execution_authorized"] is False
     assert valid["requires_live_codex_gate"] is True
 
-    forbidden_task = _valid_task()
-    forbidden_task["requested_capabilities"] = ("modify_main_branch",)
-    forbidden = validate_codex_mcp_task(forbidden_task)
-    assert forbidden["valid"] is False
-    assert "forbidden_capability_requested" in forbidden["errors"]
+    main = validate_codex_mcp_task(_valid_task("main"))
+    assert main["valid"] is True
 
-    unknown_task = _valid_task()
-    unknown_task["requested_capabilities"] = ("mystery_tool",)
-    unknown = validate_codex_mcp_task(unknown_task)
-    assert unknown["valid"] is False
-    assert "unknown_capability_requested" in unknown["errors"]
+    denied = _valid_task("main")
+    denied["orchestrator_authorized"] = False
+    rejected = validate_codex_mcp_task(denied)
+    assert rejected["valid"] is False
+    assert "orchestrator_authorization_required" in rejected["errors"]
 
-    bad_branch = _valid_task()
-    bad_branch["allowed_branch"] = "main"
-    rejected_branch = validate_codex_mcp_task(bad_branch)
-    assert rejected_branch["valid"] is False
-    assert "branch_not_allowed" in rejected_branch["errors"]
+    sensitive = _valid_task("main")
+    sensitive["requested_capabilities"] = ("write_secrets",)
+    blocked = validate_codex_mcp_task(sensitive)
+    assert blocked["valid"] is False
+    assert "human_gate_required_for_sensitive_action" in blocked["errors"]
 
     lifecycle = build_codex_mcp_lifecycle()
     assert lifecycle["actual_codex_invocation_authorized"] is False
