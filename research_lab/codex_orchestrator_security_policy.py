@@ -51,6 +51,7 @@ def build_orchestrator_security_policy():
         "all_code_changes_require_orchestrator_authorization": True,
         "main_code_changes_allowed": True,
         "main_code_changes_require_orchestrator_authorization": True,
+        "main_branch_write_requires_human_gate": True,
         "sensitive_non_code_actions_require_human_gate": True,
         "unknown_capabilities_default": "deny",
         "codex_self_escalation_allowed": False,
@@ -102,6 +103,7 @@ def validate_codex_orchestrator_security_policy():
     assert policy["allowed_code_branches"] == ("research-lab", "main")
     assert policy["main_code_changes_allowed"] is True
     assert policy["main_code_changes_require_orchestrator_authorization"] is True
+    assert policy["main_branch_write_requires_human_gate"] is True
     assert policy["sensitive_non_code_actions_require_human_gate"] is True
     assert policy["codex_self_escalation_allowed"] is False
     assert policy["codex_policy_override_allowed"] is False
