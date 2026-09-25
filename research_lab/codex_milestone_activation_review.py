@@ -24,7 +24,7 @@ from research_lab.sandbox_stripe_ledger_bridge_design import (
     validate_sandbox_stripe_ledger_bridge_design,
 )
 
-CODEX_MILESTONE_ACTIVATION_REVIEW_VERSION = "0.1"
+CODEX_MILESTONE_ACTIVATION_REVIEW_VERSION = "0.2"
 
 
 def run_codex_milestone_activation_review():
@@ -52,13 +52,15 @@ def run_codex_milestone_activation_review():
 
     ready = (
         not blockers
-        and contract["allowed_branches"] == ("research-lab",)
+        and contract["allowed_branches"] == ("research-lab", "main")
         and contract["execution_limits"]["max_cycles"] == 10
         and contract["execution_limits"]["max_repairs_per_cycle"] == 1
         and contract["execution_limits"]["stop_on_human_gate"] is True
         and contract["codex_invocation_authorized"] is False
         and contract["network_execution_authorized"] is False
         and contract["commerce_authorized"] is False
+        and contract["main_code_changes_allowed"] is True
+        and contract["main_branch_write_requires_human_gate"] is True
         and contract["main_branch_change_authorized"] is False
     )
 
@@ -78,6 +80,8 @@ def run_codex_milestone_activation_review():
         "secret_access_authorized": False,
         "commerce_authorized": False,
         "production_change_authorized": False,
+        "main_code_changes_allowed": True,
+        "main_branch_write_requires_human_gate": True,
         "main_branch_change_authorized": False,
         "external_action_authorized": False,
     }
@@ -95,6 +99,8 @@ def validate_codex_milestone_activation_review():
     assert review["secret_access_authorized"] is False
     assert review["commerce_authorized"] is False
     assert review["production_change_authorized"] is False
+    assert review["main_code_changes_allowed"] is True
+    assert review["main_branch_write_requires_human_gate"] is True
     assert review["main_branch_change_authorized"] is False
     assert review["external_action_authorized"] is False
     return True
