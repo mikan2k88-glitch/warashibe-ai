@@ -12,9 +12,10 @@ def verify_scheduler_connector(workflow_run, expected_head_sha, connector_status
         workflow_run = {}
     if not isinstance(expected_head_sha, str) or not expected_head_sha.strip():
         blockers.append("invalid_expected_sha")
-    if workflow_run.get("head_branch") != "research-lab":
+    scheduled = workflow_run.get("event") == "schedule"
+    if workflow_run.get("head_branch") != ("main" if scheduled else "research-lab"):
         blockers.append("ci_wrong_branch")
-    if workflow_run.get("path") != ".github/workflows/research-lab.yml":
+    if workflow_run.get("path") != (".github/workflows/research-lab-schedule.yml" if scheduled else ".github/workflows/research-lab.yml"):
         blockers.append("ci_wrong_workflow")
     if workflow_run.get("event") not in ("push", "schedule"):
         blockers.append("ci_event_not_automatic")

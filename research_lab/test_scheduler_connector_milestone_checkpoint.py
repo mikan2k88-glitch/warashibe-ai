@@ -10,8 +10,8 @@ def run_tests():
     assert pending["next_theme"] == "await_scheduled_run_evidence"
     assert pending["runtime_active"] is False
 
-    run = {"id": 17, "head_branch": "research-lab", "head_sha": "a" * 40,
-           "path": ".github/workflows/research-lab.yml", "event": "schedule",
+    run = {"id": 17, "head_branch": "main", "head_sha": "a" * 40,
+           "path": ".github/workflows/research-lab-schedule.yml", "event": "schedule",
            "status": "completed", "conclusion": "success"}
     snapshot = {"run_id": "17", "head_sha": "a" * 40, "status": "passed",
                 "stage": "scheduler_connector_evidence_bridge", "next_theme": "scheduler_connector_live_probe_contract"}

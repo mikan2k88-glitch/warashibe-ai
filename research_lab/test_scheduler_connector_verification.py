@@ -32,6 +32,12 @@ def run_tests():
     assert "invalid_expected_sha" in verify_scheduler_connector(run, "", verified)["blockers"]
     assert "scheduler_connector_not_verified" in verify_scheduler_connector(run, "abc123", {})["blockers"]
 
+    scheduled = dict(run, event="schedule", head_branch="main",
+                     path=".github/workflows/research-lab-schedule.yml")
+    assert verify_scheduler_connector(scheduled, "abc123", disconnected)["ci_verified"] is True
+    assert "ci_wrong_branch" in verify_scheduler_connector(
+        dict(scheduled, head_branch="research-lab"), "abc123", disconnected)["blockers"]
+
 
 if __name__ == "__main__":
     run_tests()
