@@ -14,6 +14,7 @@ from research_lab.real_world_candidate_scoring_design import (
     rank_candidates,
     score_candidate,
 )
+from real_world_policy_bridge import evaluate_real_world_policy
 
 REAL_WORLD_ENGINE_VERSION = "0.1"
 
@@ -31,12 +32,26 @@ def prepare_real_world_candidate(candidate):
             "commerce_authorized": False,
         }
 
+    policy = evaluate_real_world_policy(candidate)
+    if not policy.get("allowed"):
+        return {
+            "status": "rejected",
+            "engine_version": REAL_WORLD_ENGINE_VERSION,
+            "boundary": boundary,
+            "policy": policy,
+            "scoring": None,
+            "human_gate_required": True,
+            "execution_authorized": False,
+            "commerce_authorized": False,
+        }
+
     scoring = score_candidate(candidate)
     if not scoring.get("valid") or not scoring.get("eligible"):
         return {
             "status": "rejected",
             "engine_version": REAL_WORLD_ENGINE_VERSION,
             "boundary": boundary,
+            "policy": policy,
             "scoring": scoring,
             "human_gate_required": True,
             "execution_authorized": False,
@@ -47,6 +62,7 @@ def prepare_real_world_candidate(candidate):
         "status": "ready_for_human_gate",
         "engine_version": REAL_WORLD_ENGINE_VERSION,
         "boundary": boundary,
+        "policy": policy,
         "scoring": scoring,
         "candidate": dict(candidate),
         "human_gate_required": True,
@@ -82,6 +98,7 @@ def build_real_world_engine_snapshot():
         "flow": (
             "receive_normalized_candidates",
             "core_boundary_validation",
+            "policy_validation",
             "candidate_scoring",
             "single_candidate_selection",
             "prepare_human_gate",
