@@ -13,12 +13,14 @@ def run_tests():
 
     contract = build_codex_milestone_contract()
     assert contract["executor"] == "codex"
-    assert contract["allowed_branches"] == ("research-lab",)
+    assert contract["allowed_branches"] == ("research-lab", "main")
     assert contract["execution_limits"]["max_cycles"] == 10
     assert contract["execution_limits"]["max_repairs_per_cycle"] == 1
     assert contract["execution_limits"]["require_ci_green_before_next_cycle"] is True
     assert contract["execution_limits"]["stop_on_human_gate"] is True
     assert contract["codex_invocation_authorized"] is False
+    assert contract["main_code_changes_allowed"] is True
+    assert contract["main_branch_write_requires_human_gate"] is True
     assert contract["main_branch_change_authorized"] is False
     assert contract["commerce_authorized"] is False
 
