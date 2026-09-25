@@ -52,6 +52,7 @@ def run_tests():
     assert selected["status"] == "ready_for_human_gate"
     assert selected["candidate"]["name"] == "fast-safe"
     assert selected["ranked_count"] == 1
+    assert selected["route"]["status"] == "route_data_incomplete"
 
     empty = select_real_world_candidate([risky])
     assert empty["status"] == "no_eligible_candidate"
