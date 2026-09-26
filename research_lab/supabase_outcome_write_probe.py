@@ -1,7 +1,7 @@
-"""Explicitly opt-in, single-row write/read/delete diagnostic.
+"""Explicit opt-in, one-row Supabase write/read/cleanup diagnostic.
 
-Never runs on import or a web request. Caller supplies a trusted client.
-Only the unique probe row is eligible for cleanup. No raw errors or secrets logged.
+Never runs on import, web requests or CI against a live database.
+Caller supplies a trusted client. No raw errors, credentials or row data logged.
 """
 from uuid import uuid4
 
@@ -11,7 +11,6 @@ PREFIX = "__warashibe_write_probe__:"
 
 def probe(client, *, token=None):
     marker = PREFIX + (token or uuid4().hex)
-    inserted_id = None
     status = "write_failed"
     cleanup_ok = False
     try:
@@ -21,33 +20,27 @@ def probe(client, *, token=None):
             "days_to_outcome": 0,
         }).execute()
         rows = response.data or []
-        if len(rows) != 1 or rows[0].get("opportunity_key") != marker:
-            status = "write_unconfirmed"
+        read = (client.table(TABLE).select("id,opportunity_key")
+                .eq("opportunity_key", marker).execute())
+        found = read.data or []
+        if len(found) == 1 and found[0].get("opportunity_key") == marker:
+            status = "read_ok"
+        elif len(rows) == 1:
+            status = "read_failed"
         else:
-            inserted_id = rows[0].get("id")
-            if inserted_id is None:
-                status = "id_unavailable"
-            else:
-                read = (client.table(TABLE).select("id,opportunity_key")
-                        .eq("id", inserted_id).eq("opportunity_key", marker).execute())
-                status = ("read_ok" if len(read.data or []) == 1
-                          and read.data[0].get("opportunity_key") == marker
-                          else "read_failed")
+            status = "write_unconfirmed"
     except Exception:
         status = "write_or_read_failed"
     finally:
-        # Never delete a row without both its returned ID and unique marker.
-        if inserted_id is not None:
-            try:
-                client.table(TABLE).delete().eq("id", inserted_id).eq(
-                    "opportunity_key", marker
-                ).execute()
-                verify = (client.table(TABLE).select("id").eq("id", inserted_id)
-                          .eq("opportunity_key", marker).execute())
-                cleanup_ok = len(verify.data or []) == 0
-            except Exception:
-                cleanup_ok = False
+        try:
+            # Unique generated marker restricts deletion to this probe's row.
+            client.table(TABLE).delete().eq("opportunity_key", marker).execute()
+            verify = (client.table(TABLE).select("id")
+                      .eq("opportunity_key", marker).execute())
+            cleanup_ok = len(verify.data or []) == 0
+        except Exception:
+            cleanup_ok = False
     return {"status": "ok" if status == "read_ok" and cleanup_ok else status,
             "write_read_ok": status == "read_ok",
             "cleanup_ok": cleanup_ok,
-            "manual_review_required": inserted_id is None or not cleanup_ok}
+            "manual_review_required": not cleanup_ok}
