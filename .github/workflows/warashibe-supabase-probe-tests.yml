@@ -4,6 +4,7 @@ on:
   push:
     branches: [research-lab]
     paths:
+      - "research_lab/supabase_key_kind.py"
       - "research_lab/supabase_warashibe_read_probe.py"
       - "research_lab/test_supabase_warashibe_read_probe.py"
       - ".github/workflows/warashibe-supabase-probe-tests.yml"
