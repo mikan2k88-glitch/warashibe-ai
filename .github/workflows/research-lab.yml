@@ -40,6 +40,9 @@ jobs:
       - name: Test Gemini assignment without API calls
         run: python -m research_lab.test_gemini_assignment_offline
 
+      - name: Test persistent Gemini assignment gate
+        run: python -m research_lab.test_gemini_assignment_send_gate
+
       - name: Upload research snapshot
         if: always()
         uses: actions/upload-artifact@v4
