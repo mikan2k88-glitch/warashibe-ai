@@ -1,9 +1,4 @@
-"""Supabase-compatible outcome repository without credentials or network setup.
-
-The adapter targets the small OutcomeRepository contract.  A Supabase/PostgREST
-client is injected by the caller, so research tests need no secrets and make no
-external writes.
-"""
+"""Supabase outcome repository. A trusted caller injects its client."""
 
 from research_lab.raw_outcome_calibration import SaleOutcome
 
@@ -28,10 +23,17 @@ class SupabaseOutcomeRepository:
         return [self._decode(row) for row in (response.data or [])]
 
     def append(self, outcome):
+        days = outcome.days_to_outcome
+        if days is not None:
+            if isinstance(days, bool) or not isinstance(days, (int, float)):
+                raise ValueError("days_to_outcome must be a whole number or None")
+            if not (0 <= days < float("inf") and days == int(days)):
+                raise ValueError("days_to_outcome must be a nonnegative whole number")
+            days = int(days)
         payload = {
             "opportunity_key": outcome.opportunity_key,
             "sold": outcome.sold,
-            "days_to_outcome": outcome.days_to_outcome,
+            "days_to_outcome": days,
         }
         self.client.table(self.table).insert(payload).execute()
         return len(self.load())
