@@ -1,3 +1,4 @@
+from research_lab.supabase_key_kind import classify_key
 from research_lab.supabase_warashibe_read_probe import TABLES, probe
 
 
@@ -24,18 +25,24 @@ class Client:
 
 
 def main():
+    assert classify_key(None) == "missing"
+    assert classify_key("sb_secret_fixture") == "secret"
+    assert classify_key("sb_publishable_fixture") == "publishable"
+    assert classify_key("legacy-fixture") == "unknown"
     result = probe(environ={})
     assert result["status"] == "not_configured"
     assert result["read_ok"] is False
+    assert result["key_kind"] == "missing"
     client = Client()
     result = probe(
         environ={"SUPABASE_URL": "https://example.invalid",
-                 "SUPABASE_KEY": "offline-only-fixture"},
+                 "SUPABASE_KEY": "sb_publishable_fixture"},
         client_factory=lambda url, key: client,
     )
     assert result["read_ok"] is True
+    assert result["key_kind"] == "publishable"
     assert client.visited == list(TABLES)
-    assert "offline-only-fixture" not in str(result)
+    assert "sb_publishable_fixture" not in str(result)
     print("Offline read probe tests passed")
 
 
