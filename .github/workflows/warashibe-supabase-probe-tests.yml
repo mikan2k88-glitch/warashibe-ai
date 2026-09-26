@@ -11,6 +11,8 @@ on:
       - "research_lab/test_supabase_outcome_schema_contract.py"
       - "research_lab/supabase_outcome_repository.py"
       - "research_lab/test_supabase_outcome_repository.py"
+      - "research_lab/supabase_outcome_write_probe.py"
+      - "research_lab/test_supabase_outcome_write_probe.py"
       - ".github/workflows/warashibe-supabase-probe-tests.yml"
   workflow_dispatch:
 
@@ -35,3 +37,4 @@ jobs:
           python -m research_lab.test_supabase_warashibe_read_probe
           python -m research_lab.test_supabase_outcome_schema_contract
           python -m research_lab.test_supabase_outcome_repository
+          python -m research_lab.test_supabase_outcome_write_probe
