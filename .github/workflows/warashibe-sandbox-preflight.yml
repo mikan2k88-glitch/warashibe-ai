@@ -1,0 +1,32 @@
+name: Warashibe sandbox preflight
+
+on:
+  push:
+    branches: [research-lab]
+    paths:
+      - "research_lab/autonomous_research_orchestrator_sandbox_experiment_environment_design.py"
+      - "research_lab/sandbox_execution_preflight.py"
+      - "research_lab/test_sandbox_execution_preflight.py"
+      - ".github/workflows/warashibe-sandbox-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify sandbox remains fail-closed
+        env:
+          SUPABASE_URL: ""
+          SUPABASE_KEY: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          SUPABASE_SECRET_KEY: ""
+        run: |
+          python -m research_lab.test_autonomous_research_orchestrator_sandbox_experiment_environment_design
+          python -m research_lab.test_sandbox_execution_preflight
