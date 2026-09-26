@@ -21,7 +21,8 @@ jobs:
       - name: Checkout research branch
         uses: actions/checkout@v4
         with:
-          ref: research-lab
+          # Pin checkout to the triggering commit, not a moving branch head.
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
