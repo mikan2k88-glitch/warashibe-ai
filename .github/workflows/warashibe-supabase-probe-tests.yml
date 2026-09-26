@@ -7,6 +7,8 @@ on:
       - "research_lab/supabase_key_kind.py"
       - "research_lab/supabase_warashibe_read_probe.py"
       - "research_lab/test_supabase_warashibe_read_probe.py"
+      - "research_lab/supabase_outcome_schema_contract.py"
+      - "research_lab/test_supabase_outcome_schema_contract.py"
       - ".github/workflows/warashibe-supabase-probe-tests.yml"
   workflow_dispatch:
 
@@ -27,4 +29,6 @@ jobs:
           SUPABASE_KEY: ""
           SUPABASE_SERVICE_ROLE_KEY: ""
           SUPABASE_SECRET_KEY: ""
-        run: python -m research_lab.test_supabase_warashibe_read_probe
+        run: |
+          python -m research_lab.test_supabase_warashibe_read_probe
+          python -m research_lab.test_supabase_outcome_schema_contract
