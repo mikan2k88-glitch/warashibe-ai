@@ -1,7 +1,4 @@
-"""Preflight schema contract for the opt-in Supabase outcome writer.
-
-This check does not connect to a database or modify its schema.
-"""
+"""Offline preflight contract for the opt-in Supabase outcome writer."""
 
 
 def assess(columns):
@@ -11,8 +8,11 @@ def assess(columns):
     if not required.issubset(by_name):
         issues.append("missing_required_columns")
     identifier = by_name.get("id")
-    if identifier and identifier.get("column_default") is None:
-        issues.append("id_has_no_default")
+    if identifier and not (
+        identifier.get("column_default") is not None
+        or identifier.get("is_identity") == "YES"
+    ):
+        issues.append("id_has_no_generation")
     days = by_name.get("days_to_outcome")
     if days and days.get("data_type") != "integer":
         issues.append("unexpected_days_type")
