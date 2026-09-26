@@ -1,10 +1,12 @@
-"""Opt-in, read-only diagnostic for Warashibe-owned Supabase tables.
+"""Opt-in read-only diagnostic for Warashibe-owned Supabase tables.
 
 Run manually: python -m research_lab.supabase_warashibe_read_probe
 Never prints credentials or raw exception messages. Does not change RLS or data.
 """
 import json
 import os
+
+from research_lab.supabase_key_kind import configured_key_kind
 
 TABLES = ("warashibe_sale_outcomes", "warashibe_market_evidence")
 
@@ -15,15 +17,18 @@ def probe(*, client_factory=None, environ=None):
     key = (env.get("SUPABASE_SERVICE_ROLE_KEY")
            or env.get("SUPABASE_SECRET_KEY")
            or env.get("SUPABASE_KEY"))
+    kind = configured_key_kind(env)
     if not url or not key:
-        return {"status": "not_configured", "read_ok": False, "tables": {}}
+        return {"status": "not_configured", "read_ok": False,
+                "key_kind": kind, "tables": {}}
     if client_factory is None:
         from supabase import create_client
         client_factory = create_client
     try:
         client = client_factory(url, key)
     except Exception:
-        return {"status": "client_creation_failed", "read_ok": False, "tables": {}}
+        return {"status": "client_creation_failed", "read_ok": False,
+                "key_kind": kind, "tables": {}}
     checks = {}
     for table in TABLES:
         try:
@@ -33,7 +38,7 @@ def probe(*, client_factory=None, environ=None):
             checks[table] = "failed"
     read_ok = all(value == "ok" for value in checks.values())
     return {"status": "ok" if read_ok else "read_failed",
-            "read_ok": read_ok, "tables": checks}
+            "read_ok": read_ok, "key_kind": kind, "tables": checks}
 
 
 def main():
