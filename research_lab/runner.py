@@ -12,6 +12,26 @@ OUTPUT = Path(os.environ.get("WARASHIBE_LAB_OUTPUT", ROOT / "research_output"))
 HISTORY_LIMIT = 120
 
 
+def decide_runner_handoff(event, passed):
+    if not passed:
+        return {
+            "stage": "research_checks_failed",
+            "next_theme": "repair_research_checks",
+            "decision_reason": "research_checks_failed",
+        }
+    if event != "schedule":
+        return {
+            "stage": "awaiting_scheduled_evidence",
+            "next_theme": "await_scheduled_run_evidence",
+            "decision_reason": "schedule_trigger_not_observed",
+        }
+    return {
+        "stage": "scheduled_workflow_trigger_observed",
+        "next_theme": "supervisor_connector_live_verification",
+        "decision_reason": "schedule_checks_passed_external_verification_pending",
+    }
+
+
 def run_command(args):
     completed = subprocess.run(args, cwd=ROOT, text=True, capture_output=True)
     return {"command": " ".join(args), "returncode": completed.returncode,
@@ -43,10 +63,11 @@ def run_cycle():
     ]
     checks = [run_command([sys.executable, "-m", module]) for module in modules]
     passed = all(check["returncode"] == 0 for check in checks)
+    handoff = decide_runner_handoff(os.environ.get("GITHUB_EVENT_NAME"), passed)
     snapshot = {"generated_at": datetime.now(timezone.utc).isoformat(),
                 "status": "passed" if passed else "failed",
                 "head_sha": os.environ.get("GITHUB_SHA"), "run_id": os.environ.get("GITHUB_RUN_ID"),
-                "stage": "scheduled_workflow_trigger_verified", "next_theme": "supervisor_connector_live_verification", "checks": checks}
+                **handoff, "checks": checks}
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"
     try:
@@ -55,6 +76,7 @@ def run_cycle():
         history = []
     history.append({"generated_at": snapshot["generated_at"], "status": snapshot["status"],
                     "stage": snapshot["stage"], "next_theme": snapshot["next_theme"],
+                    "decision_reason": snapshot["decision_reason"],
                     "passed_checks": sum(1 for x in checks if x["returncode"] == 0),
                     "total_checks": len(checks)})
     history_path.write_text(json.dumps(history[-HISTORY_LIMIT:], ensure_ascii=False, indent=2), encoding="utf-8")
