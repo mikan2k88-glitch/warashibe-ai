@@ -1,0 +1,29 @@
+name: Warashibe Supabase probe offline tests
+
+on:
+  push:
+    branches: [research-lab]
+    paths:
+      - "research_lab/supabase_warashibe_read_probe.py"
+      - "research_lab/test_supabase_warashibe_read_probe.py"
+      - ".github/workflows/warashibe-supabase-probe-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test without Supabase credentials
+        env:
+          SUPABASE_URL: ""
+          SUPABASE_KEY: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          SUPABASE_SECRET_KEY: ""
+        run: python -m research_lab.test_supabase_warashibe_read_probe
