@@ -15,6 +15,24 @@
 - [研究用GitHub Actionsワークフロー](https://github.com/mikan2k88-glitch/warashibe-ai/blob/research-lab/.github/workflows/research-lab.yml)は `runner.py` を実行する。Renderの環境変数はGitHub Actionsに自動で渡らない。定期スケジュールの経路は別途確認すること。
 - 過去のIssue本文には古い状態の記述もある。必ず新しいコメント・最新のコミット・実行成果物で照合する。
 
+## 2026-09-27: Codex不在時の暫定LAB開発ループ（検証済み）
+- GPTが research-lab に限定して小規模な変更を反映し、GitHub Actionsが実行される経路を実証した。Gemini/Codexへの実送信は行っていない。
+- Sandbox preflight は設計上の実行許可が false のまま。隔離された実行環境の稼働を意味しない。
+- `1c0f10c9a893646fd5f065a8c8ff84fe59e1b2bc`: Sandbox preflight と通常Research LAB CIの両方が成功。
+  - https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36264867095
+  - https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36264867117
+- `7a3000e55db7ecc2160295d233e3d10d99daa99b`: Codex fallback gate と通常Research LAB CIの両方が成功。
+  - https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36264941738
+  - https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36264941692
+- `affb882b5c9c30349b9462dc47940674daddb079`: 通常Research LAB CIが成功。checkoutをトリガー時の `github.sha` に固定し、runの表示SHAと実際のテスト対象の食い違いを防ぐ。
+  - https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36265194740
+- ChatGPTの定期監視「わらしべLAB CI自動判定」は最新HEADの同一SHAの必要なCIを確認する。ライブラリ引継ぎ資料の更新も別の定期タスクで設定済み。ただし自動タスクの設定は、実際のライブラリ更新成功の証拠とは区別する。
+- MAINへの昇格、実DB書き込み、実取引、外部AIの実呼び出しはこのマイルストーンに含まれない。
+
+## 次の実装候補
+- 既存の仮想市場・市場証拠・成約結果の閉ループから、1件のオフライン再現可能な評価ケースを選び、商品選択の根拠と期待利益・失敗リスク・手数料を同じ出力で比較できるか検証する。既存モジュールを優先的に再利用し、同時点の全資本で1品のみの方針を維持する。
+- 研究の検証はLABのみ。実市場API・Gemini/Codex・MAIN・実決済は自動起動しない。
+
 ## 次の一件
 1. 現在の定期スケジュールとGPTタスクが読む成果物、Geminiへ渡す作業指示の生成元を特定する。
 2. Render側でキーを使うなら、認証された入口と永続的な重複防止ゲートを先に設計・検証する。公開Web経由の無認証送信を作らない。費用・回数・失敗時停止を固定する。
