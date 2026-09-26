@@ -1,7 +1,7 @@
-"""Opt-in, read-only diagnostic for the Warashibe-owned Supabase tables.
+"""Opt-in, read-only diagnostic for Warashibe-owned Supabase tables.
 
 Run manually: python -m research_lab.supabase_warashibe_read_probe
-No probe is run on import, web requests, or CI. Credentials are never printed.
+Never prints credentials or raw exception messages. Does not change RLS or data.
 """
 import json
 import os
@@ -12,7 +12,9 @@ TABLES = ("warashibe_sale_outcomes", "warashibe_market_evidence")
 def probe(*, client_factory=None, environ=None):
     env = os.environ if environ is None else environ
     url = env.get("SUPABASE_URL")
-    key = env.get("SUPABASE_SERVICE_ROLE_KEY") or env.get("SUPABASE_SECRET_KEY")
+    key = (env.get("SUPABASE_SERVICE_ROLE_KEY")
+           or env.get("SUPABASE_SECRET_KEY")
+           or env.get("SUPABASE_KEY"))
     if not url or not key:
         return {"status": "not_configured", "read_ok": False, "tables": {}}
     if client_factory is None:
@@ -29,11 +31,9 @@ def probe(*, client_factory=None, environ=None):
             checks[table] = "ok" if response is not None else "failed"
         except Exception:
             checks[table] = "failed"
-    return {
-        "status": "ok" if all(value == "ok" for value in checks.values()) else "read_failed",
-        "read_ok": all(value == "ok" for value in checks.values()),
-        "tables": checks,
-    }
+    read_ok = all(value == "ok" for value in checks.values())
+    return {"status": "ok" if read_ok else "read_failed",
+            "read_ok": read_ok, "tables": checks}
 
 
 def main():
