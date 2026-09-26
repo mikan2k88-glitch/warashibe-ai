@@ -38,8 +38,17 @@ class FakeClient:
 
 
 def main():
-    repo = validate_repository(SupabaseOutcomeRepository(FakeClient()))
+    client = FakeClient()
+    repo = validate_repository(SupabaseOutcomeRepository(client))
     assert repo.stats()["mode"] == "waiting"
+    for invalid in (1.5, -1, float("nan"), float("inf"), True):
+        try:
+            repo.append(SaleOutcome("invalid", True, invalid))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid days were accepted")
+    assert client.rows == []
     assert repo.append(SaleOutcome("camera-a", True, 2.0)) == 1
     assert repo.append(SaleOutcome("camera-a", False, 5.0)) == 2
     assert repo.append(SaleOutcome("book-b", True, 1.0)) == 3
