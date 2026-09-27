@@ -4,6 +4,14 @@ from collections.abc import Mapping
 
 MODULE_SCOUT_VALIDATION_VERSION = "0.1"
 
+_EXPECTED_SOURCE_PRIORITY = {
+    "python_standard_library": 5,
+    "official_api_or_sdk": 4,
+    "internal_shared_module": 3,
+    "mature_open_source_module": 2,
+    "chatgpt_plugin": 2,
+}
+
 _REQUIRED_FIELDS = (
     "allowed_for_experiment",
     "source",
@@ -53,8 +61,10 @@ def validate_module_scout_decision(snapshot):
             "internal_shared_module",
         ):
             errors.append("allowed_unknown_source")
-        if not isinstance(snapshot.get("reason"), str) or not snapshot.get("reason"):
-            errors.append("allowed_without_reason")
+        if priority != _EXPECTED_SOURCE_PRIORITY.get(source):
+            errors.append("source_priority_mismatch")
+        if snapshot.get("reason") != "small_reversible_experiment_allowed":
+            errors.append("allowed_reason_mismatch")
         if source == "python_standard_library":
             if snapshot.get("requires_human_gate_for_external_install") is not False:
                 errors.append("stdlib_external_install_gate_invalid")
