@@ -36,6 +36,23 @@ def run_tests():
         ("estimated_cost_usd", None),
         ("requested_capabilities", ["modify_main_branch"]),
         ("assignment_id", ""),
+        ("max_requests", "1"),
+        ("max_requests", True),
+        ("max_requests", 1.0),
+        ("max_input_tokens", "2000"),
+        ("max_input_tokens", 2000.0),
+        ("max_output_tokens", float("inf")),
+        ("max_output_tokens", float("nan")),
+        ("max_cost_usd", "0.10"),
+        ("max_cost_usd", float("nan")),
+        ("max_cost_usd", float("inf")),
+        ("max_cost_usd", float("-inf")),
+        ("max_cost_usd", True),
+        ("max_cost_usd", 0),
+        ("estimated_cost_usd", "0.01"),
+        ("estimated_cost_usd", float("nan")),
+        ("estimated_cost_usd", float("inf")),
+        ("estimated_cost_usd", -0.01),
     )
     for key, value in cases:
         state = dict(valid, **{key: value})
