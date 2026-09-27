@@ -3,6 +3,11 @@
 This module never sends a request, reads secrets, or grants execution authority.
 Budget figures are explicit per-attempt ceilings, not claims about provider pricing.
 """
+import math
+
+
+def _positive_finite_number(value):
+    return type(value) in (int, float) and math.isfinite(value) and value > 0
 
 
 def review_assignment_preflight(state):
@@ -22,21 +27,27 @@ def review_assignment_preflight(state):
         value = state.get(field)
         if not isinstance(value, str) or not value.strip() or len(value) > 256:
             errors.append("invalid_" + field)
-    for field in ("max_requests", "max_input_tokens", "max_output_tokens", "max_cost_usd"):
+    for field in ("max_requests", "max_input_tokens", "max_output_tokens"):
         value = state.get(field)
-        if type(value) not in (int, float) or value <= 0:
+        if type(value) is not int or value <= 0:
             errors.append("invalid_" + field)
-    if state.get("max_requests") != 1:
+    cost_limit = state.get("max_cost_usd")
+    if not _positive_finite_number(cost_limit):
+        errors.append("invalid_max_cost_usd")
+    if type(state.get("max_requests")) is not int or state["max_requests"] != 1:
         errors.append("request_limit_must_be_one")
-    if state.get("max_input_tokens", 0) > 2000:
+    input_limit = state.get("max_input_tokens")
+    if type(input_limit) is int and input_limit > 2000:
         errors.append("input_token_limit_exceeded")
-    if state.get("max_output_tokens", 0) > 512:
+    output_limit = state.get("max_output_tokens")
+    if type(output_limit) is int and output_limit > 512:
         errors.append("output_token_limit_exceeded")
-    if state.get("max_cost_usd", 0) > 0.10:
+    if _positive_finite_number(cost_limit) and cost_limit > 0.10:
         errors.append("cost_limit_exceeded")
-    if state.get("estimated_cost_usd") is None or type(state.get("estimated_cost_usd")) not in (int, float):
+    estimate = state.get("estimated_cost_usd")
+    if type(estimate) not in (int, float) or not math.isfinite(estimate) or estimate < 0:
         errors.append("missing_cost_estimate")
-    elif not (0 <= state["estimated_cost_usd"] <= state.get("max_cost_usd", -1)):
+    elif _positive_finite_number(cost_limit) and estimate > cost_limit:
         errors.append("estimated_cost_exceeds_limit")
     if state.get("requested_capabilities") not in ([], ()):
         errors.append("capabilities_must_be_empty")
