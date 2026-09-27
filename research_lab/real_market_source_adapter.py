@@ -37,6 +37,19 @@ def _float(raw: dict[str, Any], key: str, default: float = 0.0) -> float:
     return number
 
 
+def _nonnegative_integer(value: Any, key: str) -> int:
+    """Reject fractional, boolean, and non-finite counts instead of truncating."""
+    if isinstance(value, bool):
+        raise ValueError(f"{key} must be a nonnegative integer")
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{key} must be a nonnegative integer") from None
+    if not isfinite(number) or number < 0 or not number.is_integer():
+        raise ValueError(f"{key} must be a nonnegative integer")
+    return int(number)
+
+
 def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
     missing = [key for key in REQUIRED_RAW_FIELDS if raw.get(key) in (None, "")]
     if missing:
@@ -73,7 +86,7 @@ def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
             else _float(raw, "recovery_value")
         ),
         observed_at=str(observed_at),
-        evidence_count=int(raw.get("evidence_count", 0)),
+        evidence_count=_nonnegative_integer(raw.get("evidence_count", 0), "evidence_count"),
         confidence=_float(raw, "confidence"),
         metadata=metadata,
     )
