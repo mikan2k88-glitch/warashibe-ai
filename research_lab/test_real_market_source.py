@@ -69,6 +69,16 @@ def run():
     assert normalize_raw_observation({**raw, "metadata": None}).metadata["source_adapter_version"] == "0.1"
     assert normalize_raw_observation({**raw, "metadata": {"origin": "fixture"}}).metadata["origin"] == "fixture"
 
+    # Numeric conversion errors are isolated, including oversized integers.
+    for invalid_number in ([], {}, object(), 10 ** 1000):
+        accepted, rejected = normalize_source_batch(
+            [raw, {**raw, "purchase_price": invalid_number}, raw]
+        )
+        assert len(accepted) == 2
+        assert len(rejected) == 1
+        assert rejected[0]["index"] == 1
+        assert rejected[0]["reason"] == "purchase_price must be a finite number"
+
     # Offline malformed-row boundary: one bad listing must not discard a good one.
     for field, value in (
         ("purchase_price", -1),
