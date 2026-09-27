@@ -95,3 +95,8 @@
 - `external_id`、`name`、`category`、`source`、`currency` に対し、非空の文字列であることを明示検査。bool・数値等を `str(...)` で商品情報へ変換しない。通貨は空白除去後に大文字化。実装コミット `f9714941e81fa8e1c8c5823f2aabb1e0c5d4ac5f`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320795603
 - 各フィールドのbool・数値・リスト・空白値の拒否、正常行の継続、通貨の正規化をオフラインで回帰検証。コミット `1beeb90dff5b34842a6958943de15d6b09ad19b2`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320839118
 - 文字列の意味的な真正性、通貨コードの一覧照合、外部ソースの信頼性は今回の対象外。新規依存・実市場接続・実DB・実売買なし。
+
+## 市場取得から候補評価までの混在データ結合検証（2026-09-28）
+- 既存の `run_market_decision` を使い、モックProviderから正常2件・不正3件（非辞書、metadata型不正、巨大価格）を入力。raw_count=5、normalized_count=2、normalization_rejected=3、estimate_count=1、quality_accepted=1を検証。入力境界の修正が下流の集約・品質審査まで正常に連携することをオフラインで確認した。
+- テストコミット `aa527d4ef90ae8b7b9e7fd540b8425cb45c9d577`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36332705437
+- これは既存パイプラインの結合検証であり、複数ステップの取引シミュレーションや実市場接続・実売買を完成させたものではない。次は候補の選択結果と資本推移をオフラインで接続する方向を優先する。
