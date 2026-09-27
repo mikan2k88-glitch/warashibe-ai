@@ -79,6 +79,16 @@ def run():
         assert rejected[0]["index"] == 1
         assert rejected[0]["reason"] == "purchase_price must be a finite number"
 
+    # Identity fields must not turn booleans or numbers into plausible labels.
+    for field in ("external_id", "name", "category", "source", "currency"):
+        for invalid in (True, 123, [], "   "):
+            accepted, rejected = normalize_source_batch([raw, {**raw, field: invalid}, raw])
+            assert len(accepted) == 2, (field, invalid)
+            assert len(rejected) == 1, (field, invalid)
+            assert rejected[0]["index"] == 1
+            assert rejected[0]["reason"] == f"{field} must be a nonempty string"
+    assert normalize_raw_observation({**raw, "currency": " jpy "}).currency == "JPY"
+
     # Offline malformed-row boundary: one bad listing must not discard a good one.
     for field, value in (
         ("purchase_price", -1),
