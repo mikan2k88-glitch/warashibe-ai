@@ -70,3 +70,8 @@
 | Secret・外部通信・実DB・費用 | 不要な検証範囲 | オフラインに限定し、別Human Gateなしに接続しない |
 
 判定: **Pydanticは調査候補を継続、導入保留**。現時点の検証範囲で新しい依存を追加する根拠はない。既存Provider境界と取得後のレコード検証を混同せず、次は下流の実装とテストを調べる。
+
+## 市場証拠件数の厳密化（2026-09-27）
+- 下流の既存実装を調査し、`research_lab/real_market_source_adapter.py` が `evidence_count` を `int(...)` で変換し、小数を切り捨て得ることを確認。新規ライブラリを追加せず、有限・非負・整数値の条件を満たさない入力を拒否するよう変更した。コミット `b3a4b93d9a346a5ddf723f2ed3ec394ff3e60aff`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36319851781
+- 取り込み経路 `test_live_market_evidence_ingestion.py` に小数、負数、bool、NaN、Infinity、不正文字列、None の拒否と、正常な整数値の受理を確認する回帰テストを追加。コミット `bae1a00f69c77189ba0954973b3f3206a58b5d6d`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36319897633
+- これは件数フィールドの入力境界だけの改善であり、他の全フィールドの厳密性、外部SDKとの比較、実市場データの品質を保証するものではない。Pydantic導入は引き続き保留。外部通信・実DB・実売買なし。
