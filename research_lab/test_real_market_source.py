@@ -60,6 +60,13 @@ def run():
         ("evidence_count", -1),
         ("platform_fee", -1),
         ("purchase_price", "not-a-price"),
+        ("purchase_price", "nan"),
+        ("purchase_price", float("inf")),
+        ("expected_sale_price", float("-inf")),
+        ("sale_probability", float("nan")),
+        ("confidence", float("inf")),
+        ("platform_fee", float("nan")),
+        ("purchase_price", True),
     ):
         invalid = dict(raw)
         invalid[field] = value
