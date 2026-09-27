@@ -6,6 +6,7 @@ purchases, listings, payments, or other external actions.
 """
 
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any, Iterable
 
 from research_lab.real_market_schema import MarketObservation, validate_observation
@@ -28,7 +29,12 @@ def _float(raw: dict[str, Any], key: str, default: float = 0.0) -> float:
     value = raw.get(key, default)
     if value is None:
         return default
-    return float(value)
+    if isinstance(value, bool):
+        raise ValueError(f"{key} must be a finite number")
+    number = float(value)
+    if not isfinite(number):
+        raise ValueError(f"{key} must be a finite number")
+    return number
 
 
 def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
