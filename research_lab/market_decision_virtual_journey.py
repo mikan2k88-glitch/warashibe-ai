@@ -14,8 +14,10 @@ VIRTUAL_JOURNEY_VERSION = "0.1"
 
 def run_virtual_journey(provider_factory, query: str, start_capital: float,
                         draws: tuple[float, ...], target: float = 1_000_000,
-                        max_steps: int = 20, **gate_kwargs) -> dict:
+                        max_steps: int = 20, salvage_on_failure: bool = False, **gate_kwargs) -> dict:
     """Run at most max_steps; supplied draws make outcomes reproducible."""
+    if not isinstance(salvage_on_failure, bool):
+        raise ValueError("salvage_on_failure must be boolean")
     for key, value in (("start_capital", start_capital), ("target", target)):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or value <= 0:
             raise ValueError(f"{key} must be finite and positive")
@@ -37,7 +39,8 @@ def run_virtual_journey(provider_factory, query: str, start_capital: float,
         for step in range(1, max_steps + 1):
             provider = provider_factory(step, capital)
             decision_run = run_market_decision(provider, query, capital, **gate_kwargs)
-            trade = simulate_decision_trade(decision_run.decision, draws[step - 1])
+            trade = simulate_decision_trade(decision_run.decision, draws[step - 1],
+                                            salvage_on_failure=salvage_on_failure)
             history.append({"step": step, **trade})
             capital = trade["capital_after"]
             if trade["status"] == "no_candidate":
