@@ -8,14 +8,19 @@ from math import isfinite
 
 from research_lab.end_to_end_market_decision_pipeline import run_market_decision
 from research_lab.market_decision_virtual_trade import simulate_decision_trade
+from research_lab.virtual_trade_costs import apply_virtual_trade_costs
 
 VIRTUAL_JOURNEY_VERSION = "0.1"
 
 
 def run_virtual_journey(provider_factory, query: str, start_capital: float,
                         draws: tuple[float, ...], target: float = 1_000_000,
-                        max_steps: int = 20, salvage_on_failure: bool = False, **gate_kwargs) -> dict:
+                        max_steps: int = 20, salvage_on_failure: bool = False,
+                        cost_kwargs: dict | None = None, **gate_kwargs) -> dict:
     """Run at most max_steps; supplied draws make outcomes reproducible."""
+    if cost_kwargs is not None and (not isinstance(cost_kwargs, dict) or
+                                    set(cost_kwargs) - {"inbound_shipping", "outbound_shipping", "selling_fee_rate"}):
+        raise ValueError("cost_kwargs must contain only supported cost fields")
     if not isinstance(salvage_on_failure, bool):
         raise ValueError("salvage_on_failure must be boolean")
     for key, value in (("start_capital", start_capital), ("target", target)):
@@ -41,6 +46,8 @@ def run_virtual_journey(provider_factory, query: str, start_capital: float,
             decision_run = run_market_decision(provider, query, capital, **gate_kwargs)
             trade = simulate_decision_trade(decision_run.decision, draws[step - 1],
                                             salvage_on_failure=salvage_on_failure)
+            if cost_kwargs is not None:
+                trade = apply_virtual_trade_costs(trade, **cost_kwargs)
             history.append({"step": step, **trade})
             capital = trade["capital_after"]
             if trade["status"] == "no_candidate":
