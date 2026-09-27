@@ -9,8 +9,10 @@ from math import isfinite
 VIRTUAL_TRADE_VERSION = "0.1"
 
 
-def simulate_decision_trade(decision: dict, draw: float) -> dict:
+def simulate_decision_trade(decision: dict, draw: float, *, salvage_on_failure: bool = False) -> dict:
     """Apply one supplied random draw to one proposed candidate, fail closed."""
+    if not isinstance(salvage_on_failure, bool):
+        raise ValueError("salvage_on_failure must be boolean")
     capital = decision["current_capital"]
     if isinstance(capital, bool) or not isinstance(capital, (int, float)) or not isfinite(capital) or capital < 0:
         raise ValueError("current_capital must be finite and nonnegative")
@@ -31,8 +33,18 @@ def simulate_decision_trade(decision: dict, draw: float) -> dict:
     if not 0 < price <= capital or sale < 0 or not 0 <= probability <= 1:
         raise ValueError("candidate trade values are outside allowed bounds")
     success = draw < probability
-    return {"version": VIRTUAL_TRADE_VERSION, "status": "success" if success else "failed",
-            "capital_before": capital, "capital_after": sale if success else 0,
+    recovery = 0
+    if not success and salvage_on_failure:
+        metadata = candidate.get("metadata")
+        if not isinstance(metadata, dict):
+            raise ValueError("salvage requires candidate metadata")
+        recovery = metadata.get("recovery_value")
+        if (isinstance(recovery, bool) or not isinstance(recovery, (int, float))
+                or not isfinite(recovery) or not 0 <= recovery <= capital):
+            raise ValueError("recovery_value must be finite and within available capital")
+    status = "success" if success else ("salvaged" if recovery > 0 else "failed")
+    return {"version": VIRTUAL_TRADE_VERSION, "status": status,
+            "capital_before": capital, "capital_after": sale if success else recovery,
             "selected_item": candidate["name"], "purchase_price": price,
             "gross_sale_value": sale, "sale_probability": probability,
-            "draw": draw, "success": success, "external_action_authorized": False}
+            "draw": draw, "success": success, "salvage_on_failure": salvage_on_failure, "external_action_authorized": False}
