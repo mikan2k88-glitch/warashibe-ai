@@ -129,3 +129,9 @@
 - `research_lab/market_decision_virtual_campaign.py` を追加。失敗かつ最終資本0円の場合に限り、次の独立した挑戦を合意した3,000円で開始する。明示された試行系列の範囲内（最大100挑戦）に限定し、途中で目標到達・候補なし・最大ステップなら停止する。実装コミット `ae6649f4a48124612e04f9ec4bc9b8e2976aa2fb`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334222017
 - テストは1回目全損0円→2回目3,000円開始→3,600円到達、初回到達時は再スタートしないこと、誤った再スタート額を拒否することを確認。テストコミット `497acc2b39f1b60de5c69ccee70dc703b7775a0f`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334284862
 - これは挑戦単位の再スタートであり、1取引への資金注入ではない。損切り後の残額引き継ぎは別の遷移として未実装。実資金追加・実売買・実DB変更なし。
+
+## 損切り残額の同一挑戦内引き継ぎ（2026-09-28）
+- 既存の1品仮想売却に任意の `salvage_on_failure` を追加。失敗時に候補metadataの `recovery_value` を検証し、0より大きく現資本以下なら `salvaged` として引き継ぐ。無効値はfail-closed。デフォルトは従来どおり失敗0円。実装コミット `e61e184252a9d1024442d52baeb2a1d3e6b6f92b`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334547107
+- journeyに残額を次ステップへ渡すオプションを接続（コミット `30fa1b52c0f692d9c07ba62add164f05227d142c`、CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334609598 ）。campaignにも同オプションを接続し、残額ありでは3,000円再スタートしない（コミット `533d80ba7b7fbe8f10383efb62046efa39823302`、CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334666920 ）。
+- 結合テストは3,000→失敗回収1,500→次の1品成功1,800円、同一挑戦の継続、オプションなしの全損再スタート、現資本を超える回収額の拒否を確認。コミット `9b38d882f6e7db488d2d5857c4232a66a0c48ead`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334748768
+- 回収額はfixtureの仮定であり、実売却保証ではない。手数料・送料、回収時間、実売買、実DB変更は対象外。
