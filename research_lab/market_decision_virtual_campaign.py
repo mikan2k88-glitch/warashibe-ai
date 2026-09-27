@@ -1,7 +1,6 @@
 """Offline campaign: restart a new journey at 3,000 JPY after full loss.
 
-Restart is a NEW attempt, never an intra-trade capital injection. Partial-loss
-salvage remains a separate, unimplemented transition.
+Restart is a NEW attempt, never an intra-trade capital injection. Partial-loss salvage stays within the same attempt; it is not a restart.
 """
 
 from research_lab.market_decision_virtual_journey import run_virtual_journey
@@ -13,6 +12,7 @@ RESTART_CAPITAL_JPY = 3000
 def run_virtual_campaign(provider_factory, query: str, attempt_draws: tuple,
                          *, restart_capital: float = RESTART_CAPITAL_JPY,
                          target: float = 1_000_000, max_steps: int = 20,
+                         salvage_on_failure: bool = False,
                          **gate_kwargs) -> dict:
     """Consume explicit draw sequences; restart only after a zero-capital failure."""
     if not isinstance(attempt_draws, tuple) or not 1 <= len(attempt_draws) <= 100:
@@ -23,6 +23,7 @@ def run_virtual_campaign(provider_factory, query: str, attempt_draws: tuple,
     for index, draws in enumerate(attempt_draws, 1):
         result = run_virtual_journey(provider_factory, query, restart_capital,
                                      draws, target=target, max_steps=max_steps,
+                                     salvage_on_failure=salvage_on_failure,
                                      **gate_kwargs)
         attempts.append({"attempt": index, **result})
         if result["status"] != "failed" or result["final_capital"] != 0:
