@@ -100,3 +100,8 @@
 - 既存の `run_market_decision` を使い、モックProviderから正常2件・不正3件（非辞書、metadata型不正、巨大価格）を入力。raw_count=5、normalized_count=2、normalization_rejected=3、estimate_count=1、quality_accepted=1を検証。入力境界の修正が下流の集約・品質審査まで正常に連携することをオフラインで確認した。
 - テストコミット `aa527d4ef90ae8b7b9e7fd540b8425cb45c9d577`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36332705437
 - これは既存パイプラインの結合検証であり、複数ステップの取引シミュレーションや実市場接続・実売買を完成させたものではない。次は候補の選択結果と資本推移をオフラインで接続する方向を優先する。
+
+## 1品選択と資本制限のオフライン結合検証（2026-09-28）
+- 前回の混在市場データfixtureを使い、`run_market_decision` の下流で `best_candidate` が1品、rank=1、資本11,000円以内、`current_capital` は入力のままであることを検証。
+- 同じfixtureで資本9,000円の場合、品質審査通過後でも `best_candidate=None`、`capital_allowed_count=0`、`capital_blocked_count=1` となることを確認。テストコミット `e66657e6d98bdd7ff8564e8ade20107a089e681c`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36332895431
+- これは単一商品の提案・資本フィルターの検証。成功/失敗の抽選、売却後の資本更新、複数ステップの仮想取引はまだ接続していない。実売買・実DB変更なし。
