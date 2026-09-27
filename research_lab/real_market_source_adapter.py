@@ -56,9 +56,12 @@ def _nonnegative_integer(value: Any, key: str) -> int:
 def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
     if not isinstance(raw, dict):
         raise ValueError("raw observation must be a dictionary")
-    missing = [key for key in REQUIRED_RAW_FIELDS if raw.get(key) in (None, "")]
+    missing = [key for key in REQUIRED_RAW_FIELDS if raw.get(key) is None or raw.get(key) == ""]
     if missing:
         raise ValueError("missing required raw fields: " + ", ".join(missing))
+    for key in ("external_id", "name", "category", "source", "currency"):
+        if not isinstance(raw[key], str) or not raw[key].strip():
+            raise ValueError(f"{key} must be a nonempty string")
 
     observed_at = raw.get("observed_at")
     if not observed_at:
@@ -78,7 +81,7 @@ def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
         category=str(raw["category"]),
         source=str(raw["source"]),
         source_url=raw.get("source_url"),
-        currency=str(raw["currency"]).upper(),
+        currency=raw["currency"].strip().upper(),
         purchase_price=_float(raw, "purchase_price"),
         expected_sale_price=_float(raw, "expected_sale_price"),
         sale_probability=_float(raw, "sale_probability"),
