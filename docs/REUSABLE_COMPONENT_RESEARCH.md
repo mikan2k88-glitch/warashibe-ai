@@ -44,3 +44,16 @@
 - 実装コミット `bdfe446ffe4bc4448cdbb6606092577709d0fbed`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36300575947
 - 改ざん値の回帰テストを追加したコミット `7c183db8b67509c05cb51df982f01828863003f4`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36300648472
 - これは既存Module Scoutのオフライン安全性検証であり、外部候補の導入・評価完了や実行権限の付与ではない。
+
+## 外部候補の初回比較：市場入力検証（2026-09-27、文書調査）
+| 項目 | Pydantic v2候補 | 既存のPython標準ライブラリ／内部検証 |
+| --- | --- | --- |
+| 用途 | 型注釈によるモデル検証、JSON Schema、strict mode | `dataclasses`・`typing` と既存の明示的な市場契約・検証器 |
+| 根拠 | 公式ドキュメント https://docs.pydantic.dev/latest/ ・公式リポジトリ https://github.com/pydantic/pydantic | `research_lab/market_provider_contract.py` と既存Module Scout |
+| ライセンス | 公式リポジトリ表示はMIT。採用時に対象リリースと配布物を再確認 | 標準ライブラリ・内部コードを優先 |
+| 互換性 | 公式文書はPython 3.9+と記載する版があるが、採用する固定版とCI Python 3.13、Render側Pythonの組合せは未検証 | 現在のCIで既存研究サイクルが実行されている |
+| 安全性 | strict/laxの違いに注意。市場価格・数量・成功率は意図しない型変換を拒否する設計が必要。脆弱性・推移依存・実環境通信は未監査 | 外部依存追加なし。ただし既存コードの契約の限界は別途テスト |
+| 費用・権限 | OSSの利用自体に有料APIは不要。新規パッケージ導入は別Human Gate、CI・ロック／固定版・ライセンス確認が必要 | 新規導入不要 |
+| 現時点の扱い | **比較候補、採用未決定**。実装・インストール・ベンチマーク未実施 | **基準線**。既存機能と重複するか先に調べる |
+
+調査上の判断: 公式資料ではPydanticの型検証・strict mode・JSON Schemaの機能が確認できるが、わらしべAI固有の市場入力に対する削減効果や実測優位はまだ確認できない。まず既存契約を使うオフラインの入力境界テストを基準線とし、外部依存の追加を急がない。公式資料の記載は将来の版・脆弱性の保証ではない。Module Scoutの `security_reviewed=True` や `license_compatible=True` を文書検索だけで設定しない。
