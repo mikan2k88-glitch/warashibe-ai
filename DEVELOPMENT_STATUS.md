@@ -53,3 +53,9 @@
 - `docs/GEMINI_FIRST_SEND_APPROVAL.md` に初回Sandbox研究指示1件の審査票を作成。commit `fa3ef1310319618f38bc2e890df6d665e589cc0a`、同一SHA CI completed/success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288381746
 - 審査票は未承認。実行環境の認証入口、永続共有台帳、モデルID・料金・請求上限、個別のネットワーク/Secret/Human Gate承認は未検証。オフラインCIは実送信の証拠ではない。
 - 次の一件: 実環境の非秘密メタデータと実行境界を読み取りで確認し、審査票の未確認事項を証拠で埋める。ユーザーの具体的な承認が得られるまではGemini実送信を禁止し、MAIN・実DB・決済等も対象外とする。
+
+## 2026-09-27: Gemini実行境界の証拠整理マイルストーン
+- ユーザー確認済みRender `My Workspace` の研究用サービスを読み取り。research-lab連携・自動デプロイ・最新デプロイliveを確認。IP許可 `0.0.0.0/0` は公開到達性を示すが、個別の認証入口は未検証。Issue #1: https://github.com/mikan2k88-glitch/warashibe-ai/issues/1#issuecomment-5851975999
+- preflight数値型・有限性のfail-closed修正 `6a05ce577327e1405bedbcec923fcc458ab4a6cf` のCI success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288772742 。境界値テスト追加HEAD `19b89c25898b30c374403244f417a0e7c8f565f1` の同一SHA CI success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288873096
+- 審査票 `docs/GEMINI_FIRST_SEND_APPROVAL.md` に非秘密の実環境証拠・残課題を追記。commit `0a2ed13e739ca8d75211e3454a011c6c5793305c`、同一SHA CI completed/success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288975551
+- 次の一件: 公開WebにGemini送信口を追加せず、認証済み管理実行経路と永続共有・原子的な予約台帳の構成を設計し、オフライン疑似送信で検証する。実環境への設定変更、Secret取得、Gemini課金API送信、MAIN・実DB・決済は未承認・未実行。
