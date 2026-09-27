@@ -54,6 +54,26 @@ def main():
     assert mixed.decision["quality_rejected"] == 0
     assert mixed.decision["input_estimates"] == 1
 
+    # One-item decision is a proposal, not a purchase or a capital mutation.
+    selected = mixed.decision["best_candidate"]
+    assert selected is not None
+    assert selected["name"] == "Camera A"
+    assert selected["purchase_price"] <= 11000
+    assert selected["rank"] == 1
+    assert len(mixed.decision["ranked_candidates"]) == 1
+    assert mixed.decision["current_capital"] == 11000
+
+    unaffordable = run_market_decision(
+        MixedProvider(), "camera", 9000,
+        min_confidence=.5, min_evidence_count=3, min_source_count=2,
+    )
+    assert unaffordable.normalized_count == 2
+    assert unaffordable.decision["quality_accepted"] == 1
+    assert unaffordable.decision["best_candidate"] is None
+    assert unaffordable.decision["capital_allowed_count"] == 0
+    assert unaffordable.decision["capital_blocked_count"] == 1
+    assert unaffordable.decision["current_capital"] == 9000
+
     print("end-to-end market decision pipeline tests passed")
 
 
