@@ -73,7 +73,16 @@ def run_tests():
         assert outcome["external_action_authorized"] is False
 
     # Missing required decisions and malformed priority fail closed.
-    for field in baseline:
+    # Version is metadata in the current v0.1 validator, not a required decision field.
+    # Assert the actual required contract rather than imposing a new rule in a test.
+    for field in (
+        "allowed_for_experiment", "source", "source_priority", "reason",
+        "requires_research_lab_only", "requires_ci_comparison",
+        "requires_human_gate_for_external_install", "auto_install_authorized",
+        "auto_dependency_upgrade_authorized", "network_execution_authorized",
+        "main_branch_authorized", "production_change_authorized",
+        "external_action_authorized",
+    ):
         changed = dict(baseline)
         del changed[field]
         assert validate_module_scout_decision(changed)["valid"] is False, field
