@@ -29,8 +29,11 @@ def apply_virtual_trade_costs(trade: dict, *, inbound_shipping: float = 0,
                 else trade["capital_after"])
     proceeds = _amount("gross_proceeds", proceeds)
     fee = proceeds * rate
+    charged_outbound = outbound if proceeds > 0 else 0
+    if proceeds - fee < charged_outbound:
+        raise ValueError("selling costs exceed proceeds")
     remaining = capital - price - inbound
-    net = remaining + max(0, proceeds - fee - outbound)
+    net = remaining + proceeds - fee - charged_outbound
     if net < 0 or not isfinite(net):
         raise ValueError("invalid resulting capital")
     # A failed sale with zero proceeds still loses the purchased item, but
@@ -41,6 +44,6 @@ def apply_virtual_trade_costs(trade: dict, *, inbound_shipping: float = 0,
     return {**trade, "status": status, "capital_after": net,
             "cost_model": "cash_ledger", "unspent_cash": remaining,
             "gross_proceeds": proceeds, "selling_fee": fee,
-            "inbound_shipping": inbound, "outbound_shipping": outbound,
-            "total_costs": inbound + outbound + fee,
+            "inbound_shipping": inbound, "outbound_shipping": charged_outbound,
+            "total_costs": inbound + charged_outbound + fee,
             "external_action_authorized": False}
