@@ -110,3 +110,8 @@
 - 新規の小さなオフライン部品 `research_lab/market_decision_virtual_trade.py` で、品質審査済み `best_candidate` に対して明示的な乱数drawを適用。成功時は想定売却額、失敗時は0円、候補なしは元資本を返す。入力資本・乱数・候補価格・確率を検証し、外部アクションを許可しない。実装コミット `6ac38268ddaf20db9d70f820940ca109d6f741b1`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333080572
 - 既存の市場取得→正規化→品質審査→1品選択テストへ成功・失敗・候補なし・不正乱数・元decision非変更の検証を接続。テストコミット `d21b930f0cea167da866c18acf6ecda440be6ca0`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333144105
 - 既存 `simulation_engine.run_candidate_cycle` と同じ総売却額・失敗0円の暫定仮想モデル。手数料控除、複数ステップ、実市場・実売買・実DBは対象外。
+
+## 複数ステップの1品仮想わらしべ挑戦（2026-09-28）
+- `research_lab/market_decision_virtual_journey.py` を追加。各ステップで注入されたモックProviderから証拠を取得し、既存の品質審査・1品選択・仮想売却結果を次の資本に引き継ぐ。目標到達、失敗、候補なし、最大20ステップで停止し、入力乱数を事前検査。実装コミット `f61d408534cf4e3c56a06842bd737ddbd0654ff8`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333367297
+- 結合テストでは10,000→12,000→14,400円の2ステップ目標到達、2ステップ目失敗による0円、最大ステップ停止、品質条件で候補なし、無効乱数によるProvider未呼出を検証。テストコミット `6e3c1b23f88a94a648a1026508cfe3e7dd6f202b`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333428266
+- これは固定fixtureと指定乱数による再現可能なオフライン結合試験。実市場価格の予測精度、手数料控除、実売買、本体への組込は未実施。目標100万円への実測到達率を示すものではない。
