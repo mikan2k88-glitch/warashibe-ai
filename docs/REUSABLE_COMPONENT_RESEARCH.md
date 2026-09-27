@@ -115,3 +115,8 @@
 - `research_lab/market_decision_virtual_journey.py` を追加。各ステップで注入されたモックProviderから証拠を取得し、既存の品質審査・1品選択・仮想売却結果を次の資本に引き継ぐ。目標到達、失敗、候補なし、最大20ステップで停止し、入力乱数を事前検査。実装コミット `f61d408534cf4e3c56a06842bd737ddbd0654ff8`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333367297
 - 結合テストでは10,000→12,000→14,400円の2ステップ目標到達、2ステップ目失敗による0円、最大ステップ停止、品質条件で候補なし、無効乱数によるProvider未呼出を検証。テストコミット `6e3c1b23f88a94a648a1026508cfe3e7dd6f202b`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333428266
 - これは固定fixtureと指定乱数による再現可能なオフライン結合試験。実市場価格の予測精度、手数料控除、実売買、本体への組込は未実施。目標100万円への実測到達率を示すものではない。
+
+## 複数挑戦のシード固定統計評価（2026-09-28）
+- `research_lab/market_decision_virtual_statistics.py` を追加。ローカル乱数シードで独立した仮想journeyを最大10,000回実行し、終了状態別件数、目標到達率、平均最終資本、平均最大資本、平均ステップ数を集計。実装コミット `906f7f908b050f280bbebf1d58f897019b472829`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333617539
+- 既存の結合fixtureを40回繰り返すテストで同一シード再現性、終了件数合計、統計値の整合性、不正試行回数の拒否を検証。テストコミット `6c14f3223bf623ca2c5e03e9d30b78a5be47de89`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333685166
+- 統計はfixtureの固定価格・確率・独立乱数という仮定に条件付けられる。実市場の目標到達率、売却期間、手数料、相場変動を推定したものではない。外部アクション・実DB・実売買なし。
