@@ -48,3 +48,8 @@
 - preflightが合格してもAPI呼出し・ネットワーク・Secret読取・Codex・main・商取引の実行許可はすべてfalse。費用上限は設計上の1試行上限であり、プロバイダー実請求の確認ではない。永続共有ストレージへの本番接続、認証された入口、実際の承認とGemini実送信は未確認。
 - GPT定期研究はCI完了まで可能な範囲で再照会し、実行時間上限に達したら次の毎時実行で自動再開する運用に変更。CI未成功の新規コード変更は禁止。
 - 次の一件: CIでこの文書更新の同一SHA成功を確認し、Issue #1と既存Library引き継ぎへ実証・未検証を反映する。外部送信には別途具体的なHuman Gateが必要。
+
+## 2026-09-27: Gemini初回送信Human Gate審査準備マイルストーン
+- `docs/GEMINI_FIRST_SEND_APPROVAL.md` に初回Sandbox研究指示1件の審査票を作成。commit `fa3ef1310319618f38bc2e890df6d665e589cc0a`、同一SHA CI completed/success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288381746
+- 審査票は未承認。実行環境の認証入口、永続共有台帳、モデルID・料金・請求上限、個別のネットワーク/Secret/Human Gate承認は未検証。オフラインCIは実送信の証拠ではない。
+- 次の一件: 実環境の非秘密メタデータと実行境界を読み取りで確認し、審査票の未確認事項を証拠で埋める。ユーザーの具体的な承認が得られるまではGemini実送信を禁止し、MAIN・実DB・決済等も対象外とする。
