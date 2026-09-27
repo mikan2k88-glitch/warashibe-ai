@@ -180,6 +180,24 @@ def main():
         else:
             raise AssertionError("invalid trials accepted")
 
+    # Agreed baseline: 3,000 JPY start, 1,000,000 JPY goal.
+    # With this illustrative +20% gross-sale fixture and a 20-step cap,
+    # even an all-success route does not reach the goal.
+    baseline = run_virtual_journey(provider_factory, "camera", 3000,
+        (0.0,) * 20, target=1_000_000, max_steps=20, **gates)
+    assert baseline["start_capital"] == 3000 and baseline["target"] == 1_000_000
+    assert baseline["status"] == "max_steps_reached" and baseline["steps"] == 20
+    assert 3000 < baseline["final_capital"] < 1_000_000
+    baseline_stats = evaluate_virtual_journeys(provider_factory, "camera", 3000,
+        trials=40, seed=17, target=1_000_000, max_steps=20, **gates)
+    assert baseline_stats["start_capital"] == 3000
+    assert baseline_stats["target"] == 1_000_000
+    assert baseline_stats["status_counts"]["goal_reached"] == 0
+    assert baseline_stats["goal_rate_percent"] == 0
+    assert sum(baseline_stats["status_counts"].values()) == 40
+    assert baseline_stats == evaluate_virtual_journeys(provider_factory, "camera", 3000,
+        trials=40, seed=17, target=1_000_000, max_steps=20, **gates)
+
     print("end-to-end market decision pipeline tests passed")
 
 
