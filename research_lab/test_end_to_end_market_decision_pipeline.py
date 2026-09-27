@@ -5,6 +5,7 @@ from research_lab.market_decision_virtual_trade import simulate_decision_trade
 from research_lab.market_decision_virtual_journey import run_virtual_journey
 from research_lab.market_decision_virtual_statistics import evaluate_virtual_journeys
 from research_lab.market_decision_virtual_campaign import run_virtual_campaign
+from research_lab.virtual_trade_costs import apply_virtual_trade_costs
 
 
 class FixtureProvider:
@@ -252,6 +253,36 @@ def main():
         pass
     else:
         raise AssertionError("invalid recovery accepted")
+
+    # Optional cash ledger: keep unspent cash, charge hypothetical fees once.
+    cost_decision = {"current_capital": 3000, "best_candidate": {
+        "name": "Camera A", "purchase_price": 2400,
+        "expected_sale_price": 3600, "confidence": .8,
+        "metadata": {"recovery_value": 1500}}}
+    gross_win = simulate_decision_trade(cost_decision, 0.0)
+    net_win = apply_virtual_trade_costs(gross_win, inbound_shipping=100,
+        outbound_shipping=200, selling_fee_rate=.1)
+    assert net_win["unspent_cash"] == 500
+    assert net_win["selling_fee"] == 360 and net_win["total_costs"] == 660
+    assert net_win["capital_after"] == 3540 and net_win["cost_model"] == "cash_ledger"
+    assert gross_win["capital_after"] == 3600  # Legacy gross model unchanged.
+    recovered = simulate_decision_trade(cost_decision, .99, salvage_on_failure=True)
+    net_recovered = apply_virtual_trade_costs(recovered, inbound_shipping=100,
+        outbound_shipping=200, selling_fee_rate=.1)
+    assert net_recovered["capital_after"] == 1650  # 500 + 1500 - 150 - 200
+    zero_sale = simulate_decision_trade(cost_decision, .99)
+    net_zero = apply_virtual_trade_costs(zero_sale, inbound_shipping=100,
+        outbound_shipping=200, selling_fee_rate=.1)
+    assert net_zero["status"] == "salvaged" and net_zero["capital_after"] == 500
+    assert net_zero["outbound_shipping"] == 0
+    for costs in ({"inbound_shipping": 601}, {"selling_fee_rate": 1.1},
+                  {"outbound_shipping": 4000}, {"inbound_shipping": True}):
+        try:
+            apply_virtual_trade_costs(gross_win, **costs)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid virtual costs accepted")
 
     print("end-to-end market decision pipeline tests passed")
 
