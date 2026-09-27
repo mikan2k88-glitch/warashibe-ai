@@ -31,7 +31,10 @@ def _float(raw: dict[str, Any], key: str, default: float = 0.0) -> float:
         return default
     if isinstance(value, bool):
         raise ValueError(f"{key} must be a finite number")
-    number = float(value)
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{key} must be a finite number") from None
     if not isfinite(number):
         raise ValueError(f"{key} must be a finite number")
     return number
