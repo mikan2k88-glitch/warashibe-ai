@@ -61,7 +61,12 @@ def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
     if not observed_at:
         observed_at = datetime.now(timezone.utc).isoformat()
 
-    metadata = dict(raw.get("metadata") or {})
+    metadata_raw = raw.get("metadata")
+    if metadata_raw is None:
+        metadata_raw = {}
+    if not isinstance(metadata_raw, dict):
+        raise ValueError("metadata must be a dictionary")
+    metadata = dict(metadata_raw)
     metadata["source_adapter_version"] = SOURCE_ADAPTER_VERSION
 
     observation = MarketObservation(
