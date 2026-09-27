@@ -25,6 +25,18 @@ def main():
     assert result.accepted[0].currency == "JPY"
     assert result.rejected[0]["external_id"] == "bad"
 
+    # Counts are observations, not values to truncate or coerce from booleans.
+    for invalid in (1.5, -1, True, False, "NaN", "Infinity", "not-a-count", None):
+        bad = {**GOOD, "external_id": "invalid-count", "evidence_count": invalid}
+        checked = ingest_records("fixture", [bad])
+        assert checked.accepted_count == 0, invalid
+        assert checked.rejected_count == 1, invalid
+        assert "evidence_count must be a nonnegative integer" in checked.rejected[0]["reason"]
+    for valid in (0, 2, "3"):
+        checked = ingest_records("fixture", [{**GOOD, "evidence_count": valid}])
+        assert checked.accepted_count == 1, valid
+        assert checked.accepted[0].evidence_count == int(valid)
+
     calls = []
     def fetch():
         calls.append("called")
