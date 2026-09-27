@@ -80,3 +80,8 @@
 - 既存の `normalize_source_batch` は辞書以外の行が入ると、必須項目参照時の `AttributeError` でバッチ全体が中断し得た。 `normalize_raw_observation` の入口で辞書型を明示検査し、不正行を既存の rejected 経路へ送る。実装コミット `621a050d832e7d22aa554511b04ade024e5181a1`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320050885
 - 正常2件と `None`、リスト、文字列、整数の不正4件を混在させる回帰テストを追加。正常行の保持、不正行のindex・拒否理由を検証。コミット `e648dcbc475877bb251eeb9e2b262e86b04d3c6a`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320106346
 - 対象は非辞書行の個別隔離のみ。外部候補の導入、実市場接続、実DB変更、実売買なし。
+
+## 市場metadataの型境界（2026-09-27）
+- 既存の `dict(raw.get("metadata") or {})` は、空リスト等を空辞書として受理したり、不正なイテラブルで想定外の例外を起こし得た。辞書または未指定/Noneのみを受理し、その他は `metadata must be a dictionary` として個別拒否する。実装コミット `589bec84eecb0c177d486830911d16be939fbde5`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320329226
+- 不正metadata（リスト、文字列、数値、bool）を正常行で挟むオフライン回帰テスト、Noneと正常辞書の受理を追加。コミット `0cbb8e8976e65d96c4a2e26d2e6724020d8eab37`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320389862
+- metadataの内部キーや内容の意味検証は対象外。外部導入、実DB、実売買なし。
