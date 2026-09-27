@@ -51,6 +51,8 @@ def _nonnegative_integer(value: Any, key: str) -> int:
 
 
 def normalize_raw_observation(raw: dict[str, Any]) -> MarketObservation:
+    if not isinstance(raw, dict):
+        raise ValueError("raw observation must be a dictionary")
     missing = [key for key in REQUIRED_RAW_FIELDS if raw.get(key) in (None, "")]
     if missing:
         raise ValueError("missing required raw fields: " + ", ".join(missing))
