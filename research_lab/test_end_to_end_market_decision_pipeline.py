@@ -2,6 +2,7 @@
 
 from research_lab.end_to_end_market_decision_pipeline import run_market_decision
 from research_lab.market_decision_virtual_trade import simulate_decision_trade
+from research_lab.market_decision_virtual_journey import run_virtual_journey
 
 
 class FixtureProvider:
@@ -94,6 +95,64 @@ def main():
             pass
         else:
             raise AssertionError("invalid draw accepted")
+
+    # Multiple steps: fresh fixture evidence at each capital, one item per step.
+    calls = []
+
+    class StepProvider:
+        name = "fixture-market"
+
+        def __init__(self, capital):
+            self.capital = capital
+
+        def fetch(self, query):
+            assert query == "camera"
+            price = self.capital * 0.8
+            return [{
+                "external_id": source, "name": "Camera A", "category": "camera",
+                "source": source, "currency": "JPY", "purchase_price": price,
+                "expected_sale_price": self.capital * 1.2,
+                "sale_probability": 0.75, "confidence": 0.8,
+                "evidence_count": 2,
+                "metadata": {"gtin": "09521234000006", "model_number": "CAM-A"},
+            } for source in ("market-a", "market-b")]
+
+    def provider_factory(step, capital):
+        calls.append((step, capital))
+        return StepProvider(capital)
+
+    gates = dict(min_confidence=.5, min_evidence_count=3, min_source_count=2)
+    journey = run_virtual_journey(provider_factory, "camera", 10000,
+                                  (0.0, 0.0, 0.0), target=14000, max_steps=3, **gates)
+    assert journey["status"] == "goal_reached" and journey["steps"] == 2
+    assert calls == [(1, 10000), (2, 12000)]
+    assert [row["capital_after"] for row in journey["history"]] == [12000, 14400]
+    assert all(row["selected_item"] == "Camera A" for row in journey["history"])
+    assert not journey["external_action_authorized"]
+
+    calls.clear()
+    failed = run_virtual_journey(provider_factory, "camera", 10000,
+                                 (0.0, .99, 0.0), target=20000, max_steps=3, **gates)
+    assert failed["status"] == "failed" and failed["final_capital"] == 0
+    assert failed["steps"] == 2 and len(calls) == 2
+    calls.clear()
+    capped = run_virtual_journey(provider_factory, "camera", 10000,
+                                 (0.0, 0.0), target=20000, max_steps=2, **gates)
+    assert capped["status"] == "max_steps_reached" and capped["final_capital"] == 14400
+    calls.clear()
+    no_candidate = run_virtual_journey(provider_factory, "camera", 10000,
+                                       (0.0,), target=20000, max_steps=1,
+                                       min_confidence=.5, min_evidence_count=3, min_source_count=3)
+    assert no_candidate["status"] == "no_candidate" and no_candidate["final_capital"] == 10000
+    assert no_candidate["steps"] == 1
+    calls.clear()
+    try:
+        run_virtual_journey(provider_factory, "camera", 10000, (float("nan"),), max_steps=1)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid draw accepted")
+    assert calls == []
 
     print("end-to-end market decision pipeline tests passed")
 
