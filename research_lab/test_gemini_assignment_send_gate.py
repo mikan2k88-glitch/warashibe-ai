@@ -38,6 +38,16 @@ def run_tests():
         assert consume_assignment_gate(path, "assignment-2", "run-2") is True
         assert consume_assignment_gate(path.parent / "missing.sqlite3", "new", "run") is False
 
+        # A damaged or replaced ledger must stop sends rather than be recreated.
+        damaged = path.parent / "damaged.sqlite3"
+        damaged.write_bytes(b"not a sqlite database")
+        assert consume_assignment_gate(damaged, "new", "run") is False
+        assert damaged.read_bytes() == b"not a sqlite database"
+        empty_schema = path.parent / "empty-schema.sqlite3"
+        empty_schema.touch()
+        assert consume_assignment_gate(empty_schema, "new", "run") is False
+        assert empty_schema.is_file()
+
 
 if __name__ == "__main__":
     run_tests()
