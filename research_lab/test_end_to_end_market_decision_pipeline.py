@@ -115,7 +115,7 @@ def main():
                 "source": source, "currency": "JPY", "purchase_price": price,
                 "expected_sale_price": self.capital * 1.2,
                 "sale_probability": 0.75, "confidence": 0.8,
-                "evidence_count": 2,
+                "evidence_count": 2, "recovery_value": self.capital * 0.5,
                 "metadata": {"gtin": "09521234000006", "model_number": "CAM-A"},
             } for source in ("market-a", "market-b")]
 
@@ -222,6 +222,36 @@ def main():
             pass
         else:
             raise AssertionError("invalid restart capital accepted")
+
+    # Opt-in salvage retains a positive balance within the SAME attempt.
+    calls.clear()
+    salvaged = run_virtual_campaign(provider_factory, "camera",
+        ((.99, 0.0), (0.0, 0.0)), target=3500, max_steps=2,
+        salvage_on_failure=True, **gates)
+    assert salvaged["attempt_count"] == 1 and salvaged["restart_count"] == 0
+    assert calls == [(1, 3000), (2, 1500)]
+    history = salvaged["attempts"][0]["history"]
+    assert history[0]["status"] == "salvaged" and history[0]["capital_after"] == 1500
+    assert history[1]["capital_before"] == 1500 and history[1]["status"] == "success"
+    assert salvaged["final_capital"] == 1800
+    assert salvaged["status"] == "max_steps_reached"
+    assert not salvaged["external_action_authorized"]
+    # Without opt-in, the same failed sale remains a full loss and restarts.
+    calls.clear()
+    default = run_virtual_campaign(provider_factory, "camera",
+        ((.99, 0.0), (0.0, 0.0)), target=3500, max_steps=2, **gates)
+    assert default["attempt_count"] == 2 and default["restart_count"] == 1
+    assert default["attempts"][0]["final_capital"] == 0
+    # Invalid recovery must fail closed, never mint additional capital.
+    malformed = {"current_capital": 3000, "best_candidate": {
+        "name": "bad", "purchase_price": 2400, "expected_sale_price": 3600,
+        "confidence": .8, "metadata": {"recovery_value": 4000}}}
+    try:
+        simulate_decision_trade(malformed, .99, salvage_on_failure=True)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid recovery accepted")
 
     print("end-to-end market decision pipeline tests passed")
 
