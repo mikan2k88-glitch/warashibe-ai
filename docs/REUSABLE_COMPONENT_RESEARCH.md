@@ -85,3 +85,8 @@
 - 既存の `dict(raw.get("metadata") or {})` は、空リスト等を空辞書として受理したり、不正なイテラブルで想定外の例外を起こし得た。辞書または未指定/Noneのみを受理し、その他は `metadata must be a dictionary` として個別拒否する。実装コミット `589bec84eecb0c177d486830911d16be939fbde5`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320329226
 - 不正metadata（リスト、文字列、数値、bool）を正常行で挟むオフライン回帰テスト、Noneと正常辞書の受理を追加。コミット `0cbb8e8976e65d96c4a2e26d2e6724020d8eab37`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320389862
 - metadataの内部キーや内容の意味検証は対象外。外部導入、実DB、実売買なし。
+
+## 市場数値変換例外の個別隔離（2026-09-27）
+- `_float` が数値変換時に発する `TypeError` / `ValueError` / `OverflowError` を統一した `ValueError` にし、既存のバッチ単位拒否経路へ渡す。巨大整数によるOverflowErrorで正常行まで中断する問題を防ぐ。実装コミット `96b1430d3e9aaf0eded2994aff3cbf2454a19528`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320585482
+- 不正なリスト、辞書、オブジェクト、巨大整数を正常行で挟んだ回帰テストを追加。コミット `947945e27d0f1c375299d8ff1760447cf5f54e71`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320636673
+- 外部ライブラリ追加なし。対象は数値変換エラーの隔離であり、実市場接続や全フィールドの意味的検証ではない。
