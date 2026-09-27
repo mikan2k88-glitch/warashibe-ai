@@ -140,3 +140,8 @@
 - `research_lab/virtual_trade_costs.py` に仮想取引結果へ適用する独立したcash_ledgerを追加。次資本=取引前資本-仕入価格-仕入送料+売却/回収額-販売手数料-発送送料。売却額0なら発送送料なし。仕入と送料が資本を超える場合、手数料率が0〜1の範囲外、売却代金を超える販売費用は拒否。既存grossモデルの既定動作は変更しない。実装修正コミット `5f90198360fc5e9146ac657eca17ca97c01165a6`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334949296
 - テストは資本3,000円・仕入2,400円・仕入送料100円・売却3,600円・手数料10%・発送200円→残額3,540円、損切り回収1,500円→残額1,650円、売却0円→未使用現金500円を確認。コミット `2a76c65ec5f95af07cc31f48d54d0900bee77d3e`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36335017963
 - これは任意適用の単発計算部品。journey/campaign/statisticsへの連結は未実施。手数料・送料は仮定値であり実際の市場料金ではない。未使用現金を保持するため、従来の「全資本を1品に投入」モデルと差がある。実売買・実DB変更なし。
+
+## 費用控除後の資本を複数ステップと統計へ接続（2026-09-28）
+- `run_virtual_journey` に任意の `cost_kwargs` を追加し、各ステップで既存 `apply_virtual_trade_costs` を適用してから次の1品を探索。未指定時は従来grossモデルのまま。実装コミット `de730cceaa981a88b46faf4c22d865f73d150459`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36335893648
+- 既存の統計関数は引数をjourneyへ引き渡すため、同じ仮想送料・販売手数料条件で固定シード反復が可能。初期資本3,000円、仕入価格2,400円、仕入送料100円、売却額3,600円、販売手数料10%、発送送料200円→初回後3,540円を次ステップの探索資本に渡すこと、40回の再現性、gross既定動作の維持をテスト。最初のテストコミット `5b7c646a2d387f4cce8b3204a4a54b2b9302a9f3` は期待値の誤記でCI失敗。訂正コミット `d1b57989a71991c476f07ce26061d81062e9ef32` の同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36336038933
+- 金額は仮想fixtureの仮定値。実市場の手数料表や現実の到達確率ではない。campaignの費用オプション接続は別途。実売買・実DB変更なし。
