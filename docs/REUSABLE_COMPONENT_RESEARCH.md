@@ -38,3 +38,9 @@
 - `requirements.txt` の明示依存は `Flask==3.0.3`、`gunicorn==23.0.0`、`supabase`（未固定）。既存のSupabase SDKを優先調査し、重複DBクライアントの追加はしない。未固定依存の固定・更新も別変更としてCIと互換性を検証する。
 - `research_lab/market_provider_contract.py` は読み取り専用Provider Protocolと注入境界を既に提供する。市場データの外部SDKはまずこの境界に適合するか比較し、購入・出品・決済・資格情報の所有をProviderに持ち込まない。
 - この棚卸しはリポジトリの静的確認であり、外部候補の最新版・ライセンス・脆弱性を検証したものではない。最初の具体的実験は、既存Module Scoutの検証契約をオフラインで境界テストし、評価票へ結果を反映する。新しいScoutを重複実装しない。
+
+## Module Scout整合性検証マイルストーン（2026-09-27）
+- 既存判定器の許可結果において、候補源と優先順位の対応、許可理由 `small_reversible_experiment_allowed` の一致を追加検証する。偽装された優先順位・理由はfail-closedで拒否する。
+- 実装コミット `bdfe446ffe4bc4448cdbb6606092577709d0fbed`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36300575947
+- 改ざん値の回帰テストを追加したコミット `7c183db8b67509c05cb51df982f01828863003f4`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36300648472
+- これは既存Module Scoutのオフライン安全性検証であり、外部候補の導入・評価完了や実行権限の付与ではない。
