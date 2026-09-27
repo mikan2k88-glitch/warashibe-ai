@@ -32,3 +32,9 @@
 
 ## 権限境界
 探索・文書化・オフライン模擬検証と、実ネットワーク接続・有料API・Secret参照・実DB変更・MAIN／production・実売買は別。後者は個別Human Gateが必要。外部のコードを発見しただけで自動実行・自動導入しない。
+
+## 初回棚卸し：既存Module Scoutの再利用（2026-09-27）
+- `research_lab/autonomous_research_orchestrator_continuous_rational_improvement_module_scout_validation.py` に既存のfail-closed評価器 `validate_module_scout_decision` がある。許可される候補源はPython標準ライブラリ、公式API/SDK、ChatGPTプラグイン、成熟したOSS、内部共有モジュール。LAB限定、CI比較必須で、外部インストール・依存更新・ネットワーク・main・production・外部操作の自動許可はすべてfalse。
+- `requirements.txt` の明示依存は `Flask==3.0.3`、`gunicorn==23.0.0`、`supabase`（未固定）。既存のSupabase SDKを優先調査し、重複DBクライアントの追加はしない。未固定依存の固定・更新も別変更としてCIと互換性を検証する。
+- `research_lab/market_provider_contract.py` は読み取り専用Provider Protocolと注入境界を既に提供する。市場データの外部SDKはまずこの境界に適合するか比較し、購入・出品・決済・資格情報の所有をProviderに持ち込まない。
+- この棚卸しはリポジトリの静的確認であり、外部候補の最新版・ライセンス・脆弱性を検証したものではない。最初の具体的実験は、既存Module Scoutの検証契約をオフラインで境界テストし、評価票へ結果を反映する。新しいScoutを重複実装しない。
