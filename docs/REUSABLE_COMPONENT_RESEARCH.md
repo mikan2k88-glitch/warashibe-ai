@@ -135,3 +135,8 @@
 - journeyに残額を次ステップへ渡すオプションを接続（コミット `30fa1b52c0f692d9c07ba62add164f05227d142c`、CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334609598 ）。campaignにも同オプションを接続し、残額ありでは3,000円再スタートしない（コミット `533d80ba7b7fbe8f10383efb62046efa39823302`、CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334666920 ）。
 - 結合テストは3,000→失敗回収1,500→次の1品成功1,800円、同一挑戦の継続、オプションなしの全損再スタート、現資本を超える回収額の拒否を確認。コミット `9b38d882f6e7db488d2d5857c4232a66a0c48ead`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334748768
 - 回収額はfixtureの仮定であり、実売却保証ではない。手数料・送料、回収時間、実売買、実DB変更は対象外。
+
+## 任意適用の送料・販売手数料・未使用資本台帳（2026-09-28）
+- `research_lab/virtual_trade_costs.py` に仮想取引結果へ適用する独立したcash_ledgerを追加。次資本=取引前資本-仕入価格-仕入送料+売却/回収額-販売手数料-発送送料。売却額0なら発送送料なし。仕入と送料が資本を超える場合、手数料率が0〜1の範囲外、売却代金を超える販売費用は拒否。既存grossモデルの既定動作は変更しない。実装修正コミット `5f90198360fc5e9146ac657eca17ca97c01165a6`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36334949296
+- テストは資本3,000円・仕入2,400円・仕入送料100円・売却3,600円・手数料10%・発送200円→残額3,540円、損切り回収1,500円→残額1,650円、売却0円→未使用現金500円を確認。コミット `2a76c65ec5f95af07cc31f48d54d0900bee77d3e`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36335017963
+- これは任意適用の単発計算部品。journey/campaign/statisticsへの連結は未実施。手数料・送料は仮定値であり実際の市場料金ではない。未使用現金を保持するため、従来の「全資本を1品に投入」モデルと差がある。実売買・実DB変更なし。
