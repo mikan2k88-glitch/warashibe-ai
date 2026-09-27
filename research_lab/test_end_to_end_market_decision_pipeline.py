@@ -1,6 +1,7 @@
 """Deterministic end-to-end market decision pipeline check."""
 
 from research_lab.end_to_end_market_decision_pipeline import run_market_decision
+from research_lab.market_decision_virtual_trade import simulate_decision_trade
 
 
 class FixtureProvider:
@@ -73,6 +74,26 @@ def main():
     assert unaffordable.decision["capital_allowed_count"] == 0
     assert unaffordable.decision["capital_blocked_count"] == 1
     assert unaffordable.decision["current_capital"] == 9000
+
+    # Deterministic virtual transition: exactly one candidate, no external action.
+    before = dict(mixed.decision)
+    won = simulate_decision_trade(mixed.decision, 0.0)
+    lost = simulate_decision_trade(mixed.decision, 0.99)
+    assert won["status"] == "success" and won["capital_after"] == selected["expected_sale_price"]
+    assert lost["status"] == "failed" and lost["capital_after"] == 0
+    assert won["capital_before"] == lost["capital_before"] == 11000
+    assert won["selected_item"] == lost["selected_item"] == "Camera A"
+    assert not won["external_action_authorized"] and not lost["external_action_authorized"]
+    assert mixed.decision == before
+    stopped = simulate_decision_trade(unaffordable.decision, 0.0)
+    assert stopped["status"] == "no_candidate" and stopped["capital_after"] == 9000
+    for invalid_draw in (-0.1, 1, float("nan"), True):
+        try:
+            simulate_decision_trade(mixed.decision, invalid_draw)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid draw accepted")
 
     print("end-to-end market decision pipeline tests passed")
 
