@@ -3,6 +3,7 @@
 from research_lab.end_to_end_market_decision_pipeline import run_market_decision
 from research_lab.market_decision_virtual_trade import simulate_decision_trade
 from research_lab.market_decision_virtual_journey import run_virtual_journey
+from research_lab.market_decision_virtual_statistics import evaluate_virtual_journeys
 
 
 class FixtureProvider:
@@ -153,6 +154,31 @@ def main():
     else:
         raise AssertionError("invalid draw accepted")
     assert calls == []
+
+    # Seeded statistics use the same bounded, one-item fixture journey.
+    def stats(**kwargs):
+        return evaluate_virtual_journeys(provider_factory, "camera", 10000,
+            trials=40, seed=17, target=14000, max_steps=3, **gates, **kwargs)
+
+    first = stats()
+    assert first == stats()
+    assert first["trials"] == 40 and first["seed"] == 17
+    assert sum(first["status_counts"].values()) == 40
+    assert set(first["status_counts"]) == {
+        "goal_reached", "failed", "no_candidate", "max_steps_reached"
+    }
+    assert first["status_counts"]["goal_reached"] + first["status_counts"]["failed"] == 40
+    assert first["goal_rate_percent"] == 100 * first["status_counts"]["goal_reached"] / 40
+    assert 1 <= first["average_steps"] <= 2
+    assert first["average_max_capital"] >= first["average_final_capital"]
+    assert not first["external_action_authorized"]
+    for bad in (0, -1, True, 10001):
+        try:
+            evaluate_virtual_journeys(provider_factory, "camera", 10000, trials=bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid trials accepted")
 
     print("end-to-end market decision pipeline tests passed")
 
