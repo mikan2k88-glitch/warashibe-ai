@@ -19,9 +19,16 @@
 | --- | --- | --- |
 | Gemini API | 課金設定済み。Render環境変数 `GEMINI_API_KEY` にキー登録済み | 実通信・応答の成功は未確認 |
 | Render | 研究用サービス `warashibe-ai-research-lab` を利用 | GitHub ActionsへRenderの環境変数が自動転送されるわけではない |
-| Supabase | 研究用Render環境に関連設定が登録済みとの申告 | 実DB変更は本仕様では許可しない |
+| Supabase | 既存プロジェクト `yt-shorts-automation`（Project ID `bittxuhjejaokfgmymkw`）を共用する方針。`company-x-db` は使わず、新規プロジェクトも作らない | 既存コードに接続・スキーマ契約あり。実DB変更は本仕様では許可しない |
 
 キーの値、トークン、認証情報は文書・ログ・Issue・チャットへ転載しない。環境変数の登録申告と、実行環境からの取得成功・API疎通成功は別々に検証する。
+
+
+## Supabaseの確定済み方針と追加設計事項
+- 既存の `yt-shorts-automation`（Project ID `bittxuhjejaokfgmymkw`）を利用する。新規Supabaseプロジェクトを作成せず、`company-x-db` はわらしべAIに使用しない。同じ選定議論を繰り返さない。
+- 既存の `public.videos` は変更禁止。わらしべ専用テーブルは `warashibe_sale_outcomes` と `warashibe_market_evidence`。両テーブルはRLS有効・匿名公開アクセス禁止を設計条件とする。
+- 両テーブルの作成済みとの過去の実行報告は、現在の実DBのスキーマ・RLS・権限を再検証した証拠とは区別する。実DBの読み取り確認、DDL、書き込みは適切な権限・承認の範囲で別途扱う。
+- Geminiの一回限り送信を防護する共有台帳をこのSupabaseに置くかは**未決定の追加設計事項**。既存テーブルを流用したり、承認なしに新規テーブル・関数・ポリシーを作成しない。管理経路の認証、原子的な一意予約、再起動耐久性を設計・検証するまでは実送信禁止。
 
 ## Geminiの初回利用条件
 - まずSandboxで、小さな研究課題を1件だけ送信し、GPTが構造化された応答を検証する。
