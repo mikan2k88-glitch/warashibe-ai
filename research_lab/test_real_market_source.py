@@ -50,6 +50,26 @@ def run():
     assert len(bad) == 1
     assert "purchase_price" in bad[0]["reason"]
 
+    # Offline malformed-row boundary: one bad listing must not discard a good one.
+    for field, value in (
+        ("purchase_price", -1),
+        ("expected_sale_price", -1),
+        ("sale_probability", 1.1),
+        ("sale_probability", -0.1),
+        ("confidence", 1.1),
+        ("evidence_count", -1),
+        ("platform_fee", -1),
+        ("purchase_price", "not-a-price"),
+    ):
+        invalid = dict(raw)
+        invalid[field] = value
+        accepted, rejected = normalize_source_batch([raw, invalid])
+        assert len(accepted) == 1, field
+        assert len(rejected) == 1, field
+        assert rejected[0]["index"] == 1, field
+        assert rejected[0]["external_id"] == raw["external_id"], field
+
+
 
 if __name__ == "__main__":
     run()
