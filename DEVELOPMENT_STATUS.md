@@ -41,3 +41,10 @@
 
 ## 次回の読み方・更新方法
 新しい会話では「warashibe-ai の research-lab ブランチにある `DEVELOPMENT_STATUS.md` と Issue #1 を読み、最新のCI・実行記録を確認して続けて」と伝える。作業後はこの文書の現在地と次の一件を更新し、実行証拠の詳細はIssue #1に追記する。未確認の段階を完了に書き換えない。
+
+## 2026-09-27: Gemini一回限り送信のオフライン安全検証
+- 永続SQLiteゲートと疑似Gemini応答の結合テストを追加。重複・別runからの再送・不確実な通信失敗後の再送・台帳消失を拒否する。commit `5fb0e7bfb90819403ab09ea4eb7213ee57d5571a`、同一SHA CI success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36287976148
+- 費用・回数・トークン上限とHuman Gate等をfail-closedで確認するオフラインpreflightを追加。commit `c6bc3f76454c48b464e312bbad1915b6e534626b`、同一SHA CI success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288120655
+- preflightが合格してもAPI呼出し・ネットワーク・Secret読取・Codex・main・商取引の実行許可はすべてfalse。費用上限は設計上の1試行上限であり、プロバイダー実請求の確認ではない。永続共有ストレージへの本番接続、認証された入口、実際の承認とGemini実送信は未確認。
+- GPT定期研究はCI完了まで可能な範囲で再照会し、実行時間上限に達したら次の毎時実行で自動再開する運用に変更。CI未成功の新規コード変更は禁止。
+- 次の一件: CIでこの文書更新の同一SHA成功を確認し、Issue #1と既存Library引き継ぎへ実証・未検証を反映する。外部送信には別途具体的なHuman Gateが必要。
