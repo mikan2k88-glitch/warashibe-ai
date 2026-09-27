@@ -34,6 +34,26 @@ def main():
     assert run.decision["quality_accepted"] == 1
     assert run.decision["quality_rejected"] == 0
     assert run.decision["input_estimates"] == 1
+    class MixedProvider(FixtureProvider):
+        def fetch(self, query):
+            rows = super().fetch(query)
+            return [rows[0], None, {**rows[0], "metadata": []}, rows[1],
+                    {**rows[0], "purchase_price": 10 ** 1000}]
+
+    mixed = run_market_decision(
+        MixedProvider(), " camera ", 11000,
+        min_confidence=.5, min_evidence_count=3, min_source_count=2,
+    )
+    assert mixed.provider == "fixture-market"
+    assert mixed.query == "camera"
+    assert mixed.raw_count == 5
+    assert mixed.normalized_count == 2
+    assert mixed.normalization_rejected == 3
+    assert mixed.estimate_count == 1
+    assert mixed.decision["quality_accepted"] == 1
+    assert mixed.decision["quality_rejected"] == 0
+    assert mixed.decision["input_estimates"] == 1
+
     print("end-to-end market decision pipeline tests passed")
 
 
