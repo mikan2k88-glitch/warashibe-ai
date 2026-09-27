@@ -105,3 +105,8 @@
 - 前回の混在市場データfixtureを使い、`run_market_decision` の下流で `best_candidate` が1品、rank=1、資本11,000円以内、`current_capital` は入力のままであることを検証。
 - 同じfixtureで資本9,000円の場合、品質審査通過後でも `best_candidate=None`、`capital_allowed_count=0`、`capital_blocked_count=1` となることを確認。テストコミット `e66657e6d98bdd7ff8564e8ade20107a089e681c`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36332895431
 - これは単一商品の提案・資本フィルターの検証。成功/失敗の抽選、売却後の資本更新、複数ステップの仮想取引はまだ接続していない。実売買・実DB変更なし。
+
+## 1品の仮想売却結果と資本遷移（2026-09-28）
+- 新規の小さなオフライン部品 `research_lab/market_decision_virtual_trade.py` で、品質審査済み `best_candidate` に対して明示的な乱数drawを適用。成功時は想定売却額、失敗時は0円、候補なしは元資本を返す。入力資本・乱数・候補価格・確率を検証し、外部アクションを許可しない。実装コミット `6ac38268ddaf20db9d70f820940ca109d6f741b1`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333080572
+- 既存の市場取得→正規化→品質審査→1品選択テストへ成功・失敗・候補なし・不正乱数・元decision非変更の検証を接続。テストコミット `d21b930f0cea167da866c18acf6ecda440be6ca0`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36333144105
+- 既存 `simulation_engine.run_candidate_cycle` と同じ総売却額・失敗0円の暫定仮想モデル。手数料控除、複数ステップ、実市場・実売買・実DBは対象外。
