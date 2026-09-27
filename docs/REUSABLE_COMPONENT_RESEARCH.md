@@ -75,3 +75,8 @@
 - 下流の既存実装を調査し、`research_lab/real_market_source_adapter.py` が `evidence_count` を `int(...)` で変換し、小数を切り捨て得ることを確認。新規ライブラリを追加せず、有限・非負・整数値の条件を満たさない入力を拒否するよう変更した。コミット `b3a4b93d9a346a5ddf723f2ed3ec394ff3e60aff`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36319851781
 - 取り込み経路 `test_live_market_evidence_ingestion.py` に小数、負数、bool、NaN、Infinity、不正文字列、None の拒否と、正常な整数値の受理を確認する回帰テストを追加。コミット `bae1a00f69c77189ba0954973b3f3206a58b5d6d`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36319897633
 - これは件数フィールドの入力境界だけの改善であり、他の全フィールドの厳密性、外部SDKとの比較、実市場データの品質を保証するものではない。Pydantic導入は引き続き保留。外部通信・実DB・実売買なし。
+
+## 市場レコードの非辞書入力を個別隔離（2026-09-27）
+- 既存の `normalize_source_batch` は辞書以外の行が入ると、必須項目参照時の `AttributeError` でバッチ全体が中断し得た。 `normalize_raw_observation` の入口で辞書型を明示検査し、不正行を既存の rejected 経路へ送る。実装コミット `621a050d832e7d22aa554511b04ade024e5181a1`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320050885
+- 正常2件と `None`、リスト、文字列、整数の不正4件を混在させる回帰テストを追加。正常行の保持、不正行のindex・拒否理由を検証。コミット `e648dcbc475877bb251eeb9e2b262e86b04d3c6a`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320106346
+- 対象は非辞書行の個別隔離のみ。外部候補の導入、実市場接続、実DB変更、実売買なし。
