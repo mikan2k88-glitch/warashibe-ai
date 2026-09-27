@@ -284,6 +284,32 @@ def main():
         else:
             raise AssertionError("invalid virtual costs accepted")
 
+    # Cash ledger is applied at EVERY step before the next provider fetch.
+    fees = dict(inbound_shipping=100, outbound_shipping=200, selling_fee_rate=.1)
+    calls.clear()
+    net_journey = run_virtual_journey(provider_factory, "camera", 3000,
+        (0.0, 0.0), target=1_000_000, max_steps=2, cost_kwargs=fees, **gates)
+    assert net_journey["status"] == "max_steps_reached"
+    assert net_journey["history"][0]["capital_after"] == 2940
+    assert calls == [(1, 3000), (2, 2940)]
+    assert all(row["cost_model"] == "cash_ledger" for row in net_journey["history"])
+    calls.clear()
+    net_stats = evaluate_virtual_journeys(provider_factory, "camera", 3000,
+        trials=40, seed=17, target=1_000_000, max_steps=2,
+        cost_kwargs=fees, **gates)
+    assert net_stats == evaluate_virtual_journeys(provider_factory, "camera", 3000,
+        trials=40, seed=17, target=1_000_000, max_steps=2,
+        cost_kwargs=fees, **gates)
+    assert net_stats["start_capital"] == 3000 and net_stats["goal_rate_percent"] == 0
+    assert sum(net_stats["status_counts"].values()) == 40
+    assert net_stats["average_final_capital"] >= 0
+    assert not net_stats["external_action_authorized"]
+    # Legacy gross route remains available when the ledger is not requested.
+    gross_journey = run_virtual_journey(provider_factory, "camera", 3000,
+        (0.0, 0.0), target=1_000_000, max_steps=2, **gates)
+    assert gross_journey["history"][0]["capital_after"] == 3600
+    assert "cost_model" not in gross_journey["history"][0]
+
     print("end-to-end market decision pipeline tests passed")
 
 
