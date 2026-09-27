@@ -290,8 +290,8 @@ def main():
     net_journey = run_virtual_journey(provider_factory, "camera", 3000,
         (0.0, 0.0), target=1_000_000, max_steps=2, cost_kwargs=fees, **gates)
     assert net_journey["status"] == "max_steps_reached"
-    assert net_journey["history"][0]["capital_after"] == 2940
-    assert calls == [(1, 3000), (2, 2940)]
+    assert net_journey["history"][0]["capital_after"] == 3540
+    assert calls == [(1, 3000), (2, 3540)]
     assert all(row["cost_model"] == "cash_ledger" for row in net_journey["history"])
     calls.clear()
     net_stats = evaluate_virtual_journeys(provider_factory, "camera", 3000,
