@@ -72,6 +72,18 @@ def run_tests():
         assert outcome["valid"] is False, field
         assert outcome["external_action_authorized"] is False
 
+    # A plausible-looking but inconsistent allowed decision must also fail closed.
+    for field, value in (
+        ("source_priority", 3),
+        ("reason", "approved_by_external_document"),
+        ("reason", ""),
+    ):
+        changed = dict(baseline)
+        changed[field] = value
+        outcome = validate_module_scout_decision(changed)
+        assert outcome["valid"] is False, field
+        assert outcome["ready_for_small_reversible_experiment"] is False
+
     # Missing required decisions and malformed priority fail closed.
     # Version is metadata in the current v0.1 validator, not a required decision field.
     # Assert the actual required contract rather than imposing a new rule in a test.
