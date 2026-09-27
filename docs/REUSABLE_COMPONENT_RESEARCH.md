@@ -90,3 +90,8 @@
 - `_float` が数値変換時に発する `TypeError` / `ValueError` / `OverflowError` を統一した `ValueError` にし、既存のバッチ単位拒否経路へ渡す。巨大整数によるOverflowErrorで正常行まで中断する問題を防ぐ。実装コミット `96b1430d3e9aaf0eded2994aff3cbf2454a19528`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320585482
 - 不正なリスト、辞書、オブジェクト、巨大整数を正常行で挟んだ回帰テストを追加。コミット `947945e27d0f1c375299d8ff1760447cf5f54e71`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320636673
 - 外部ライブラリ追加なし。対象は数値変換エラーの隔離であり、実市場接続や全フィールドの意味的検証ではない。
+
+## 市場商品の識別文字列の厳密化（2026-09-27）
+- `external_id`、`name`、`category`、`source`、`currency` に対し、非空の文字列であることを明示検査。bool・数値等を `str(...)` で商品情報へ変換しない。通貨は空白除去後に大文字化。実装コミット `f9714941e81fa8e1c8c5823f2aabb1e0c5d4ac5f`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320795603
+- 各フィールドのbool・数値・リスト・空白値の拒否、正常行の継続、通貨の正規化をオフラインで回帰検証。コミット `1beeb90dff5b34842a6958943de15d6b09ad19b2`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36320839118
+- 文字列の意味的な真正性、通貨コードの一覧照合、外部ソースの信頼性は今回の対象外。新規依存・実市場接続・実DB・実売買なし。
