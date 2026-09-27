@@ -4,6 +4,7 @@ from research_lab.end_to_end_market_decision_pipeline import run_market_decision
 from research_lab.market_decision_virtual_trade import simulate_decision_trade
 from research_lab.market_decision_virtual_journey import run_virtual_journey
 from research_lab.market_decision_virtual_statistics import evaluate_virtual_journeys
+from research_lab.market_decision_virtual_campaign import run_virtual_campaign
 
 
 class FixtureProvider:
@@ -197,6 +198,30 @@ def main():
     assert sum(baseline_stats["status_counts"].values()) == 40
     assert baseline_stats == evaluate_virtual_journeys(provider_factory, "camera", 3000,
         trials=40, seed=17, target=1_000_000, max_steps=20, **gates)
+
+    # Full loss starts a NEW attempt with 3,000 JPY, not a capital injection.
+    calls.clear()
+    campaign = run_virtual_campaign(provider_factory, "camera",
+        ((.99,), (0.0,)), target=3500, max_steps=1, **gates)
+    assert campaign["attempt_count"] == 2 and campaign["restart_count"] == 1
+    assert [a["start_capital"] for a in campaign["attempts"]] == [3000, 3000]
+    assert [a["final_capital"] for a in campaign["attempts"]] == [0, 3600]
+    assert campaign["status"] == "goal_reached" and campaign["final_capital"] == 3600
+    assert calls == [(1, 3000), (1, 3000)]
+    assert not campaign["external_action_authorized"]
+    calls.clear()
+    stop = run_virtual_campaign(provider_factory, "camera",
+        ((0.0,), (.99,)), target=3500, max_steps=1, **gates)
+    assert stop["attempt_count"] == 1 and stop["restart_count"] == 0
+    assert calls == [(1, 3000)]
+    for bad in (0, 100, True):
+        try:
+            run_virtual_campaign(provider_factory, "camera", ((0.0,),),
+                                 restart_capital=bad, max_steps=1)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid restart capital accepted")
 
     print("end-to-end market decision pipeline tests passed")
 
