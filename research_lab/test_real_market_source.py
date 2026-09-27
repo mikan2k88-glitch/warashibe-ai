@@ -50,6 +50,13 @@ def run():
     assert len(bad) == 1
     assert "purchase_price" in bad[0]["reason"]
 
+    # A malformed row is rejected individually; valid neighbours survive.
+    accepted, rejected = normalize_source_batch([raw, None, [], "not-a-row", 42, raw])
+    assert len(accepted) == 2
+    assert [item["index"] for item in rejected] == [1, 2, 3, 4]
+    assert all(item["external_id"] is None for item in rejected)
+    assert all(item["reason"] == "raw observation must be a dictionary" for item in rejected)
+
     # Offline malformed-row boundary: one bad listing must not discard a good one.
     for field, value in (
         ("purchase_price", -1),
