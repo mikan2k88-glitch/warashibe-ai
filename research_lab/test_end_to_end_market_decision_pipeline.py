@@ -324,6 +324,35 @@ def main():
     assert not net_campaign["external_action_authorized"]
     assert not net_step["external_action_authorized"]
 
+    # A failed purchase retaining cash is salvage, not a fresh 3,000 JPY attempt.
+    calls.clear()
+    partial_campaign = run_virtual_campaign(provider_factory, "camera",
+        ((.99,), (0.0,)), target=3500, max_steps=1,
+        cost_kwargs=fees, **gates)
+    assert partial_campaign["attempt_count"] == 1
+    assert partial_campaign["restart_count"] == 0
+    assert partial_campaign["status"] == "max_steps_reached"
+    assert partial_campaign["final_capital"] == 500
+    assert partial_campaign["total_costs"] == 100
+    assert partial_campaign["attempts"][0]["history"][0]["status"] == "salvaged"
+    assert calls == [(1, 3000)]
+    # Opt-in fees cannot be confused with the legacy gross campaign.
+    gross_campaign = run_virtual_campaign(provider_factory, "camera",
+        ((0.0,),), target=3500, max_steps=1, **gates)
+    assert gross_campaign["final_capital"] == 3600
+    assert gross_campaign["total_costs"] == 0
+    assert "cost_model" not in gross_campaign["attempts"][0]["history"][0]
+    for invalid_costs in ({"inbound_shipping": 601},
+                          {"selling_fee_rate": 1.1},
+                          {"unsupported_fee": 1}):
+        try:
+            run_virtual_campaign(provider_factory, "camera", ((0.0,),),
+                target=3500, max_steps=1, cost_kwargs=invalid_costs, **gates)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid campaign costs accepted")
+
     # Legacy gross route remains available when the ledger is not requested.
     gross_journey = run_virtual_journey(provider_factory, "camera", 3000,
         (0.0, 0.0), target=1_000_000, max_steps=2, **gates)
