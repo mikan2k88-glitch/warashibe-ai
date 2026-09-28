@@ -6,6 +6,7 @@ from research_lab.market_decision_virtual_journey import run_virtual_journey
 from research_lab.market_decision_virtual_statistics import evaluate_virtual_journeys
 from research_lab.market_decision_virtual_campaign import run_virtual_campaign
 from research_lab.virtual_trade_costs import apply_virtual_trade_costs
+from research_lab.one_item_scenario_evaluation import evaluate_one_item_scenario
 
 
 class FixtureProvider:
@@ -352,6 +353,33 @@ def main():
             pass
         else:
             raise AssertionError("invalid campaign costs accepted")
+
+    # One report joins selection evidence, hypothetical success/loss, and costs.
+    report_decision = {"current_capital": 3000, "best_candidate": {
+        "name": "Camera A", "purchase_price": 2400,
+        "expected_sale_price": 3600, "confidence": .75}}
+    report = evaluate_one_item_scenario(report_decision, cost_kwargs=fees)
+    assert report["selected_item"] == "Camera A"
+    assert report["selection_reason"] == "existing_quality_gated_best_candidate"
+    assert report["success_capital"] == 3540 and report["failure_capital"] == 500
+    assert report["success_net_profit"] == 540 and report["failure_net_profit"] == -2500
+    assert report["failure_probability"] == .25
+    assert report["expected_net_profit"] == -220
+    assert report["hypothetical_costs"] == {"success": 660, "failure": 100}
+    assert report["one_item_only"] and report["scenario_only"]
+    assert not report["external_action_authorized"]
+    assert report_decision["best_candidate"]["confidence"] == .75
+    assert evaluate_one_item_scenario(report_decision)["cost_model"] == "legacy_gross"
+    assert evaluate_one_item_scenario(
+        {"current_capital": 3000, "best_candidate": None},
+        cost_kwargs=fees)["selected_item"] is None
+    for bad in ({"selling_fee_rate": 1.1}, {"unknown": 1}):
+        try:
+            evaluate_one_item_scenario(report_decision, cost_kwargs=bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid scenario costs accepted")
 
     # Legacy gross route remains available when the ledger is not requested.
     gross_journey = run_virtual_journey(provider_factory, "camera", 3000,
