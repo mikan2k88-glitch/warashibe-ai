@@ -13,7 +13,7 @@ def run_virtual_campaign(provider_factory, query: str, attempt_draws: tuple,
                          *, restart_capital: float = RESTART_CAPITAL_JPY,
                          target: float = 1_000_000, max_steps: int = 20,
                          salvage_on_failure: bool = False,
-                         **gate_kwargs) -> dict:
+                         cost_kwargs: dict | None = None, **gate_kwargs) -> dict:
     """Consume explicit draw sequences; restart only after a zero-capital failure."""
     if not isinstance(attempt_draws, tuple) or not 1 <= len(attempt_draws) <= 100:
         raise ValueError("attempt_draws must contain 1 to 100 attempts")
@@ -24,7 +24,7 @@ def run_virtual_campaign(provider_factory, query: str, attempt_draws: tuple,
         result = run_virtual_journey(provider_factory, query, restart_capital,
                                      draws, target=target, max_steps=max_steps,
                                      salvage_on_failure=salvage_on_failure,
-                                     **gate_kwargs)
+                                     cost_kwargs=cost_kwargs, **gate_kwargs)
         attempts.append({"attempt": index, **result})
         if result["status"] != "failed" or result["final_capital"] != 0:
             break
@@ -33,4 +33,6 @@ def run_virtual_campaign(provider_factory, query: str, attempt_draws: tuple,
             "attempts": attempts, "attempt_count": len(attempts),
             "restart_count": len(attempts) - 1, "restart_capital": restart_capital,
             "final_capital": last["final_capital"],
+            "total_costs": sum(row.get("total_costs", 0) for attempt in attempts
+                               for row in attempt["history"]),
             "external_action_authorized": False}
