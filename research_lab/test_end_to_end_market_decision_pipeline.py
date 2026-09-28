@@ -304,6 +304,26 @@ def main():
     assert sum(net_stats["status_counts"].values()) == 40
     assert net_stats["average_final_capital"] >= 0
     assert not net_stats["external_action_authorized"]
+    # Campaign and the same fixed one-item cash ledger agree on net proceeds.
+    calls.clear()
+    net_campaign = run_virtual_campaign(provider_factory, "camera",
+        ((0.0,),), target=3500, max_steps=1, cost_kwargs=fees, **gates)
+    assert net_campaign["status"] == "goal_reached"
+    assert net_campaign["attempt_count"] == 1 and net_campaign["restart_count"] == 0
+    assert net_campaign["final_capital"] == 3540
+    assert net_campaign["final_capital"] - net_campaign["restart_capital"] == 540
+    assert net_campaign["total_costs"] == 660
+    assert calls == [(1, 3000)]
+    net_step = net_campaign["attempts"][0]["history"][0]
+    assert net_step["selected_item"] == "Camera A"
+    assert net_step["purchase_price"] == 2400
+    assert net_step["gross_proceeds"] == 3600
+    assert net_step["unspent_cash"] == 500
+    assert net_step["capital_after"] == net_win["capital_after"] == 3540
+    assert net_step["total_costs"] == net_win["total_costs"] == 660
+    assert not net_campaign["external_action_authorized"]
+    assert not net_step["external_action_authorized"]
+
     # Legacy gross route remains available when the ledger is not requested.
     gross_journey = run_virtual_journey(provider_factory, "camera", 3000,
         (0.0, 0.0), target=1_000_000, max_steps=2, **gates)
