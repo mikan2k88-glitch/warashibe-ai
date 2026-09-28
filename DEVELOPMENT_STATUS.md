@@ -59,3 +59,9 @@
 - preflight数値型・有限性のfail-closed修正 `6a05ce577327e1405bedbcec923fcc458ab4a6cf` のCI success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288772742 。境界値テスト追加HEAD `19b89c25898b30c374403244f417a0e7c8f565f1` の同一SHA CI success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288873096
 - 審査票 `docs/GEMINI_FIRST_SEND_APPROVAL.md` に非秘密の実環境証拠・残課題を追記。commit `0a2ed13e739ca8d75211e3454a011c6c5793305c`、同一SHA CI completed/success: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36288975551
 - 次の一件: 公開WebにGemini送信口を追加せず、認証済み管理実行経路と永続共有・原子的な予約台帳の構成を設計し、オフライン疑似送信で検証する。実環境への設定変更、Secret取得、Gemini課金API送信、MAIN・実DB・決済は未承認・未実行。
+
+## 2026-09-28: 費用込み仮想Campaignの固定fixture回帰マイルストーン
+- 費用モデルは明示的な `cost_kwargs` を指定したオフライン研究のみで有効。1品の仕入れ2,400円、初期資本3,000円、仮想売却額3,600円、入荷送料100円、発送送料200円、販売手数料率10%の成功fixtureで、未使用現金500円、費用660円、最終純資本3,540円、初期資本との差+540円を検証した。実市場価格・実利益を示すものではない。
+- 単品の `apply_virtual_trade_costs` と `run_virtual_campaign` の同一fixtureで純資本・費用が一致し、外部実行許可はfalse。コミット `81af6d1e909c0478de5a277cc0f4c399f4cbf4c7`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36434553937
+- 失敗後に未使用現金500円が残るケースは同じ挑戦の `salvaged` とし、新しい3,000円の挑戦に数えない。費用なしの従来モデルは3,600円、`total_costs=0` を維持。不正な費用設定を拒否する回帰テストを追加。コミット `fc9adc2f688b26d00a87a629a5e176f45e68dc7f`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36436898622
+- 独立した商品DDモジュールとの接続、実際の商品データ、実市場手数料、実取引は未検証。次の一件は商品選択根拠と同じfixtureの期待利益・失敗リスク・仮想費用を一つのオフライン評価出力に整理すること。MAIN、DB、Secrets、外部AIの実行は変更しない。
