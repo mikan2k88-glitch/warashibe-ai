@@ -65,3 +65,9 @@
 - 単品の `apply_virtual_trade_costs` と `run_virtual_campaign` の同一fixtureで純資本・費用が一致し、外部実行許可はfalse。コミット `81af6d1e909c0478de5a277cc0f4c399f4cbf4c7`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36434553937
 - 失敗後に未使用現金500円が残るケースは同じ挑戦の `salvaged` とし、新しい3,000円の挑戦に数えない。費用なしの従来モデルは3,600円、`total_costs=0` を維持。不正な費用設定を拒否する回帰テストを追加。コミット `fc9adc2f688b26d00a87a629a5e176f45e68dc7f`、同一SHA CI成功: https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36436898622
 - 独立した商品DDモジュールとの接続、実際の商品データ、実市場手数料、実取引は未検証。次の一件は商品選択根拠と同じfixtureの期待利益・失敗リスク・仮想費用を一つのオフライン評価出力に整理すること。MAIN、DB、Secrets、外部AIの実行は変更しない。
+
+## 2026-09-28: 単品の選択根拠・損益・失敗リスク・仮想費用の同一評価出力
+- `research_lab/one_item_scenario_evaluation.py` を追加。既存の `best_candidate` と仮想取引・現金台帳の検証を再利用し、成功/失敗の資本、純利益、仮定した失敗確率、仮想費用、確率加重の期待純利益を一つのread-only出力にまとめる。候補の新しいランキングや独立した商品DDモジュールとの接続ではない。
+- 固定fixture: 初期3,000円、仕入2,400円、売却3,600円、入荷送料100円、発送送料200円、手数料率10%、仮定の成功確率75%。成功時3,540円（+540円、費用660円）、失敗時500円（−2,500円、費用100円）、期待純利益−220円。これは仮定に基づくオフライン結果であり実市場の収益・成約確率を実証しない。
+- 実装コミット `2d4095083e977bfab86004eeb24ba1a08e971daa` の同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36437650128 。結合回帰テスト `fa741f2fc9eed43fd2c847d44aae5cb73e31de5a` の同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36437802146 。外部実行許可はfalse。
+- 次の一件: 実データではなく独立した商品DD項目（根拠・送料・売却可能性・回収価値）の入力契約と不足データ時の保留をオフラインで検証。MAIN/DB/Secrets/外部AI実行/実取引は対象外。
