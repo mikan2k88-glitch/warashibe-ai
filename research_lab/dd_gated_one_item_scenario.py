@@ -1,6 +1,6 @@
 """Fail-closed offline bridge: DD evidence must pass before scenario arithmetic."""
 
-from research_lab.product_dd_input_gate import evaluate_product_dd
+from research_lab.product_dd_input_gate import EVIDENCE_FIELDS, evaluate_product_dd
 from research_lab.one_item_scenario_evaluation import evaluate_one_item_scenario
 
 
@@ -20,5 +20,13 @@ def evaluate_dd_gated_scenario(candidate, decision, *, cost_kwargs=None):
              ("confidence", "confidence"))
     if any(selected.get(right) != candidate[left] for left, right in pairs):
         return dict(base, dd_status="hold_decision_mismatch", dd_reasons=("dd_decision_values_differ",))
+    identity_fields = ("item_id",) + EVIDENCE_FIELDS
+    if any(not isinstance(candidate.get(field), str)
+           or not candidate[field].strip()
+           or not isinstance(selected.get(field), str)
+           or not selected[field].strip()
+           or selected[field] != candidate[field] for field in identity_fields):
+        return dict(base, dd_status="hold_decision_mismatch",
+                    dd_reasons=("dd_decision_identity_or_evidence_differ",))
     scenario = evaluate_one_item_scenario(decision, cost_kwargs=cost_kwargs)
     return dict(base, scenario=scenario)
