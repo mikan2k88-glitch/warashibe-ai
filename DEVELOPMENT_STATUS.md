@@ -102,3 +102,8 @@
 ## 2026-09-29: 市場データ取得経路の棚卸し
 - [市場データ取得経路の棚卸し](docs/MARKET_DATA_ACCESS_INVENTORY.md)を作成。research-labのPythonコードで市場向けHTTP実装はeBay Browse検索1経路。eBay結果変換、Real Marketの正規化、sandbox市場候補パイプラインは取得済みレコードを受け取るオフライン処理。GitHub Actions/Gemini HTTPは別用途。
 - 棚卸しcommit `473360fad6afcadce93ac1466f2953d7033ce7a0` の同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36547808305 completed/success。現段階では共通市場HTTP層を追加しない。二つ目の市場プロバイダー実装時に同じ許可先・操作・リダイレクト・制限後停止の契約を適用する。外部パッケージ内部や実環境通信の監査ではない。
+
+## 2026-09-29: eBay出品価格だけのDD評価を保留
+- eBay Browseの取得済みlistingは `metadata.asking_price_only=True`。DD入口はこの印を持つ候補を、他の仮定値や根拠文字列が揃っていても `hold_missing_or_invalid_evidence` / `asking_price_only` とし、スコア・単品損益予測を出さない。
+- eBay adapterから得た固定listingに仮の売却・費用・確率を加えても保留する回帰と、単品シナリオ `scenario=None` の結合回帰を追加。ローカルresearch runner 226/226成功。最終コード・回帰commit `7da59680429d52973cec59b4aabc54ac6f0ba5b6` 同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36548358348 completed/success。
+- この印を落とす別変換まで保護するものではない。出品価格は成約価格や成約確率の証拠ではない。実市場取引、MAIN、DB、Secrets、外部AIは未実行。次は出品データからDDへ渡す明示的な変換契約を設け、印と根拠不足を保持することをオフラインで検証する。
