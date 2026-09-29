@@ -18,6 +18,9 @@ def evaluate_product_dd(candidate):
     """Gate a fixture on complete numeric inputs and explicit evidence references."""
     if not isinstance(candidate, dict):
         return _hold(("candidate_not_mapping",))
+    metadata = candidate.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("asking_price_only") is True:
+        return _hold(("asking_price_only",))
     missing = tuple(field for field in REQUIRED_FIELDS + EVIDENCE_FIELDS
                     if field not in candidate or candidate[field] is None)
     if missing:
