@@ -390,6 +390,7 @@ def main():
 
     # Independent DD must gate scenario output, including mismatched decision data.
     dd = {
+        "item_id": "camera-a-001",
         "purchase_price_jpy": 2400, "estimated_sale_price_jpy": 3600,
         "estimated_fees_jpy": 360, "estimated_shipping_jpy": 300,
         "estimated_days_to_sell": 3, "liquidation_value_jpy": 2000,
@@ -398,11 +399,28 @@ def main():
         "fee_evidence": "fixture:fee", "shipping_evidence": "fixture:shipping",
         "liquidation_evidence": "fixture:liquidation",
     }
-    approved = evaluate_dd_gated_scenario(dd, report_decision, cost_kwargs=fees)
+    linked_decision = {**report_decision, "best_candidate": {
+        **report_decision["best_candidate"], "item_id": dd["item_id"],
+        **{key: dd[key] for key in ("price_evidence", "sale_evidence",
+            "fee_evidence", "shipping_evidence", "liquidation_evidence")}}}
+    approved = evaluate_dd_gated_scenario(dd, linked_decision, cost_kwargs=fees)
     assert approved["dd_status"] == "eligible_for_offline_comparison"
     assert approved["scenario"]["success_capital"] == 3540
     assert approved["scenario"]["expected_net_profit"] == -220
     assert not approved["external_action_authorized"]
+    for changed_dd, changed_decision in (
+        ({**dd, "item_id": "camera-b-002"}, linked_decision),
+        ({**dd, "sale_evidence": "fixture:other-sale"}, linked_decision),
+        (dd, {**linked_decision, "best_candidate": {
+            **linked_decision["best_candidate"], "item_id": "camera-b-002"}}),
+        (dd, {**linked_decision, "best_candidate": {
+            **linked_decision["best_candidate"], "fee_evidence": "fixture:other-fee"}}),
+        (dd, report_decision),
+        ({key: value for key, value in dd.items() if key != "item_id"}, linked_decision),
+    ):
+        unlinked = evaluate_dd_gated_scenario(changed_dd, changed_decision, cost_kwargs=fees)
+        assert unlinked["dd_status"] == "hold_decision_mismatch"
+        assert unlinked["scenario"] is None
     for invalid in ({**dd, "sale_evidence": ""},
                     {**dd, "estimated_shipping_jpy": float("nan")},
                     {**dd, "estimated_sale_price_jpy": 1000}):
