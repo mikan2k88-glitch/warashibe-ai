@@ -88,3 +88,8 @@
 - `evaluate_dd_gated_scenario` で商品IDと5種の根拠参照（価格、売却、手数料、送料、清算価値）を双方必須とし、値の不一致・欠落・空欄では `hold_decision_mismatch` / `scenario=None` とする。価格・確信度の既存照合も維持。
 - 同一ID・根拠の固定fixtureで成功時3,540円、期待純利益−220円を維持。商品ID違い、根拠違い、識別子欠落は予測なし。実装 `7b44bf734ded1d925d0a06d902cff6a419197407` の中間CIは旧fixtureとの不一致で失敗したが、回帰更新後の `c32b56250b35edd4b40dd19134c13cb0cda6c293` は同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36545470717 completed/success。ローカルresearch runnerは226/226通過。
 - 根拠参照はfixtureの文字列一致であり、外部資料の真偽や商品IDの実市場照合を示さない。次は実データの出所・取得時刻・鮮度を含む証拠契約をオフラインで定義・検証する。外部AI、MAIN、DB、Secrets、実取引は未実行。
+
+## 2026-09-29: 商品根拠の出所・取得時刻・鮮度のオフラインゲート
+- 既存DD評価を再利用する `evaluate_product_dd_with_provenance` を追加。単品損益予測の入口では、5種の根拠に非空の出所とタイムゾーン付きISO取得時刻を必須とし、明示した評価時刻から7日（設定可能）超、未来日付、不正・欠落なら `hold_missing_or_invalid_evidence` / `scenario=None`。評価時刻がない場合も保留。既存DD単独のスコアラーは変更しない。
+- 境界日、有効な固定fixture、期限切れ、未来日付、空出所、不正時刻、不正な許容期間をオフラインで回帰。成功時3,540円、仮定に基づく期待純利益−220円を維持。ローカル研究チェック226/226成功。最終コード・回帰コミット `b922eafe12591377d300a97138748bbc4bd8fb8f` の同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36546612251 completed/success。
+- これは申告された出所文字列と日時の形式・鮮度検査であり、外部資料の存在・真正性や実市場観測を実証しない。次の候補は許可した商品データAPIとドメインに限定し、アクセス制限後の迂回・再試行を模擬環境で拒否する検証。MAIN、DB、Secrets、外部AI、実取引は未実行。
