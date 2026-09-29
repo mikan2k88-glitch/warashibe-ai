@@ -7,6 +7,7 @@ network calls, purchases, listings, payments, or sale-outcome persistence.
 from dataclasses import dataclass
 
 from research_lab.ebay_browse_adapter import browse_search_to_records
+from research_lab.ebay_listing_dd_bridge import listing_observation_to_dd_input
 from research_lab.live_market_evidence_ingestion import IngestionResult, ingest_records
 
 BRIDGE_VERSION = "0.1"
@@ -40,3 +41,18 @@ def ingest_browse_search_payload(payload, *, observed_at=None):
         ingestion=ingestion,
         mapping_rejected=tuple(mapping_rejected),
     )
+
+
+def build_dd_input_batch(result: EbayBrowseIngestionResult) -> dict:
+    """Convert accepted listings separately; one unsuitable row cannot promote others."""
+    if not isinstance(result, EbayBrowseIngestionResult):
+        raise ValueError("eBay ingestion result required")
+    inputs, rejected = [], []
+    for observation in result.accepted:
+        try:
+            inputs.append(listing_observation_to_dd_input(observation))
+        except ValueError:
+            rejected.append({"item_id": observation.external_id,
+                             "reason": "dd_conversion_rejected"})
+    return {"dd_inputs": tuple(inputs), "rejected": tuple(rejected),
+            "external_action_authorized": False}
