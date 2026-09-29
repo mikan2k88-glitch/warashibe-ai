@@ -117,3 +117,9 @@
 - `build_dd_input_batch` が正常に取り込まれたeBay観測を1行ずつ既存の部分入力変換に渡す。JPYの2件は商品ID・提示価格・価格根拠・asking-price-only印を保持し、USDは独立して変換拒否。元の不正価格行は取り込み段階で拒否される。どのDD部分入力も売却根拠を補わず、評価は保留。
 - ローカルresearch runner226/226通過。最終コード・回帰commit `cb97ae91dfcb08fa992ccad03a3b41e6c7f62c8e` の同一SHA GitHub Actions run https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36549401966 は一覧でcompleted successfullyと表示された。GitHub REST APIは一時的に403で、一覧HTMLから実行番号・SHA・成功表示を照合した。
 - DD変換拒否は元の取り込み拒否と別集計。実eBay通信や売却根拠取得、MAIN/DB/Secrets/外部AI/実売買は未実施。次は独立した成約根拠を合流させる前に、商品ID・市場・出所・日時の一致条件を設計する。
+
+## 2026-09-29: 独立成約根拠の照合レビューゲート（オフライン）
+- `research_lab/sale_evidence_join_gate.py` を追加。出品記録と独立した成約根拠候補について、商品ID・市場一致、別出所・別証拠参照、タイムゾーン付き取得日時と明示的な評価時刻からの鮮度を検査。不一致・欠落・未来・期限切れなら `hold_evidence_join`。通過時も `reviewable_provenance_pair` のみで、`scenario=None`、`asking_price_only=True`、外部実行許可false。独立データの真正性・成約事実を検証したものではない。
+- 実装 `8690c745b2d968948590b50ca6a56dceeae33b79` は同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36551284180 success。9件の回帰テスト `3078ee1962c9ff71373c02a8387795a970b4f255` は https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36552385327 success。ただしこの時点ではrunner未登録。
+- `research_lab/runner.py` に `research_lab.test_sale_evidence_join_gate` を登録した `c53a98c9a5ecec5763291c8347e94daf71f90603` は同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36552496976 completed/success。ログ内で `Ran 9 tests ... OK` を確認。これを本マイルストーンの回帰実行証拠とする。
+- 次の一件: 出品・成約根拠の両者がレビュー可能でも、eBay出品の `asking_price_only` 印を自動解除せず、独立根拠の真正性・商品同一性を裏付ける追加審査契約をオフラインで定義する。実市場の成約実績・実通信、MAIN、DB、Secrets、外部AI、実売買は未確認・未実施。
