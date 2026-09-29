@@ -71,3 +71,10 @@
 - 固定fixture: 初期3,000円、仕入2,400円、売却3,600円、入荷送料100円、発送送料200円、手数料率10%、仮定の成功確率75%。成功時3,540円（+540円、費用660円）、失敗時500円（−2,500円、費用100円）、期待純利益−220円。これは仮定に基づくオフライン結果であり実市場の収益・成約確率を実証しない。
 - 実装コミット `2d4095083e977bfab86004eeb24ba1a08e971daa` の同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36437650128 。結合回帰テスト `fa741f2fc9eed43fd2c847d44aae5cb73e31de5a` の同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36437802146 。外部実行許可はfalse。
 - 次の一件: 実データではなく独立した商品DD項目（根拠・送料・売却可能性・回収価値）の入力契約と不足データ時の保留をオフラインで検証。MAIN/DB/Secrets/外部AI実行/実取引は対象外。
+
+## 2026-09-29: 商品DD入力のfail-closedオフラインゲート
+- `research_lab/product_dd_input_gate.py` で既存スコアラーの入力9項目と、価格・売却・手数料・送料・清算価値の根拠参照5項目を検証。欠落、空欄、非有限数はスコアを出さず `hold_missing_or_invalid_evidence`。全項目がある場合のみ既存のスコアラーに委譲し、政策上のブロックと比較可能を区別する。
+- `test_real_world_candidate_scoring_design.py` に欠落5パターン、NaN、空根拠、非mapping、許可/ブロックの固定fixture回帰を追加。根拠文字列はfixture上の申告であり、実際の外部資料の検証・市場観測を意味しない。選択結果や現金台帳への本番接続は未実施。
+- 実装 `0ce074d7874a2d66f755d7a483037437fac26b33` 同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36507092801 。回帰テスト `1abd0e41507b478bd29a1d5b58520d3ddff8e8bc` 同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36507170913 。外部実行許可なし。
+- 定期監督はOpenAI安全チェックによる `add_comment_to_issue` 拒否の報告を受け、毎時読み取り専用・タスク本文報告に変更。定期タスクからGitHub/Library書き込みは試行しない。チャット中の変更と定期実行成功を混同しない。
+- 次の一件: 商品DDのhold/blocked/比較可能を単品シナリオ評価への入力境界で明示し、hold時に損益予測を出さないことをオフライン結合検証する。
