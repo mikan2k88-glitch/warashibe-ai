@@ -83,3 +83,8 @@
 - `research_lab/dd_gated_one_item_scenario.py` を追加。独立した商品DD入力ゲートが `eligible_for_offline_comparison` の場合のみ既存単品シナリオを評価する。根拠不足・不正値・Policyブロックは `scenario=None` で保留。DDと選択済み候補の仕入価格・売却価格・confidenceの不一致も保留する。外部実行許可はfalse。
 - 同一fixtureで成功時3,540円・期待純利益−220円を再現し、根拠欠落、NaN、Policyブロック、候補不一致、候補なしでは予測を生成しない回帰テストを既存のend-to-endテストに追加。実装 `3c6f9a371ceeaacd1c3ae62269be91fa4abe40ff` CI success https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36508043289 。回帰 `554d565fbc4528df18ca103546ae85b83e50763e` CI success https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36508132423 。
 - この結合はオフライン固定データの契約検証であり、実市場根拠の真偽、実成約確率、実取引、Gemini/Codex実送信を確認したものではない。次の一件はDDと選択候補の同一性を識別子・根拠参照まで拡張するかを検討し、異なる商品を誤接続しない回帰を追加する。
+
+## 2026-09-29: DDと選択候補の商品ID・根拠参照照合
+- `evaluate_dd_gated_scenario` で商品IDと5種の根拠参照（価格、売却、手数料、送料、清算価値）を双方必須とし、値の不一致・欠落・空欄では `hold_decision_mismatch` / `scenario=None` とする。価格・確信度の既存照合も維持。
+- 同一ID・根拠の固定fixtureで成功時3,540円、期待純利益−220円を維持。商品ID違い、根拠違い、識別子欠落は予測なし。実装 `7b44bf734ded1d925d0a06d902cff6a419197407` の中間CIは旧fixtureとの不一致で失敗したが、回帰更新後の `c32b56250b35edd4b40dd19134c13cb0cda6c293` は同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36545470717 completed/success。ローカルresearch runnerは226/226通過。
+- 根拠参照はfixtureの文字列一致であり、外部資料の真偽や商品IDの実市場照合を示さない。次は実データの出所・取得時刻・鮮度を含む証拠契約をオフラインで定義・検証する。外部AI、MAIN、DB、Secrets、実取引は未実行。
