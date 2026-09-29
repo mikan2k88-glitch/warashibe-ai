@@ -107,3 +107,8 @@
 - eBay Browseの取得済みlistingは `metadata.asking_price_only=True`。DD入口はこの印を持つ候補を、他の仮定値や根拠文字列が揃っていても `hold_missing_or_invalid_evidence` / `asking_price_only` とし、スコア・単品損益予測を出さない。
 - eBay adapterから得た固定listingに仮の売却・費用・確率を加えても保留する回帰と、単品シナリオ `scenario=None` の結合回帰を追加。ローカルresearch runner 226/226成功。最終コード・回帰commit `7da59680429d52973cec59b4aabc54ac6f0ba5b6` 同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36548358348 completed/success。
 - この印を落とす別変換まで保護するものではない。出品価格は成約価格や成約確率の証拠ではない。実市場取引、MAIN、DB、Secrets、外部AIは未実行。次は出品データからDDへ渡す明示的な変換契約を設け、印と根拠不足を保持することをオフラインで検証する。
+
+## 2026-09-29: eBay出品観測からDD部分入力への明示変換
+- `research_lab/ebay_listing_dd_bridge.py` を追加。取り込み済み `MarketObservation` のeBay出品で `asking_price_only=True`、JPY、正の有限価格、タイムゾーン付き取得時刻を確認し、商品ID・仕入提示価格・価格根拠と出所/時刻・印だけをDD入力に変換する。売却見込み・成約確率・売却根拠は作らない。
+- 固定eBay payload→取り込み→変換→DD保留→単品シナリオなしを既存テストに追加。別ソース、印欠落、USD、時刻のタイムゾーン欠落は変換拒否。ローカルresearch runner 226/226成功。最終コード・回帰commit `24b1915a75377a1e55d94f500a0b5898ced2aefb` の同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36548890899 completed/success。
+- この関数を通らない別変換は対象外。実eBay API通信、成約根拠、MAIN、DB、Secrets、外部AI、実売買は未実施。次はこの部分入力を商品評価へ統合する際、独立した成約根拠を補う条件と、出所を混同しない契約をオフラインで定義する。
