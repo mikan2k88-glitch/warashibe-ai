@@ -1,5 +1,6 @@
 """Tests for real-world candidate scoring design."""
 
+from research_lab.product_dd_input_gate import evaluate_product_dd
 from research_lab.real_world_candidate_scoring_design import (
     build_real_world_candidate_scoring_design,
     rank_candidates,
@@ -50,6 +51,29 @@ def run_tests():
     result = score_candidate(loss)
     assert result["eligible"] is False
     assert "non_positive_expected_profit" in result["blockers"]
+
+    # Independent offline DD input contract: never score incomplete evidence.
+    evidence = {field: "fixture:documented-assumption" for field in (
+        "price_evidence", "sale_evidence", "fee_evidence",
+        "shipping_evidence", "liquidation_evidence")}
+    complete = dict(strong, **evidence)
+    approved = evaluate_product_dd(complete)
+    assert approved["status"] == "eligible_for_offline_comparison"
+    assert approved["scoring"]["expected_net_profit_jpy"] == 1300
+    assert approved["one_item_only"] and not approved["external_action_authorized"]
+    assert evaluate_product_dd(dict(weak, **evidence))["status"] == "policy_blocked"
+    for field in evidence:
+        missing = dict(complete)
+        missing.pop(field)
+        held = evaluate_product_dd(missing)
+        assert held["status"] == "hold_missing_or_invalid_evidence"
+        assert held["scoring"] is None and "missing_" + field in held["reasons"]
+    for field in ("estimated_sale_price_jpy", "confidence"):
+        invalid = dict(complete, **{field: float("nan")})
+        assert evaluate_product_dd(invalid)["scoring"] is None
+    assert evaluate_product_dd(dict(complete, sale_evidence="  "))["scoring"] is None
+    assert evaluate_product_dd(None)["scoring"] is None
+    assert complete["price_evidence"] == "fixture:documented-assumption"
 
     design = build_real_world_candidate_scoring_design()
     assert design["next_integration_target"] == "warashibe_core_real_world_mode"
