@@ -413,6 +413,12 @@ def main():
     assert approved["scenario"]["success_capital"] == 3540
     assert approved["scenario"]["expected_net_profit"] == -220
     assert not approved["external_action_authorized"]
+    asking_only = evaluate_dd_gated_scenario(
+        {**dd, "metadata": {"asking_price_only": True}}, linked_decision,
+        cost_kwargs=fees, as_of=as_of)
+    assert asking_only["dd_status"] == "hold_missing_or_invalid_evidence"
+    assert asking_only["dd_reasons"] == ("asking_price_only",)
+    assert asking_only["scenario"] is None
     for invalid_metadata in (
         None,
         {**dd["evidence_metadata"], "sale_evidence": {"source": "", "observed_at": observed_at}},
