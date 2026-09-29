@@ -98,3 +98,7 @@
 - `ebay_browse_transport.py` の検索GETを固定HTTPSホスト `api.ebay.com` と `/buy/browse/v1/item_summary/search` のみに制限し、HTTPリダイレクトを追わない専用handlerを使用。Bearerトークンを別ホスト・別経路へ転送しない。
 - モックで許可外ホスト、HTTP、別経路、紛らわしいサブドメイン、リダイレクト、403/429時に再試行なしを検証。ローカルresearch runner 226/226成功。最終コード・テストcommit `252814293d083366b5306dbfca7ddd3da0734d24` 同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36547286165 completed/success。
 - eBay Browse検索の既存読み取り経路のみが対象。他の市場アダプター、プロキシ・ネットワーク全体の強制隔離、実HTTP応答、実商品データ取得は検証していない。外部AI、MAIN、DB、Secrets、実売買は未実行。次は市場データ取得経路全体の棚卸しと、同じ境界を共通化する必要性を評価する。
+
+## 2026-09-29: 市場データ取得経路の棚卸し
+- [市場データ取得経路の棚卸し](docs/MARKET_DATA_ACCESS_INVENTORY.md)を作成。research-labのPythonコードで市場向けHTTP実装はeBay Browse検索1経路。eBay結果変換、Real Marketの正規化、sandbox市場候補パイプラインは取得済みレコードを受け取るオフライン処理。GitHub Actions/Gemini HTTPは別用途。
+- 棚卸しcommit `473360fad6afcadce93ac1466f2953d7033ce7a0` の同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36547808305 completed/success。現段階では共通市場HTTP層を追加しない。二つ目の市場プロバイダー実装時に同じ許可先・操作・リダイレクト・制限後停止の契約を適用する。外部パッケージ内部や実環境通信の監査ではない。
