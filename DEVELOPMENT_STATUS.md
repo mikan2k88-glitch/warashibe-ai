@@ -78,3 +78,8 @@
 - 実装 `0ce074d7874a2d66f755d7a483037437fac26b33` 同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36507092801 。回帰テスト `1abd0e41507b478bd29a1d5b58520d3ddff8e8bc` 同一SHA CI成功 https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36507170913 。外部実行許可なし。
 - 定期監督はOpenAI安全チェックによる `add_comment_to_issue` 拒否の報告を受け、毎時読み取り専用・タスク本文報告に変更。定期タスクからGitHub/Library書き込みは試行しない。チャット中の変更と定期実行成功を混同しない。
 - 次の一件: 商品DDのhold/blocked/比較可能を単品シナリオ評価への入力境界で明示し、hold時に損益予測を出さないことをオフライン結合検証する。
+
+## 2026-09-29: 商品DD保留と単品損益予測の結合ゲート
+- `research_lab/dd_gated_one_item_scenario.py` を追加。独立した商品DD入力ゲートが `eligible_for_offline_comparison` の場合のみ既存単品シナリオを評価する。根拠不足・不正値・Policyブロックは `scenario=None` で保留。DDと選択済み候補の仕入価格・売却価格・confidenceの不一致も保留する。外部実行許可はfalse。
+- 同一fixtureで成功時3,540円・期待純利益−220円を再現し、根拠欠落、NaN、Policyブロック、候補不一致、候補なしでは予測を生成しない回帰テストを既存のend-to-endテストに追加。実装 `3c6f9a371ceeaacd1c3ae62269be91fa4abe40ff` CI success https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36508043289 。回帰 `554d565fbc4528df18ca103546ae85b83e50763e` CI success https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36508132423 。
+- この結合はオフライン固定データの契約検証であり、実市場根拠の真偽、実成約確率、実取引、Gemini/Codex実送信を確認したものではない。次の一件はDDと選択候補の同一性を識別子・根拠参照まで拡張するかを検討し、異なる商品を誤接続しない回帰を追加する。
