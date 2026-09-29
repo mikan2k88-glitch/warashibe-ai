@@ -7,6 +7,7 @@ from research_lab.market_decision_virtual_statistics import evaluate_virtual_jou
 from research_lab.market_decision_virtual_campaign import run_virtual_campaign
 from research_lab.virtual_trade_costs import apply_virtual_trade_costs
 from research_lab.one_item_scenario_evaluation import evaluate_one_item_scenario
+from research_lab.dd_gated_one_item_scenario import evaluate_dd_gated_scenario
 
 
 class FixtureProvider:
@@ -386,6 +387,33 @@ def main():
         (0.0, 0.0), target=1_000_000, max_steps=2, **gates)
     assert gross_journey["history"][0]["capital_after"] == 3600
     assert "cost_model" not in gross_journey["history"][0]
+
+    # Independent DD must gate scenario output, including mismatched decision data.
+    dd = {
+        "purchase_price_jpy": 2400, "estimated_sale_price_jpy": 3600,
+        "estimated_fees_jpy": 360, "estimated_shipping_jpy": 300,
+        "estimated_days_to_sell": 3, "liquidation_value_jpy": 2000,
+        "market_depth": .8, "automation_ease": .8, "confidence": .75,
+        "price_evidence": "fixture:price", "sale_evidence": "fixture:sale",
+        "fee_evidence": "fixture:fee", "shipping_evidence": "fixture:shipping",
+        "liquidation_evidence": "fixture:liquidation",
+    }
+    approved = evaluate_dd_gated_scenario(dd, report_decision, cost_kwargs=fees)
+    assert approved["dd_status"] == "eligible_for_offline_comparison"
+    assert approved["scenario"]["success_capital"] == 3540
+    assert approved["scenario"]["expected_net_profit"] == -220
+    assert not approved["external_action_authorized"]
+    for invalid in ({**dd, "sale_evidence": ""},
+                    {**dd, "estimated_shipping_jpy": float("nan")},
+                    {**dd, "estimated_sale_price_jpy": 1000}):
+        held = evaluate_dd_gated_scenario(invalid, report_decision, cost_kwargs=fees)
+        assert held["scenario"] is None and held["dd_status"] != "eligible_for_offline_comparison"
+        assert not held["external_action_authorized"]
+    mismatch = evaluate_dd_gated_scenario(dd, {**report_decision,
+        "best_candidate": {**report_decision["best_candidate"], "expected_sale_price": 3700}},
+        cost_kwargs=fees)
+    assert mismatch["dd_status"] == "hold_decision_mismatch" and mismatch["scenario"] is None
+    assert evaluate_dd_gated_scenario(dd, {"current_capital": 3000, "best_candidate": None})["scenario"] is None
 
     print("end-to-end market decision pipeline tests passed")
 
