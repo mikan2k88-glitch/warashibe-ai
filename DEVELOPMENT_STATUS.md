@@ -112,3 +112,8 @@
 - `research_lab/ebay_listing_dd_bridge.py` を追加。取り込み済み `MarketObservation` のeBay出品で `asking_price_only=True`、JPY、正の有限価格、タイムゾーン付き取得時刻を確認し、商品ID・仕入提示価格・価格根拠と出所/時刻・印だけをDD入力に変換する。売却見込み・成約確率・売却根拠は作らない。
 - 固定eBay payload→取り込み→変換→DD保留→単品シナリオなしを既存テストに追加。別ソース、印欠落、USD、時刻のタイムゾーン欠落は変換拒否。ローカルresearch runner 226/226成功。最終コード・回帰commit `24b1915a75377a1e55d94f500a0b5898ced2aefb` の同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36548890899 completed/success。
 - この関数を通らない別変換は対象外。実eBay API通信、成約根拠、MAIN、DB、Secrets、外部AI、実売買は未実施。次はこの部分入力を商品評価へ統合する際、独立した成約根拠を補う条件と、出所を混同しない契約をオフラインで定義する。
+
+## 2026-09-29: eBay取り込み済み候補のDD部分入力バッチ
+- `build_dd_input_batch` が正常に取り込まれたeBay観測を1行ずつ既存の部分入力変換に渡す。JPYの2件は商品ID・提示価格・価格根拠・asking-price-only印を保持し、USDは独立して変換拒否。元の不正価格行は取り込み段階で拒否される。どのDD部分入力も売却根拠を補わず、評価は保留。
+- ローカルresearch runner226/226通過。最終コード・回帰commit `cb97ae91dfcb08fa992ccad03a3b41e6c7f62c8e` の同一SHA GitHub Actions run https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36549401966 は一覧でcompleted successfullyと表示された。GitHub REST APIは一時的に403で、一覧HTMLから実行番号・SHA・成功表示を照合した。
+- DD変換拒否は元の取り込み拒否と別集計。実eBay通信や売却根拠取得、MAIN/DB/Secrets/外部AI/実売買は未実施。次は独立した成約根拠を合流させる前に、商品ID・市場・出所・日時の一致条件を設計する。
