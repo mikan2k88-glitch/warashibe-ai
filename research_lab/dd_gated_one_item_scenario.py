@@ -1,12 +1,12 @@
 """Fail-closed offline bridge: DD evidence must pass before scenario arithmetic."""
 
-from research_lab.product_dd_input_gate import EVIDENCE_FIELDS, evaluate_product_dd
+from research_lab.product_dd_input_gate import EVIDENCE_FIELDS, evaluate_product_dd_with_provenance
 from research_lab.one_item_scenario_evaluation import evaluate_one_item_scenario
 
 
-def evaluate_dd_gated_scenario(candidate, decision, *, cost_kwargs=None):
+def evaluate_dd_gated_scenario(candidate, decision, *, cost_kwargs=None, as_of=None, max_age_days=7):
     """Use an existing one-item decision only when its DD inputs are eligible and match."""
-    dd = evaluate_product_dd(candidate)
+    dd = evaluate_product_dd_with_provenance(candidate, as_of=as_of, max_age_days=max_age_days)
     base = {"dd_status": dd["status"], "dd_reasons": dd["reasons"],
             "scenario": None, "one_item_only": True, "scenario_only": True,
             "external_action_authorized": False}
