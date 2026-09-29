@@ -1,0 +1,24 @@
+"""Fail-closed offline bridge: DD evidence must pass before scenario arithmetic."""
+
+from research_lab.product_dd_input_gate import evaluate_product_dd
+from research_lab.one_item_scenario_evaluation import evaluate_one_item_scenario
+
+
+def evaluate_dd_gated_scenario(candidate, decision, *, cost_kwargs=None):
+    """Use an existing one-item decision only when its DD inputs are eligible and match."""
+    dd = evaluate_product_dd(candidate)
+    base = {"dd_status": dd["status"], "dd_reasons": dd["reasons"],
+            "scenario": None, "one_item_only": True, "scenario_only": True,
+            "external_action_authorized": False}
+    if dd["status"] != "eligible_for_offline_comparison":
+        return base
+    if not isinstance(decision, dict) or not isinstance(decision.get("best_candidate"), dict):
+        return dict(base, dd_status="hold_decision_mismatch", dd_reasons=("missing_decision_candidate",))
+    selected = decision["best_candidate"]
+    pairs = (("purchase_price_jpy", "purchase_price"),
+             ("estimated_sale_price_jpy", "expected_sale_price"),
+             ("confidence", "confidence"))
+    if any(selected.get(right) != candidate[left] for left, right in pairs):
+        return dict(base, dd_status="hold_decision_mismatch", dd_reasons=("dd_decision_values_differ",))
+    scenario = evaluate_one_item_scenario(decision, cost_kwargs=cost_kwargs)
+    return dict(base, scenario=scenario)
