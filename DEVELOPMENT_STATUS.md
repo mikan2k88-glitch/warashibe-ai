@@ -93,3 +93,8 @@
 - 既存DD評価を再利用する `evaluate_product_dd_with_provenance` を追加。単品損益予測の入口では、5種の根拠に非空の出所とタイムゾーン付きISO取得時刻を必須とし、明示した評価時刻から7日（設定可能）超、未来日付、不正・欠落なら `hold_missing_or_invalid_evidence` / `scenario=None`。評価時刻がない場合も保留。既存DD単独のスコアラーは変更しない。
 - 境界日、有効な固定fixture、期限切れ、未来日付、空出所、不正時刻、不正な許容期間をオフラインで回帰。成功時3,540円、仮定に基づく期待純利益−220円を維持。ローカル研究チェック226/226成功。最終コード・回帰コミット `b922eafe12591377d300a97138748bbc4bd8fb8f` の同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36546612251 completed/success。
 - これは申告された出所文字列と日時の形式・鮮度検査であり、外部資料の存在・真正性や実市場観測を実証しない。次の候補は許可した商品データAPIとドメインに限定し、アクセス制限後の迂回・再試行を模擬環境で拒否する検証。MAIN、DB、Secrets、外部AI、実取引は未実行。
+
+## 2026-09-29: eBay Browse検索の外部アクセス境界（オフライン検証）
+- `ebay_browse_transport.py` の検索GETを固定HTTPSホスト `api.ebay.com` と `/buy/browse/v1/item_summary/search` のみに制限し、HTTPリダイレクトを追わない専用handlerを使用。Bearerトークンを別ホスト・別経路へ転送しない。
+- モックで許可外ホスト、HTTP、別経路、紛らわしいサブドメイン、リダイレクト、403/429時に再試行なしを検証。ローカルresearch runner 226/226成功。最終コード・テストcommit `252814293d083366b5306dbfca7ddd3da0734d24` 同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36547286165 completed/success。
+- eBay Browse検索の既存読み取り経路のみが対象。他の市場アダプター、プロキシ・ネットワーク全体の強制隔離、実HTTP応答、実商品データ取得は検証していない。外部AI、MAIN、DB、Secrets、実売買は未実行。次は市場データ取得経路全体の棚卸しと、同じ境界を共通化する必要性を評価する。
