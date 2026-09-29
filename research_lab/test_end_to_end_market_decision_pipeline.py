@@ -403,11 +403,37 @@ def main():
         **report_decision["best_candidate"], "item_id": dd["item_id"],
         **{key: dd[key] for key in ("price_evidence", "sale_evidence",
             "fee_evidence", "shipping_evidence", "liquidation_evidence")}}}
-    approved = evaluate_dd_gated_scenario(dd, linked_decision, cost_kwargs=fees)
+    observed_at = "2026-09-28T12:00:00+00:00"
+    as_of = "2026-09-29T12:00:00+00:00"
+    dd["evidence_metadata"] = {key: {"source": "fixture:market-a", "observed_at": observed_at}
+        for key in ("price_evidence", "sale_evidence", "fee_evidence",
+                    "shipping_evidence", "liquidation_evidence")}
+    approved = evaluate_dd_gated_scenario(dd, linked_decision, cost_kwargs=fees, as_of=as_of)
     assert approved["dd_status"] == "eligible_for_offline_comparison"
     assert approved["scenario"]["success_capital"] == 3540
     assert approved["scenario"]["expected_net_profit"] == -220
     assert not approved["external_action_authorized"]
+    for invalid_metadata in (
+        None,
+        {**dd["evidence_metadata"], "sale_evidence": {"source": "", "observed_at": observed_at}},
+        {**dd["evidence_metadata"], "fee_evidence": {"source": "fixture:market-a", "observed_at": "bad"}},
+        {**dd["evidence_metadata"], "price_evidence": {"source": "fixture:market-a", "observed_at": "2026-09-20T12:00:00+00:00"}},
+        {**dd["evidence_metadata"], "shipping_evidence": {"source": "fixture:market-a", "observed_at": "2026-09-30T12:00:00+00:00"}},
+    ):
+        changed = {**dd, "evidence_metadata": invalid_metadata}
+        held = evaluate_dd_gated_scenario(changed, linked_decision, cost_kwargs=fees, as_of=as_of)
+        assert held["scenario"] is None
+        assert held["dd_status"] == "hold_missing_or_invalid_evidence"
+    assert evaluate_dd_gated_scenario(dd, linked_decision, cost_kwargs=fees)["scenario"] is None
+    assert evaluate_dd_gated_scenario(dd, linked_decision, cost_kwargs=fees,
+        as_of="2026-10-05T12:00:00+00:00")["scenario"] is not None  # seven-day boundary
+    assert evaluate_dd_gated_scenario(dd, linked_decision, cost_kwargs=fees,
+        as_of=as_of, max_age_days=0.5)["scenario"] is None
+    for bad_age in (True, float("inf"), 1e308):
+        assert evaluate_dd_gated_scenario(dd, linked_decision,
+            as_of=as_of, max_age_days=bad_age)["scenario"] is None
+    for bad_clock in ("bad", "2026-09-29T12:00:00"):
+        assert evaluate_dd_gated_scenario(dd, linked_decision, as_of=bad_clock)["scenario"] is None
     for changed_dd, changed_decision in (
         ({**dd, "item_id": "camera-b-002"}, linked_decision),
         ({**dd, "sale_evidence": "fixture:other-sale"}, linked_decision),
@@ -418,20 +444,20 @@ def main():
         (dd, report_decision),
         ({key: value for key, value in dd.items() if key != "item_id"}, linked_decision),
     ):
-        unlinked = evaluate_dd_gated_scenario(changed_dd, changed_decision, cost_kwargs=fees)
+        unlinked = evaluate_dd_gated_scenario(changed_dd, changed_decision, cost_kwargs=fees, as_of=as_of)
         assert unlinked["dd_status"] == "hold_decision_mismatch"
         assert unlinked["scenario"] is None
     for invalid in ({**dd, "sale_evidence": ""},
                     {**dd, "estimated_shipping_jpy": float("nan")},
                     {**dd, "estimated_sale_price_jpy": 1000}):
-        held = evaluate_dd_gated_scenario(invalid, report_decision, cost_kwargs=fees)
+        held = evaluate_dd_gated_scenario(invalid, linked_decision, cost_kwargs=fees, as_of=as_of)
         assert held["scenario"] is None and held["dd_status"] != "eligible_for_offline_comparison"
         assert not held["external_action_authorized"]
-    mismatch = evaluate_dd_gated_scenario(dd, {**report_decision,
-        "best_candidate": {**report_decision["best_candidate"], "expected_sale_price": 3700}},
-        cost_kwargs=fees)
+    mismatch = evaluate_dd_gated_scenario(dd, {**linked_decision,
+        "best_candidate": {**linked_decision["best_candidate"], "expected_sale_price": 3700}},
+        cost_kwargs=fees, as_of=as_of)
     assert mismatch["dd_status"] == "hold_decision_mismatch" and mismatch["scenario"] is None
-    assert evaluate_dd_gated_scenario(dd, {"current_capital": 3000, "best_candidate": None})["scenario"] is None
+    assert evaluate_dd_gated_scenario(dd, {"current_capital": 3000, "best_candidate": None}, as_of=as_of)["scenario"] is None
 
     print("end-to-end market decision pipeline tests passed")
 
