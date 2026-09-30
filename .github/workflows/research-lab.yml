@@ -86,6 +86,9 @@ jobs:
       - name: Test public-safe repair audit summary offline
         run: python -m research_lab.test_problem_repair_public_audit_summary
 
+      - name: Test public audit summary digest offline
+        run: python -m research_lab.test_problem_repair_public_audit_digest
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
