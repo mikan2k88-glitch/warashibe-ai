@@ -16,7 +16,7 @@ from research_lab.problem_repair_public_audit_digest import (
 
 _PACKAGE_SCHEMA_VERSION = "1.0"
 _PACKAGE_TYPE = "warashibe-ai-public-repair-audit"
-_PACKAGE_DIGEST_FIELDS = (
+_PACKAGE_FIELDS = (
     "package_schema_version",
     "package_type",
     "target_sha",
@@ -24,6 +24,20 @@ _PACKAGE_DIGEST_FIELDS = (
     "summary_digest",
     "package_digest_algorithm",
     "summary",
+    "package_digest",
+)
+_PACKAGE_DIGEST_FIELDS = _PACKAGE_FIELDS[:-1]
+_SUMMARY_FIELDS = (
+    "schema_version",
+    "scope",
+    "target_sha",
+    "verification_status",
+    "integrity_status",
+    "attestation_digest_algorithm",
+    "attestation_digest",
+    "read_only",
+    "contains_secrets",
+    "contains_internal_execution_details",
 )
 
 
@@ -54,6 +68,16 @@ def _sha256_hex(payload):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _validate_summary_shape(summary):
+    keys = set(summary)
+    expected = set(_SUMMARY_FIELDS)
+    if keys - expected:
+        return "unexpected_summary_field"
+    if expected - keys:
+        return "missing_summary_field"
+    return None
+
+
 def build_public_repair_audit_package(summary_result):
     base = _base_result()
 
@@ -69,6 +93,10 @@ def build_public_repair_audit_package(summary_result):
     summary = summary_result.get("summary")
     if not isinstance(summary, dict):
         return dict(base, reasons=("invalid_summary",))
+
+    shape_error = _validate_summary_shape(summary)
+    if shape_error:
+        return dict(base, reasons=(shape_error,))
 
     digest_result = build_public_repair_audit_digest(summary_result)
     if digest_result.get("status") != "public_repair_audit_digest_ready":
@@ -123,6 +151,13 @@ def verify_public_repair_audit_package(package):
     if not isinstance(package, dict):
         return dict(base, reasons=("invalid_package",))
 
+    package_keys = set(package)
+    expected_keys = set(_PACKAGE_FIELDS)
+    if package_keys - expected_keys:
+        return dict(base, reasons=("unexpected_package_field",))
+    if expected_keys - package_keys:
+        return dict(base, reasons=("missing_package_field",))
+
     if package.get("package_schema_version") != _PACKAGE_SCHEMA_VERSION:
         return dict(base, reasons=("package_schema_version_not_supported",))
 
@@ -142,6 +177,10 @@ def verify_public_repair_audit_package(package):
     summary = package.get("summary")
     if not isinstance(summary, dict):
         return dict(base, reasons=("invalid_summary",))
+
+    shape_error = _validate_summary_shape(summary)
+    if shape_error:
+        return dict(base, target_sha=target_sha.strip(), reasons=(shape_error,))
 
     summary_target_sha = summary.get("target_sha")
     if not isinstance(summary_target_sha, str) or not summary_target_sha.strip():
