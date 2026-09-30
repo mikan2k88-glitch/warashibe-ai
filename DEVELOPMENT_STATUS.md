@@ -131,3 +131,11 @@
 - 実行境界までの定常回帰は commit b171fadd304fb3e51a9da51f50168a2bd55c0f6f、同一SHA CI #902 success。exact-SHA検証ゲート実装 d849e7588f9422d88c0359db6d5bf04df12f1997 は CI #903 success、回帰テスト 0a00f8d73f42feedab51e3f815cbcb47b7e8eb12 は CI #904 success、定常CI登録 e444701e8724c85d0f4c58a4d6431c20e9da7a7f は CI #905 success。
 - これにより「問題検出 → ガードレール候補 → 再発判定 → 修復候補 → AI修復判断 → 実行境界 → 同一SHA CI検証」までの制御ループをresearch-labで回帰できるマイルストーンに到達。まだ一般目的の自動パッチ生成器、失敗時の自動ロールバック実行、MAIN昇格、実取引・外部サービス操作を有効化したものではない。
 - 次の候補は、許可済みの単一ファイル修復に対して「変更前SHA・変更後SHA・対象パス・期待テスト・CI結果」を監査記録として一つに束ね、成功/失敗を再現可能に追跡すること。
+
+## 2026-09-30: AI修復監査記録マイルストーン
+- research_lab/problem_repair_audit_record.py を追加し、1件のAI修復について repair_id、変更前SHA、変更後SHA、対象Pythonファイル、期待テスト、exact-SHA CI検証結果を1つの監査記録に束ねる契約を定義。
+- 対象は research_lab/ 配下のPython 1ファイルに限定。同一SHAのまま、非終端のCI検証結果、範囲外パス、不正入力は fail-closed で監査記録を作らない。
+- 成功修復と失敗修復の両方を監査可能。失敗時は rollback_candidate を記録するが、自動ロールバック、自動再試行、外部実行は引き続き許可しない。
+- 実装 commit 295ce7da7bee91514f0c7eaf79ef1971867028dd は CI #907 success。回帰テスト commit ca2901d3a4219b7bdfd998b8e2654017adaa7035 は CI #908 success。定常CI登録 commit 4565909f5ded63d38b550c0edd17fc6d84ad58b4 は CI #909 success。
+- これにより「問題検出 → 修復判断 → 単一ファイル実行境界 → exact-SHA CI検証 → 再現可能な監査記録」までを research-lab の定常回帰で追跡できるマイルストーンに到達。
+- 次の候補は、監査記録を1サイクル分の repair ledger に集約し、同一 repair_id の重複、複数修復、前後SHAの連鎖不整合を拒否するオフライン台帳ゲートを追加すること。
