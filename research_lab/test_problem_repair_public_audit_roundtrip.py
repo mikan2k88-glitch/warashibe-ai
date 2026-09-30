@@ -1,4 +1,5 @@
 """Regression tests for serialized public repair audit package round-trips."""
+import json
 import unittest
 
 from research_lab.problem_repair_public_audit_package import (
@@ -73,7 +74,7 @@ class TestProblemRepairPublicAuditRoundtrip(unittest.TestCase):
     def test_extra_field_is_rejected(self):
         package = self.package()
         package["extra"] = "tampered"
-        serialized = serialize_public_repair_audit_package(package, allow_unvalidated=True)
+        serialized = json.dumps(package, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         result = verify_serialized_public_repair_audit_package(serialized)
         self.assertIn("unexpected_package_field", result["reasons"])
         self.assert_safe(result)
