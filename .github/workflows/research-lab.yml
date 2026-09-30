@@ -95,6 +95,9 @@ jobs:
       - name: Test public audit package roundtrip offline
         run: python -m research_lab.test_problem_repair_public_audit_roundtrip
 
+      - name: Test audit distribution metadata contract offline
+        run: python -m research_lab.test_problem_repair_audit_distribution_metadata
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
