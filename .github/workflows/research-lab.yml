@@ -62,6 +62,9 @@ jobs:
       - name: Test single-repair cycle ledger offline
         run: python -m research_lab.test_problem_repair_ledger
 
+      - name: Test cross-cycle repair continuity offline
+        run: python -m research_lab.test_problem_repair_cross_cycle
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
