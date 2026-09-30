@@ -102,7 +102,13 @@ jobs:
         run: python -m research_lab.test_problem_repair_audit_distribution_bundle
 
       - name: Test audit distribution bundle roundtrip offline
-        run: python -m research_lab.test_problem_repair_audit_distribution_bundle_roundtrip
+        run: |
+          mkdir -p research_output
+          set +e
+          python -m unittest -v research_lab.test_problem_repair_audit_distribution_bundle_roundtrip > research_output/audit_distribution_bundle_roundtrip_test.log 2>&1
+          status=$?
+          cat research_output/audit_distribution_bundle_roundtrip_test.log
+          exit $status
 
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
