@@ -47,6 +47,22 @@ class TestProblemRepairPublicAuditPackage(unittest.TestCase):
         self.assertEqual(package["summary"]["target_sha"], "sha-final")
         self.assert_safe(result)
 
+    def test_package_uses_exact_fixed_field_set(self):
+        package = build_public_repair_audit_package(self.summary_result())["package"]
+        self.assertEqual(
+            set(package),
+            {
+                "package_schema_version",
+                "package_type",
+                "target_sha",
+                "summary_digest_algorithm",
+                "summary_digest",
+                "package_digest_algorithm",
+                "summary",
+                "package_digest",
+            },
+        )
+
     def test_same_summary_produces_same_package_digest(self):
         first = build_public_repair_audit_package(self.summary_result())
         second = build_public_repair_audit_package(self.summary_result())
@@ -85,6 +101,21 @@ class TestProblemRepairPublicAuditPackage(unittest.TestCase):
         result = verify_public_repair_audit_package(package)
         self.assertEqual(result["status"], "public_repair_audit_package_mismatch")
         self.assertIn("package_digest_mismatch", result["reasons"])
+        self.assert_safe(result)
+
+    def test_unknown_package_field_is_rejected(self):
+        built = build_public_repair_audit_package(self.summary_result())
+        package = dict(built["package"], unexpected_field="must-not-be-accepted")
+        result = verify_public_repair_audit_package(package)
+        self.assertIn("unexpected_package_field", result["reasons"])
+        self.assert_safe(result)
+
+    def test_missing_package_field_is_rejected(self):
+        built = build_public_repair_audit_package(self.summary_result())
+        package = dict(built["package"])
+        package.pop("summary_digest")
+        result = verify_public_repair_audit_package(package)
+        self.assertIn("missing_package_field", result["reasons"])
         self.assert_safe(result)
 
     def test_wrong_package_schema_is_rejected(self):
