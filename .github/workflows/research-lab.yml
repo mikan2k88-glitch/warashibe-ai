@@ -53,6 +53,9 @@ jobs:
       - name: Test bounded AI repair execution plan offline
         run: python -m research_lab.test_problem_repair_execution_boundary
 
+      - name: Test exact-SHA AI repair validation offline
+        run: python -m research_lab.test_problem_repair_validation_gate
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
