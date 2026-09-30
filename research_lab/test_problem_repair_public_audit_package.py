@@ -65,7 +65,7 @@ class TestProblemRepairPublicAuditPackage(unittest.TestCase):
     def test_summary_tampering_is_detected(self):
         built = build_public_repair_audit_package(self.summary_result())
         package = dict(built["package"])
-        package["summary"] = dict(package["summary"], target_sha="sha-other")
+        package["summary"] = dict(package["summary"], verification_status="unverified")
         result = verify_public_repair_audit_package(package)
         self.assertEqual(result["status"], "public_repair_audit_package_mismatch")
         self.assertIn("summary_digest_mismatch", result["reasons"])
