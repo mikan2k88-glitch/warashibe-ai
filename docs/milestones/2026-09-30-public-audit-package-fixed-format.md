@@ -40,11 +40,13 @@ This remains a read-only audit artifact. A valid package does not authorize exte
 - Fixed-schema implementation: `99e8acb4e28fd9d40c0dc8cbf2c8c457c882a0c4`
 - Fixed-schema regression tests: `0e82bff35027bda33ea4f9eb029e8f5256bd0686`
 - Schema contract: `research_lab/PUBLIC_REPAIR_AUDIT_PACKAGE_SCHEMA.md`
-- Previous green package baseline: CI #958 on commit `9986bcf3105e94d62c66a3d2bb1b1f278423d3ff`
+- Final branch HEAD: `aff0c6bb90b0b4b3dad4b25b21786fceb5201c39`
+- Exact-HEAD Research Lab CI: **#963 success** (`36730126424`)
+- CI verified the public summary, public summary digest, and public repair audit package tests successfully.
 
-## Current verification state
+## Verification state
 
-The connected GitHub Actions view has not yet exposed a run for the new commits `99e8acb4...` / `0e82bff3...` / `378f857d...`, so these commits must not be described as CI-green until the next research-lab Actions cycle reports success for the exact current HEAD.
+The fixed-format milestone is CI-green. The Actions run checked out the exact triggering SHA and completed successfully.
 
 ## Next milestone
 
