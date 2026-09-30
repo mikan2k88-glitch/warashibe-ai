@@ -68,10 +68,13 @@ class TestProblemRepairAuditDistributionBundle(unittest.TestCase):
     def test_bundle_digest_detects_tampering(self):
         built = build_audit_distribution_bundle(self.package_result(), self.metadata_result())
         tampered = dict(built["bundle"])
-        tampered["artifact_name"] = "public-repair-audit-" + "d" * 40 + ".json"
+        tampered["package"] = dict(
+            tampered["package"],
+            summary={"verification_status": "tampered"},
+        )
         result = verify_audit_distribution_bundle(tampered)
         self.assertEqual(result["status"], "audit_distribution_bundle_mismatch")
-        self.assertIn("embedded_artifact_name_mismatch", result["reasons"])
+        self.assertIn("bundle_digest_mismatch", result["reasons"])
         self.assert_safe(result)
 
     def test_embedded_package_digest_mismatch_is_rejected(self):
