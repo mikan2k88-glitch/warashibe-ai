@@ -74,6 +74,9 @@ jobs:
       - name: Test repair history exact-SHA CI proof offline
         run: python -m research_lab.test_problem_repair_history_ci_proof
 
+      - name: Test repair history CI proof digest offline
+        run: python -m research_lab.test_problem_repair_history_proof_digest
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
