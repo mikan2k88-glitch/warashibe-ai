@@ -63,6 +63,24 @@ class TestProblemRepairPublicAuditPackage(unittest.TestCase):
             },
         )
 
+    def test_summary_uses_exact_fixed_field_set(self):
+        package = build_public_repair_audit_package(self.summary_result())["package"]
+        self.assertEqual(
+            set(package["summary"]),
+            {
+                "schema_version",
+                "scope",
+                "target_sha",
+                "verification_status",
+                "integrity_status",
+                "attestation_digest_algorithm",
+                "attestation_digest",
+                "read_only",
+                "contains_secrets",
+                "contains_internal_execution_details",
+            },
+        )
+
     def test_same_summary_produces_same_package_digest(self):
         first = build_public_repair_audit_package(self.summary_result())
         second = build_public_repair_audit_package(self.summary_result())
@@ -116,6 +134,21 @@ class TestProblemRepairPublicAuditPackage(unittest.TestCase):
         package.pop("summary_digest")
         result = verify_public_repair_audit_package(package)
         self.assertIn("missing_package_field", result["reasons"])
+        self.assert_safe(result)
+
+    def test_unknown_summary_field_is_rejected(self):
+        summary = self.summary_result()
+        summary["summary"] = dict(summary["summary"], unexpected_field="must-not-be-accepted")
+        result = build_public_repair_audit_package(summary)
+        self.assertIn("unexpected_summary_field", result["reasons"])
+        self.assert_safe(result)
+
+    def test_missing_summary_field_is_rejected(self):
+        summary = self.summary_result()
+        summary["summary"] = dict(summary["summary"])
+        summary["summary"].pop("scope")
+        result = build_public_repair_audit_package(summary)
+        self.assertIn("missing_summary_field", result["reasons"])
         self.assert_safe(result)
 
     def test_wrong_package_schema_is_rejected(self):
