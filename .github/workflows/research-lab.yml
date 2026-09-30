@@ -98,6 +98,9 @@ jobs:
       - name: Test audit distribution metadata contract offline
         run: python -m research_lab.test_problem_repair_audit_distribution_metadata
 
+      - name: Test canonical audit distribution bundle offline
+        run: python -m research_lab.test_problem_repair_audit_distribution_bundle
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
