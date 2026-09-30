@@ -125,3 +125,46 @@ GitHub Actionsで、移動するブランチ参照ではなく実行対象のコ
 
 ### 判定
 2件目でも、通常Webは公式一次資料確認に強く、Firecrawl側はGitHubの具体的なIssue/PR/運用文脈を同時に集約する点で有用だった。1件目と同様、仕様確定は公式資料を優先し、Firecrawl/Alexandriaは既存実装探索・背景調査の加速用途に向く。まだ2/3件なので標準調査ルートへの昇格は保留する。
+
+
+## 比較試験 3: AIエージェント実行ガードレール論文探索
+
+### 問い
+AIコーディングエージェントやツール実行型エージェントに対する、実行前・実行中のガードレール研究を2026年の公開論文から探索し、わらしべAIの自動研究・自己修復設計に使える一次資料へ到達できるか比較する。
+
+### 通常Web調査
+- arXivの `AgentGuard: Learning Execution Guardrails from Anomalous Coding-Agent Trajectories` に到達。
+- 実行履歴中の異常パターンから、命令レベルの制約を学習して必要時だけ適用する設計を確認。
+- 2026年公開の関連論文として、エージェント安全性、実行境界、tool-use guardrailの候補も複数得られた。
+- 一次資料へ直接到達しやすい一方、関連研究を広く並べるには複数検索が必要。
+
+### Firecrawl / Alexandria系のResearch Index
+- 同じテーマで `AgentGuard` を最上位に取得。
+- 同時に、`StepGuard`、`AgentTrust`、`TraceSafe`、`DreamGuard`、`No Certificate, No Execution` 等、実行前監視・runtime interception・trace certification・長期軌跡評価に関する2026年論文をまとまって取得。
+- 各結果にpaper ID、arXiv ID、タイトル、abstract、rank scoreが付いており、関連研究の比較表を作りやすい。
+- 一方で、abstract検索結果だけで手法や数値の妥当性を確定せず、採用判断時には原論文本文・実装・追加資料を確認する必要がある。
+
+### わらしべAIへの示唆
+- `AgentGuard`: 過去の異常実行から条件付きルールを学ぶ考え方は、Libraryの問題管理ログから再発防止ルール候補を生成する設計と相性がよい。
+- `StepGuard` / `AgentTrust`: 実行前にtool actionを監査し、allow / warn / block / review等の判定を挟む考え方は、現在のPolicy Guardと実取引監視ゲートの拡張候補。
+- `No Certificate, No Execution`: 生成された提案と実行許可を分離し、チェック可能な証明・承認がなければ実行しない考え方は、既存のHuman Gate / `external_action_authorized=False` 方針と整合する。
+- これらは研究上の候補であり、そのまま本番採用・実取引許可を意味しない。
+
+### 暫定比較
+| 項目 | 通常Web | Firecrawl / Alexandria系 |
+| --- | --- | --- |
+| arXiv一次資料への到達 | 良好 | 良好 |
+| 関連研究の横断探索 | 複数検索が必要 | 1回で複数の高関連論文を取得 |
+| メタデータの構造化 | ページごとに確認 | paper/arXiv ID・abstract・scoreが揃う |
+| ノイズ | 比較的少ない | 今回は高関連結果が多い |
+| Research LABへの有用性 | 高い | 高い。研究テーマの棚卸しで優位 |
+
+### コスト観測
+- Firecrawl Research Index実行前の残クレジット表示: `997`。
+- 実行後の残クレジット表示: `997`。
+- この観測では差分 `0`。ツール種別、キャッシュ、課金タイミング等の影響があり得るため、Research Indexが常に0クレジットとは判断しない。
+
+### 3件評価のまとめ
+3件の比較では、通常Web調査は公式一次資料の確定確認に安定して強かった。一方、Firecrawl / Alexandria系は、開発者検索ではIssue/PR/実装背景、Research Indexでは関連論文群を構造化して横断収集する用途で一貫して追加価値があった。
+
+**Research LABではFirecrawl / Alexandriaを標準調査候補へ昇格する。** ただし役割は「探索・候補収集・横断比較の加速」とし、重要仕様・安全条件・実取引判断は公式一次資料または独立した根拠で再確認する。利用不能時は通常Webへfail-safeにフォールバックし、権限拡張や迂回をしない。
