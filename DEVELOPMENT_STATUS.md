@@ -123,3 +123,11 @@
 - 実装 `8690c745b2d968948590b50ca6a56dceeae33b79` は同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36551284180 success。9件の回帰テスト `3078ee1962c9ff71373c02a8387795a970b4f255` は https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36552385327 success。ただしこの時点ではrunner未登録。
 - `research_lab/runner.py` に `research_lab.test_sale_evidence_join_gate` を登録した `c53a98c9a5ecec5763291c8347e94daf71f90603` は同一SHA CI https://github.com/mikan2k88-glitch/warashibe-ai/actions/runs/36552496976 completed/success。ログ内で `Ran 9 tests ... OK` を確認。これを本マイルストーンの回帰実行証拠とする。
 - 次の一件: 出品・成約根拠の両者がレビュー可能でも、eBay出品の `asking_price_only` 印を自動解除せず、独立根拠の真正性・商品同一性を裏付ける追加審査契約をオフラインで定義する。実市場の成約実績・実通信、MAIN、DB、Secrets、外部AI、実売買は未確認・未実施。
+
+## 2026-09-30: AI自己修復ループの実行境界・同一SHA検証マイルストーン
+- research-lab内の通常の低リスクなコード修復判断はAIが行い、Human Gateを要求しない方針に更新。対象は1サイクル最大1件、原則 research_lab/ 配下のPython 1ファイルのみ。MAIN/production、Secrets/認証情報、実DB、実取引・決済、課金、権限拡張、外部AI実行、破壊的操作は自動修復対象外。
+- problem_guardrail_candidate.py → problem_guardrail_recurrence.py → problem_repair_candidate.py → problem_repair_ai_decision.py → problem_repair_execution_boundary.py → problem_repair_validation_gate.py の段階ゲートを構築。問題から修復候補を作り、AIが可否判断し、書込み範囲を制限し、書込み後は同一SHAのCIだけで成功判定する。
+- problem_repair_validation_gate.py はSHA不一致、CI未完了、未知の結論をfail-closedで停止。CI successのみ repair_validated_success。failure/cancelled/timed_out/action_required は rollback_candidate=True とするが、自動再試行・自動ロールバック・外部実行は許可しない。
+- 実行境界までの定常回帰は commit b171fadd304fb3e51a9da51f50168a2bd55c0f6f、同一SHA CI #902 success。exact-SHA検証ゲート実装 d849e7588f9422d88c0359db6d5bf04df12f1997 は CI #903 success、回帰テスト 0a00f8d73f42feedab51e3f815cbcb47b7e8eb12 は CI #904 success、定常CI登録 e444701e8724c85d0f4c58a4d6431c20e9da7a7f は CI #905 success。
+- これにより「問題検出 → ガードレール候補 → 再発判定 → 修復候補 → AI修復判断 → 実行境界 → 同一SHA CI検証」までの制御ループをresearch-labで回帰できるマイルストーンに到達。まだ一般目的の自動パッチ生成器、失敗時の自動ロールバック実行、MAIN昇格、実取引・外部サービス操作を有効化したものではない。
+- 次の候補は、許可済みの単一ファイル修復に対して「変更前SHA・変更後SHA・対象パス・期待テスト・CI結果」を監査記録として一つに束ね、成功/失敗を再現可能に追跡すること。
