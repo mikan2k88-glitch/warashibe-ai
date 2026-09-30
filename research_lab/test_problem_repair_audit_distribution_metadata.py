@@ -35,6 +35,9 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
             },
         }
 
+    def artifact_name(self):
+        return "public-repair-audit-" + "a" * 40 + ".json"
+
     def assert_safe(self, result):
         self.assertIs(result["external_runtime_action_authorized"], False)
         self.assertIs(result["auto_retry_authorized"], False)
@@ -43,7 +46,7 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
     def test_builds_fixed_distribution_metadata(self):
         result = build_audit_distribution_metadata(
             package_result=self.package_result(),
-            artifact_name="public-repair-audit-a" + "a" * 40 + ".json",
+            artifact_name=self.artifact_name(),
             generated_at="2026-09-30T00:00:00Z",
         )
         self.assertEqual(result["status"], "audit_distribution_metadata_ready")
@@ -72,7 +75,7 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
     def test_same_inputs_produce_same_metadata(self):
         kwargs = {
             "package_result": self.package_result(),
-            "artifact_name": "public-repair-audit-a" + "a" * 40 + ".json",
+            "artifact_name": self.artifact_name(),
             "generated_at": "2026-09-30T00:00:00Z",
         }
         first = build_audit_distribution_metadata(**kwargs)
@@ -82,7 +85,7 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
     def test_invalid_generated_at_is_rejected(self):
         result = build_audit_distribution_metadata(
             package_result=self.package_result(),
-            artifact_name="public-repair-audit-a" + "a" * 40 + ".json",
+            artifact_name=self.artifact_name(),
             generated_at="not-a-time",
         )
         self.assertIn("invalid_generated_at", result["reasons"])
@@ -102,7 +105,7 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
         package_result["status"] = "hold_public_repair_audit_package"
         result = build_audit_distribution_metadata(
             package_result=package_result,
-            artifact_name="public-repair-audit-a" + "a" * 40 + ".json",
+            artifact_name=self.artifact_name(),
             generated_at="2026-09-30T00:00:00Z",
         )
         self.assertIn("package_not_ready", result["reasons"])
@@ -111,7 +114,7 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
     def test_matching_metadata_verifies_against_package(self):
         kwargs = {
             "package_result": self.package_result(),
-            "artifact_name": "public-repair-audit-a" + "a" * 40 + ".json",
+            "artifact_name": self.artifact_name(),
             "generated_at": "2026-09-30T00:00:00Z",
         }
         built = build_audit_distribution_metadata(**kwargs)
@@ -125,19 +128,19 @@ class TestProblemRepairAuditDistributionMetadata(unittest.TestCase):
     def test_target_sha_tampering_is_rejected(self):
         kwargs = {
             "package_result": self.package_result(),
-            "artifact_name": "public-repair-audit-a" + "a" * 40 + ".json",
+            "artifact_name": self.artifact_name(),
             "generated_at": "2026-09-30T00:00:00Z",
         }
         built = build_audit_distribution_metadata(**kwargs)
         tampered = dict(built["metadata"], target_sha="b" * 40)
         result = verify_audit_distribution_metadata(tampered, self.package_result())
-        self.assertIn("target_sha_mismatch", result["reasons"])
+        self.assertIn("artifact_name_target_sha_mismatch", result["reasons"])
         self.assert_safe(result)
 
     def test_package_digest_tampering_is_rejected(self):
         kwargs = {
             "package_result": self.package_result(),
-            "artifact_name": "public-repair-audit-a" + "a" * 40 + ".json",
+            "artifact_name": self.artifact_name(),
             "generated_at": "2026-09-30T00:00:00Z",
         }
         built = build_audit_distribution_metadata(**kwargs)
