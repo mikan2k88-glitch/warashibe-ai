@@ -65,6 +65,9 @@ jobs:
       - name: Test cross-cycle repair continuity offline
         run: python -m research_lab.test_problem_repair_cross_cycle
 
+      - name: Test repair history snapshot offline
+        run: python -m research_lab.test_problem_repair_history_snapshot
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
