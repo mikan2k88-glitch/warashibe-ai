@@ -84,7 +84,7 @@ class TestProblemRepairPublicAuditRoundtrip(unittest.TestCase):
         serialized = serialize_public_repair_audit_package(package)
         tampered = serialized.replace("sha-final", "sha-tampered")
         result = verify_serialized_public_repair_audit_package(tampered)
-        self.assertIn("target_sha_mismatch", result["reasons"])
+        self.assertIn("summary_digest_mismatch", result["reasons"])
         self.assert_safe(result)
 
 
