@@ -150,6 +150,7 @@ def verify_public_repair_audit_package(package):
     if target_sha.strip() != summary_target_sha.strip():
         return dict(
             base,
+            status="public_repair_audit_package_mismatch",
             target_sha=target_sha.strip(),
             reasons=("target_sha_mismatch",),
         )
@@ -172,6 +173,7 @@ def verify_public_repair_audit_package(package):
     if observed_summary_digest != expected_summary_digest.lower():
         return dict(
             base,
+            status="public_repair_audit_package_mismatch",
             target_sha=target_sha.strip(),
             observed_package_digest=package.get("package_digest"),
             reasons=("summary_digest_mismatch",),
@@ -198,6 +200,7 @@ def verify_public_repair_audit_package(package):
     if observed_package_digest != expected_package_digest.lower():
         return dict(
             base,
+            status="public_repair_audit_package_mismatch",
             target_sha=target_sha.strip(),
             observed_package_digest=observed_package_digest,
             reasons=("package_digest_mismatch",),
