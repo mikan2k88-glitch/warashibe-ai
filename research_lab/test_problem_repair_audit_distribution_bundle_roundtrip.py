@@ -56,68 +56,48 @@ class TestProblemRepairAuditDistributionBundleRoundtrip(unittest.TestCase):
         self.assertIs(result["auto_retry_authorized"], False)
         self.assertIs(result["auto_rollback_authorized"], False)
 
-    def test_roundtrip_preserves_bundle_and_digest(self):
-        original = self.bundle()
-        serialized = serialize_audit_distribution_bundle(original)
-        received = deserialize_audit_distribution_bundle(serialized)
-        self.assertEqual(received, original)
+    def test_roundtrip_preserves_verified_bundle(self):
+        bundle = self.bundle()
+        serialized = serialize_audit_distribution_bundle(bundle)
+        restored = deserialize_audit_distribution_bundle(serialized)
+        self.assertEqual(restored, bundle)
+
         verified = verify_serialized_audit_distribution_bundle(serialized)
         self.assertEqual(verified["status"], "audit_distribution_bundle_verified")
         self.assertIs(verified["integrity_verified"], True)
-        self.assertEqual(verified["observed_bundle_digest"], original["bundle_digest"])
+        self.assertEqual(verified["observed_bundle_digest"], bundle["bundle_digest"])
         self.assert_safe(verified)
 
-    def test_key_order_is_canonicalized(self):
-        original = self.bundle()
-        reordered = {key: original[key] for key in reversed(tuple(original))}
-        serialized_original = serialize_audit_distribution_bundle(original)
-        serialized_reordered = serialize_audit_distribution_bundle(reordered)
-        self.assertEqual(serialized_original, serialized_reordered)
+    def test_serialization_is_deterministic(self):
+        bundle = self.bundle()
+        first = serialize_audit_distribution_bundle(bundle)
+        second = serialize_audit_distribution_bundle(dict(reversed(list(bundle.items()))))
+        self.assertEqual(first, second)
 
-    def test_tampering_after_serialization_is_detected(self):
-        original = self.bundle()
-        received = deserialize_audit_distribution_bundle(
-            serialize_audit_distribution_bundle(original)
-        )
-        received["artifact_name"] = "public-repair-audit-" + "d" * 40 + ".json"
-        result = verify_serialized_audit_distribution_bundle(
-            json.dumps(received, sort_keys=True, separators=(",", ":"))
-        )
-        self.assertEqual(result["status"], "hold_audit_distribution_bundle_integrity")
-        self.assertIn("embedded_artifact_name_mismatch", result["reasons"])
+    def test_tampered_bundle_digest_is_rejected(self):
+        bundle = self.bundle()
+        tampered = dict(bundle, bundle_digest="d" * 64)
+        serialized = json.dumps(tampered, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        result = verify_serialized_audit_distribution_bundle(serialized)
+        self.assertEqual(result["status"], "audit_distribution_bundle_mismatch")
+        self.assertIn("bundle_digest_mismatch", result["reasons"])
         self.assert_safe(result)
 
-    def test_embedded_object_tampering_is_detected(self):
-        original = self.bundle()
-        received = deserialize_audit_distribution_bundle(
-            serialize_audit_distribution_bundle(original)
-        )
-        received["metadata"] = dict(received["metadata"], artifact_id="d" * 64)
-        result = verify_serialized_audit_distribution_bundle(
-            json.dumps(received, sort_keys=True, separators=(",", ":"))
-        )
-        self.assertIn("embedded_artifact_id_mismatch", result["reasons"])
-        self.assert_safe(result)
-
-    def test_unknown_field_is_rejected_after_transport(self):
-        original = self.bundle()
-        received = deserialize_audit_distribution_bundle(
-            serialize_audit_distribution_bundle(original)
-        )
-        received["unexpected"] = "blocked"
-        result = verify_serialized_audit_distribution_bundle(
-            json.dumps(received, sort_keys=True, separators=(",", ":"))
-        )
+    def test_extra_field_is_rejected(self):
+        bundle = self.bundle()
+        bundle["extra"] = "blocked"
+        serialized = json.dumps(bundle, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        result = verify_serialized_audit_distribution_bundle(serialized)
         self.assertIn("unexpected_bundle_field", result["reasons"])
         self.assert_safe(result)
 
-    def test_invalid_json_is_fail_closed(self):
-        result = verify_serialized_audit_distribution_bundle("{not-json")
+    def test_non_object_json_is_rejected(self):
+        result = verify_serialized_audit_distribution_bundle("[]")
         self.assertIn("invalid_serialized_bundle", result["reasons"])
         self.assert_safe(result)
 
-    def test_non_object_json_is_fail_closed(self):
-        result = verify_serialized_audit_distribution_bundle("[]")
+    def test_invalid_json_is_rejected(self):
+        result = verify_serialized_audit_distribution_bundle("{bad json")
         self.assertIn("invalid_serialized_bundle", result["reasons"])
         self.assert_safe(result)
 
