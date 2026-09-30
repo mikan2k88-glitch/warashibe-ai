@@ -1,4 +1,5 @@
 """Regression tests for audit distribution bundle JSON round-trips."""
+import json
 import unittest
 
 from research_lab.problem_repair_audit_distribution_bundle import (
@@ -61,7 +62,7 @@ class TestProblemRepairAuditDistributionBundleRoundtrip(unittest.TestCase):
         received = deserialize_audit_distribution_bundle(serialized)
         self.assertEqual(received, original)
         verified = verify_serialized_audit_distribution_bundle(serialized)
-        self.assertEqual(verified["status"], "audit_distribution_bundle_roundtrip_verified")
+        self.assertEqual(verified["status"], "audit_distribution_bundle_verified")
         self.assertIs(verified["integrity_verified"], True)
         self.assertEqual(verified["observed_bundle_digest"], original["bundle_digest"])
         self.assert_safe(verified)
@@ -80,9 +81,9 @@ class TestProblemRepairAuditDistributionBundleRoundtrip(unittest.TestCase):
         )
         received["artifact_name"] = "public-repair-audit-" + "d" * 40 + ".json"
         result = verify_serialized_audit_distribution_bundle(
-            __import__("json").dumps(received, sort_keys=True, separators=(",", ":"))
+            json.dumps(received, sort_keys=True, separators=(",", ":"))
         )
-        self.assertEqual(result["status"], "audit_distribution_bundle_mismatch")
+        self.assertEqual(result["status"], "hold_audit_distribution_bundle_integrity")
         self.assertIn("embedded_artifact_name_mismatch", result["reasons"])
         self.assert_safe(result)
 
@@ -93,7 +94,7 @@ class TestProblemRepairAuditDistributionBundleRoundtrip(unittest.TestCase):
         )
         received["metadata"] = dict(received["metadata"], artifact_id="d" * 64)
         result = verify_serialized_audit_distribution_bundle(
-            __import__("json").dumps(received, sort_keys=True, separators=(",", ":"))
+            json.dumps(received, sort_keys=True, separators=(",", ":"))
         )
         self.assertIn("embedded_artifact_id_mismatch", result["reasons"])
         self.assert_safe(result)
@@ -105,7 +106,7 @@ class TestProblemRepairAuditDistributionBundleRoundtrip(unittest.TestCase):
         )
         received["unexpected"] = "blocked"
         result = verify_serialized_audit_distribution_bundle(
-            __import__("json").dumps(received, sort_keys=True, separators=(",", ":"))
+            json.dumps(received, sort_keys=True, separators=(",", ":"))
         )
         self.assertIn("unexpected_bundle_field", result["reasons"])
         self.assert_safe(result)
