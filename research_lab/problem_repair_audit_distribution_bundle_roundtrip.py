@@ -61,5 +61,7 @@ def verify_serialized_audit_distribution_bundle(serialized):
     bundle = deserialize_audit_distribution_bundle(serialized)
     if not isinstance(bundle, dict):
         return bundle
+    if bundle.get("status") == "hold_audit_distribution_bundle_roundtrip":
+        return bundle
 
     return verify_audit_distribution_bundle(bundle)
