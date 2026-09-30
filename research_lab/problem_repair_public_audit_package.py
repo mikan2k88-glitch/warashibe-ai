@@ -171,7 +171,7 @@ def verify_public_repair_audit_package(package):
             base,
             status="public_repair_audit_package_mismatch",
             target_sha=target_sha.strip(),
-            reasons=("summary_digest_not_ready",),
+            reasons=("summary_digest_mismatch",),
         )
 
     observed_summary_digest = digest_result["public_summary_digest"]
