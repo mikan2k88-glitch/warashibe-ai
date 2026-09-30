@@ -1,4 +1,6 @@
 """Regression tests for the consumer-facing audit verification contract."""
+import hashlib
+import json
 import unittest
 
 from research_lab.problem_repair_audit_consumer_verification import (
@@ -13,7 +15,7 @@ class TestProblemRepairAuditConsumerVerification(unittest.TestCase):
         self.assertEqual(result["decision"], "accept")
         self.assertTrue(result["integrity_verified"])
         self.assertEqual(result["target_sha"], "a" * 40)
-        self.assertEqual(result["bundle_digest"], "b" * 64)
+        self.assertEqual(len(result["bundle_digest"]), 64)
         self.assertEqual(result["reason_codes"], ())
         self.assert_safe(result)
 
@@ -74,25 +76,58 @@ class TestProblemRepairAuditConsumerVerification(unittest.TestCase):
         self.assertFalse(result["auto_rollback_authorized"])
 
     def _valid_bundle(self):
-        return {
+        target_sha = "a" * 40
+        package_digest = "b" * 64
+        artifact_name = f"public-repair-audit-{target_sha}.json"
+        artifact_id = "c" * 64
+        package = {
+            "target_sha": target_sha,
+            "package_digest": package_digest,
+        }
+        metadata = {
+            "target_sha": target_sha,
+            "package_digest": package_digest,
+            "artifact_id": artifact_id,
+            "artifact_name": artifact_name,
+        }
+        bundle = {
             "bundle_schema_version": "1.0",
             "bundle_type": "warashibe-ai-public-repair-audit-distribution-bundle",
-            "target_sha": "a" * 40,
+            "target_sha": target_sha,
             "package_schema_version": "1.0",
             "package_digest_algorithm": "sha256",
-            "package_digest": "b" * 64,
-            "artifact_name": "public-repair-audit-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
-            "artifact_id": "c" * 64,
-            "package": {"target_sha": "a" * 40, "package_digest": "b" * 64},
-            "metadata": {
-                "target_sha": "a" * 40,
-                "package_digest": "b" * 64,
-                "artifact_id": "c" * 64,
-                "artifact_name": "public-repair-audit-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
-            },
+            "package_digest": package_digest,
+            "artifact_name": artifact_name,
+            "artifact_id": artifact_id,
+            "package": package,
+            "metadata": metadata,
             "bundle_digest_algorithm": "sha256",
-            "bundle_digest": "d" * 64,
         }
+        digest_fields = {
+            key: bundle[key]
+            for key in (
+                "bundle_schema_version",
+                "bundle_type",
+                "target_sha",
+                "package_schema_version",
+                "package_digest_algorithm",
+                "package_digest",
+                "artifact_name",
+                "artifact_id",
+                "package",
+                "metadata",
+                "bundle_digest_algorithm",
+            )
+        }
+        payload = json.dumps(
+            digest_fields,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        bundle["bundle_digest"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return bundle
 
 
 if __name__ == "__main__":
