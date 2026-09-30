@@ -62,11 +62,4 @@ def verify_serialized_audit_distribution_bundle(serialized):
     if not isinstance(bundle, dict):
         return bundle
 
-    verification = verify_audit_distribution_bundle(bundle)
-    if verification.get("status") != "audit_distribution_bundle_verified":
-        return verification
-
-    return {
-        **verification,
-        "status": "audit_distribution_bundle_roundtrip_verified",
-    }
+    return verify_audit_distribution_bundle(bundle)
