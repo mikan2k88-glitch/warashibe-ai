@@ -104,6 +104,9 @@ jobs:
       - name: Test audit distribution bundle roundtrip offline
         run: python -m research_lab.test_problem_repair_audit_distribution_bundle_roundtrip
 
+      - name: Test consumer-facing audit verification contract offline
+        run: python -m research_lab.test_problem_repair_audit_consumer_verification
+
       - name: Test Gemini fallback without API calls
         run: python -m research_lab.test_gemini_fallback_offline
 
