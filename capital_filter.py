@@ -1,7 +1,35 @@
 # ============================================================
 # Capital Filter
-# 現在の資本全額で扱える候補商品を判定
+# Candidate形式を共通Policyへ接続する資本フィルター
 # ============================================================
+
+from policy_engine import evaluate_trade
+
+
+def _candidate_to_policy_item(candidate):
+    """Candidate形式をpolicy_engineが扱う商品形式へ変換する。"""
+
+    purchase_price = candidate.get(
+        "purchase_price",
+        candidate.get("price", 0)
+    )
+
+    expected_sale_price = candidate.get(
+        "expected_sale_price",
+        candidate.get("next_value", 0)
+    )
+
+    confidence = candidate.get(
+        "confidence",
+        candidate.get("success_rate", 1.0)
+    )
+
+    return {
+        "name": candidate.get("name", "candidate"),
+        "price": purchase_price,
+        "success_rate": confidence,
+        "next_value": expected_sale_price if expected_sale_price > 0 else 1,
+    }
 
 
 def evaluate_capital_fit(
@@ -9,16 +37,10 @@ def evaluate_capital_fit(
     candidate
 ):
     """
-    現在資本に対して候補商品が適合するか判定する。
+    Candidateの資本適合を共通Policyで判定する。
 
-    基本ルール：
-    - 同一時点では資本全額で1商品だけを扱う
-    - 仕入れ価格が現在資本と一致しない候補は除外
-    - 仕入れ価格が0以下なら除外
-
-    データ形式：
-    - purchase_price を優先
-    - 旧market_engine形式の price にも対応
+    全資本1品ルールの正本はpolicy_engine.evaluate_trade()。
+    このモジュールではCandidate形式の変換と表示用情報の付加だけを行う。
     """
 
     purchase_price = candidate.get(
@@ -26,33 +48,33 @@ def evaluate_capital_fit(
         candidate.get("price", 0)
     )
 
-    reasons = []
+    if current_capital <= 0:
+        return {
+            "allowed": False,
+            "current_capital": current_capital,
+            "purchase_price": purchase_price,
+            "capital_usage_rate": None,
+            "policy_version": None,
+            "rule_summary": {},
+            "reasons": ["現在資本が0以下です"],
+        }
 
-    if purchase_price <= 0:
-        reasons.append(
-            "仕入れ価格が0以下です"
-        )
-
-    elif purchase_price != current_capital:
-        reasons.append(
-            f"現在資本 {current_capital} 円を全額使うため、"
-            f"仕入れ価格は {current_capital} 円と一致する必要があります"
-        )
-
-    allowed = len(reasons) == 0
+    policy_decision = evaluate_trade(
+        current_capital,
+        _candidate_to_policy_item(candidate)
+    )
 
     return {
-        "allowed": allowed,
+        "allowed": policy_decision["allowed"],
         "current_capital": current_capital,
         "purchase_price": purchase_price,
         "capital_usage_rate": round(
-            purchase_price
-            / current_capital,
+            purchase_price / current_capital,
             4
-        )
-        if current_capital > 0
-        else None,
-        "reasons": reasons
+        ),
+        "policy_version": policy_decision["policy_version"],
+        "rule_summary": policy_decision["rule_summary"],
+        "reasons": policy_decision["reasons"],
     }
 
 
@@ -60,7 +82,7 @@ def filter_by_capital(
     candidates,
     current_capital
 ):
-    """候補商品を全資本購入ルールでフィルタリングする。"""
+    """候補商品を共通Policyの資本ルールでフィルタリングする。"""
 
     allowed = []
     blocked = []
