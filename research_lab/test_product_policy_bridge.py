@@ -1,5 +1,9 @@
-from capital_filter import evaluate_capital_fit
+from capital_filter import _candidate_to_policy_item, evaluate_capital_fit
 from candidate_engine import create_candidate
+from candidate_strategy_adapter import candidate_to_strategy_item
+from danger_filter import evaluate_candidate
+from market_candidate_adapter import market_item_to_candidate
+from ranking_engine import calculate_expected_value
 from policy_engine import POLICY_VERSION, evaluate_trade
 from research_lab.repair_execution_controller import control_repair_execution
 
@@ -105,6 +109,56 @@ def main():
     assert evaluation["estimated_fees"] == 450
     assert evaluation["authenticity_status"] == "verified"
     assert evaluation["return_risk"] == "low"
+
+    pg005_plan = control_repair_execution(
+        state="plan",
+        planning={
+            "recurrence_result": {
+                "status": "recurrence_not_contained",
+                "guardrail_effective": False,
+            },
+            "repair_kind": "tighten_gate",
+            "target": "candidate probability semantics",
+            "rationale": "separate information confidence from success probability",
+            "path": "candidate_engine.py",
+            "change_summary": "add an explicit success probability field without changing confidence meaning",
+            "expected_test": "research_lab.test_product_policy_bridge",
+        },
+    )
+    assert pg005_plan["controller_state"] == "write"
+    assert pg005_plan["execution_plan"]["path"] == "candidate_engine.py"
+
+    separated = create_candidate(
+        name="semantic split",
+        purchase_price=3_000,
+        expected_sale_price=4_500,
+        source="test",
+        confidence=0.9,
+        success_probability=0.4,
+    )
+    assert separated["confidence"] == 0.9
+    assert separated["success_probability"] == 0.4
+    assert calculate_expected_value(separated) == 1_800
+
+    risk = evaluate_candidate(separated)
+    assert risk["information_confidence"] == 0.9
+    assert risk["success_probability"] == 0.4
+    assert risk["risk_level"] == "challenge"
+
+    policy_item = _candidate_to_policy_item(separated)
+    assert policy_item["success_rate"] == 0.4
+
+    strategy_item = candidate_to_strategy_item(separated)
+    assert strategy_item["success_rate"] == 0.4
+
+    virtual = market_item_to_candidate({
+        "name": "わら",
+        "price": 3_000,
+        "next_value": 4_500,
+        "success_rate": 0.8,
+    })
+    assert virtual["confidence"] == 1.0
+    assert virtual["success_probability"] == 0.8
 
     pg004_repair = control_repair_execution(
         state="ci",
