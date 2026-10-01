@@ -50,7 +50,7 @@ v1.0は「実売買の完全自動化」ではない。
 
 | ID | Gap | v1.0 | 依存 | 優先 |
 | --- | --- | --- | --- | --- |
-| PG-001 | Candidate経路のcapital filterが「資本以下」を許可し、全資本1品ルールと不一致 | 必須 | なし | P0 |
+| PG-001 | Candidate経路のcapital filterが「資本以下」を許可し、全資本1品ルールと不一致 | 必須 | なし | DONE（実証完成） |
 | PG-002 | `START_CAPITAL=100` が初期実運用想定約3,000円と不一致。市場段階も100円起点 | 必須 | PG-001 | P1 |
 | PG-003 | legacy market/policy経路とCandidate経路でPolicy適用方式が二重化し、同一ルール保証が弱い | 必須 | PG-001 | P1 |
 | PG-004 | 実商品候補評価で、価格・流動性・想定売却期間・手数料・真贋・返品の主要項目が統一契約になっていない | 必須 | PG-001, PG-003 | P1 |
@@ -119,3 +119,39 @@ Post-v1:
 - 通常の低リスクresearch-lab修正は自律的に進める。
 - P0基盤の追加研究は、製品Gapの解消を妨げる具体的問題が出た場合だけ行う。
 - CI Green、文書追加、研究テーマ追加だけではv1.0進捗と数えない。
+
+
+## 7. 実行状況
+
+### PG-001 — 実証完成
+
+- RED: commit `f395cf00c46106f69a36bb02ce82d354d1962bc3` / CI #1034 failure。
+  - `10,000` 円資本に対する `8,000` 円候補がallowedになる不整合をtargeted testで再現。
+- Product fix: `capital_filter.py` を全資本一致Policyへ変更。
+  - repair commit `8f4480fe46c2737ac28d8e5873ed6f54c0b145d8`
+  - exact-SHA CI #1035 `completed / success`
+- P0 finalize:
+  - 実repair evidenceをcontrollerへ投入。
+  - audit / ledger / `advance_problem_queue` をproduct testで検証。
+- Product-first blocker修復:
+  - auditの旧 `research_lab/` 専用path制限を限定製品Pythonパスへ拡張: `8dddb03a6a7f98b2c03953e302a8384ec6846fb9`
+  - execution boundaryも同じ限定範囲へ拡張: `171b8d77a3d4524bb71cbb47eeeb645a9b85a52b`
+  - 旧Research-first境界テストをProduct-first契約へ同期: `05f5e3ec3db6200dca78da33722d4989a31c77ce`
+  - exact-SHA CI #1040 `completed / success`
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用完成: 未判定。定時/定常の自律サイクルから別の製品Gapを同じP0経路で完遂できた時点で判定する。
+
+### 次の実問題
+
+**PG-002: v1.0開始資本を約3,000円へ整合する。**
+
+対象候補:
+- `policy_engine.START_CAPITAL`
+- 仮想市場の開始段階
+- campaign / journey / routeの開始資本契約
+- 既存100円前提テスト
+
+PG-002も、P0 planning → targeted RED → single-file repair → exact-SHA CI → audit/ledger → Greenの順で処理する。
