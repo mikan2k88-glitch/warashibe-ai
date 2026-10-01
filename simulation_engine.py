@@ -264,9 +264,12 @@ def run_candidate_cycle(
         )
 
         success_rate = candidate.get(
-            "confidence",
+            "success_probability",
             0
         )
+
+        if success_rate is None:
+            success_rate = 0
 
         # ----------------------------------------------------
         # 成功判定
