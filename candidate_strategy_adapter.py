@@ -15,7 +15,7 @@
 from strategy_engine import select_item
 
 
-ADAPTER_VERSION = "1.2"
+ADAPTER_VERSION = "1.3"
 
 
 def candidate_to_strategy_item(candidate):
@@ -24,7 +24,11 @@ def candidate_to_strategy_item(candidate):
     return {
         "name": candidate.get("name", ""),
         "price": candidate.get("purchase_price", 0),
-        "success_rate": candidate.get("confidence", 0),
+        "success_rate": (
+            candidate.get("success_probability")
+            if candidate.get("success_probability") is not None
+            else 0
+        ),
         "next_value": candidate.get("expected_sale_price", 0),
         "candidate_score": candidate.get("score", 0),
     }
