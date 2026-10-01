@@ -50,11 +50,30 @@ class TestProblemRepairExecutionBoundary(unittest.TestCase):
         self.assertIs(result["git_write_authorized"], False)
         self.assert_safe(result)
 
-    def test_only_research_lab_python_paths_are_allowed(self):
+    def test_bounded_product_python_paths_are_allowed(self):
         for path in (
             "app.py",
+            "capital_filter.py",
+            "routes/simulation_routes.py",
+            "research_lab/sample_guard.py",
+        ):
+            with self.subTest(path=path):
+                result = build_repair_execution_plan(
+                    self.ai_decision,
+                    path=path,
+                    change_summary="tighten validation",
+                    expected_test="python -m research_lab.test_sample_guard",
+                )
+                self.assertEqual(result["status"], "repair_execution_plan_ready")
+                self.assertIs(result["git_write_authorized"], True)
+                self.assertEqual(result["plan"]["branch"], "research-lab")
+                self.assert_safe(result)
+
+    def test_unbounded_or_non_python_paths_are_blocked(self):
+        for path in (
             ".github/workflows/research-lab.yml",
             "docs/PROJECT_SPEC.md",
+            "scripts/unsafe.py",
             "../research_lab/escape.py",
             "/research_lab/absolute.py",
         ):
