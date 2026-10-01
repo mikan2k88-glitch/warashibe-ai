@@ -35,6 +35,9 @@ def control_repair_execution(*, state, planning=None, write_evidence=None, ci_ev
         if not isinstance(write_evidence, dict) or not isinstance(ci_evidence, dict):
             return {"status": "repair_controller_hold", "controller_state": "ci",
                     "milestone_reached": False, "next_action": "await_exact_sha_ci"}
+        if ci_evidence.get("observed_sha") != write_evidence.get("after_sha"):
+            return {"status": "repair_controller_hold", "controller_state": "ci",
+                    "milestone_reached": False, "next_action": "await_exact_sha_ci"}
         verification = {
             "cycle_id": ci_evidence.get("cycle_id"),
             "repair_id": ci_evidence.get("repair_id"),
