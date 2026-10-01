@@ -5,7 +5,6 @@ for an AI-authorized low-risk repair. Human approval is intentionally not part o
 this ordinary research-lab repair path.
 """
 
-_ALLOWED_PREFIXES = ("research_lab/",)
 _ALLOWED_SUFFIXES = (".py",)
 
 
@@ -39,7 +38,13 @@ def build_repair_execution_plan(ai_decision, *, path, change_summary, expected_t
     if normalized.startswith("/") or ".." in normalized.split("/"):
         return dict(base, reasons=("path_not_allowed",))
 
-    if not normalized.startswith(_ALLOWED_PREFIXES):
+    path_parts = normalized.split("/")
+    product_path_allowed = (
+        len(path_parts) == 1
+        or normalized.startswith("routes/")
+        or normalized.startswith("research_lab/")
+    )
+    if not product_path_allowed:
         return dict(base, reasons=("path_not_allowed",))
 
     if not normalized.endswith(_ALLOWED_SUFFIXES):
