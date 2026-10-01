@@ -1,8 +1,7 @@
 """Offline repair-candidate proposal for recurring guardrail failures.
 
-This module only proposes one reviewable repair candidate when an unsafe pattern
-has recurred and was not contained. It never edits code, prompts, policies,
-permissions, workflows, or external systems and never authorizes execution.
+Ordinary low-risk research-lab repairs are AI-decided. This module only
+synthesizes a bounded candidate; it never edits files or external systems.
 """
 
 _ALLOWED_REPAIR_KINDS = {
@@ -18,6 +17,8 @@ def propose_repair_candidate(recurrence_result, *, repair_kind, target, rational
     base = {
         "status": "hold_repair_candidate",
         "reviewable": False,
+        "requires_ai_decision": True,
+        "human_gate_required": False,
         "repair_candidate": None,
         "external_action_authorized": False,
         "auto_repair_authorized": False,
@@ -52,6 +53,7 @@ def propose_repair_candidate(recurrence_result, *, repair_kind, target, rational
         "trade",
         "live db",
         "permission expansion",
+        "external ai",
     )
     if any(term in lowered for term in forbidden_terms):
         return dict(base, reasons=("repair_scope_not_allowed",))
@@ -61,7 +63,8 @@ def propose_repair_candidate(recurrence_result, *, repair_kind, target, rational
         "target": target.strip(),
         "rationale": rationale.strip(),
         "scope": "research-lab",
-        "requires_review": True,
+        "requires_ai_decision": True,
+        "human_gate_required": False,
         "single_repair_only": True,
     }
 
