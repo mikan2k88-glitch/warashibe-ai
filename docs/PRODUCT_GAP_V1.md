@@ -54,7 +54,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-002 | `START_CAPITAL=100` が初期実運用想定約3,000円と不一致。市場段階も100円起点 | 必須 | PG-001 | DONE（実証完成） |
 | PG-003 | legacy market/policy経路とCandidate経路でPolicy適用方式が二重化し、同一ルール保証が弱い | 必須 | PG-001 | DONE（実証完成） |
 | PG-004 | 実商品候補評価で、価格・流動性・想定売却期間・手数料・真贋・返品の主要項目が統一契約になっていない | 必須 | PG-001, PG-003 | DONE（実証完成） |
-| PG-005 | confidenceを仮想success rateとして使う箇所があり、「情報信頼度」と「取引成功確率」の意味が混在 | 必須 | PG-004 | P1 |
+| PG-005 | confidenceを仮想success rateとして使う箇所があり、「情報信頼度」と「取引成功確率」の意味が混在 | 必須 | PG-004 | DONE（実証完成） |
 | PG-006 | Candidate選択結果を製品側の結果保存/監査へ一貫して残す運用経路が未完成 | 必須 | PG-004 | P1 |
 | PG-007 | Supabaseのwarashibe専用テーブル契約はあるが、v1.0製品経路から安全にread/writeする運用完成証拠が不足 | 条件付き必須 | PG-006 | P2 |
 | PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | P2 |
@@ -241,11 +241,63 @@ Post-v1:
 - 実証完成: 完了。
 - 運用完成: 未判定。
 
+### PG-005 — 実証完成
+
+- RED:
+  - contract regression commit `448aa04adc50ed10143cff447b796457c0028b81`
+  - CI #1058 `failure`
+  - `create_candidate()` が `success_probability` を受け取れず、意味分離未実装を再現。
+- 段階修復:
+  - Candidate契約:
+    - `candidate_engine.py` に `success_probability` を追加。
+    - commit `6a83adc5a3cd09ef62318d9d266097452aa61b1b`
+    - CI #1059 `failure`、次の混線箇所がrankingであることを確認。
+  - Ranking:
+    - 期待値・scoreの成功確率を `success_probability` へ分離。
+    - `confidence` は情報信頼度として独立加点。
+    - commit `16d21712cbd8d5ceab157d9657cc7fb43920c8e5`
+    - CI #1060 `failure`、次の混線箇所がdanger filterであることを確認。
+  - Danger:
+    - risk分類を `success_probability` に変更。
+    - `information_confidence` と `success_probability` を別々に返す。
+    - commit `5bd961f9067c847e13e2e45da590eb9686625236`
+    - CI #1061 `failure`、次の混線箇所がpolicy bridgeであることを確認。
+  - Policy bridge:
+    - `capital_filter.py` がlegacy Policyへ `success_probability` を渡すよう変更。
+    - 未評価時は `confidence` を流用しない。
+    - commit `5824619cdc028e1df4bbd7e99548cd2b69cce4d2`
+    - CI #1062 `failure`、次の混線箇所がstrategy adapterであることを確認。
+  - Strategy adapter:
+    - Strategy用 `success_rate` を `success_probability` 由来へ変更。
+    - commit `dc5d0380e0beded528af33bcb620d445d438f6e8`
+    - CI #1063 `failure`、次の混線箇所がvirtual-market adapterであることを確認。
+  - Virtual-market adapter:
+    - 仮想市場の `success_rate` を `success_probability` へ格納。
+    - 仮想市場データの情報信頼度は `confidence=1.0` として分離。
+    - commit `ea6374bd2db55b6a1937277b411d3516a7a19ff0`
+    - CI #1064 `completed / success`
+  - Simulation:
+    - `simulation_engine.py` の成功判定を `confidence` から `success_probability` へ変更。
+    - commit `6502be77815f4cd022cbcf60f19d5b1ba4f82469`
+    - CI #1065 `completed / success`
+- P0 finalize:
+  - simulation回帰: `confidence=0.99`, `success_probability=0.4`, `random=0.5` で失敗となることを固定。
+  - before `ea6374b...` -> after `6502be7...`
+  - path `simulation_engine.py`
+  - audit / ledger / `advance_problem_queue` を固定。
+  - evidence commit `7eab883bcf67f21fa943a0fde2bb1603cc875747`
+  - CI #1066 `completed / success`
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用完成: 未判定。
+
 ### 次の実問題
 
-**PG-005: information confidence と trade success probability の意味を分離する。**
+**PG-006: Candidate選択結果を製品側の結果保存/監査へ一貫して残す。**
 
 狙い:
-- `confidence` を情報信頼度として固定。
-- 仮想取引成功確率は別フィールドへ分離。
-- danger/ranking/simulationで意味の混線をなくす。
+- 選択された1候補と評価理由を共通結果形式へ保存する。
+- candidate / strategy / simulation の結果を同じ監査契約で追跡できるようにする。
+- PG-007/008のSupabase・運用接続へ渡せる製品側recordを作る。
