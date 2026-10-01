@@ -18,6 +18,7 @@ HISTORY_LIMIT = 120
 PROFILES = {
     "build": [
         "research_lab.test_problem_repair_candidate",
+        "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
         "research_lab.test_problem_repair_execution_boundary",
         "research_lab.test_problem_repair_validation_gate",
@@ -38,6 +39,7 @@ PROFILES = {
         "research_lab.test_problem_guardrail_candidate",
         "research_lab.test_problem_guardrail_recurrence",
         "research_lab.test_problem_repair_candidate",
+        "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
         "research_lab.test_problem_repair_execution_boundary",
         "research_lab.test_problem_repair_validation_gate",
