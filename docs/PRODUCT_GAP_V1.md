@@ -52,7 +52,7 @@ v1.0は「実売買の完全自動化」ではない。
 | --- | --- | --- | --- | --- |
 | PG-001 | Candidate経路のcapital filterが「資本以下」を許可し、全資本1品ルールと不一致 | 必須 | なし | DONE（実証完成） |
 | PG-002 | `START_CAPITAL=100` が初期実運用想定約3,000円と不一致。市場段階も100円起点 | 必須 | PG-001 | DONE（実証完成） |
-| PG-003 | legacy market/policy経路とCandidate経路でPolicy適用方式が二重化し、同一ルール保証が弱い | 必須 | PG-001 | P1 |
+| PG-003 | legacy market/policy経路とCandidate経路でPolicy適用方式が二重化し、同一ルール保証が弱い | 必須 | PG-001 | DONE（実証完成） |
 | PG-004 | 実商品候補評価で、価格・流動性・想定売却期間・手数料・真贋・返品の主要項目が統一契約になっていない | 必須 | PG-001, PG-003 | P1 |
 | PG-005 | confidenceを仮想success rateとして使う箇所があり、「情報信頼度」と「取引成功確率」の意味が混在 | 必須 | PG-004 | P1 |
 | PG-006 | Candidate選択結果を製品側の結果保存/監査へ一貫して残す運用経路が未完成 | 必須 | PG-004 | P1 |
@@ -174,11 +174,42 @@ Post-v1:
 - 実証完成: 完了。
 - 運用完成: 未判定。
 
+### PG-003 — 実証完成
+
+- ベースライン:
+  - contract test追加 commit `6172ca0f0e1db6628cee008c3309f882bd0f8402`
+  - CI #1047 `completed / success`
+- P0 planning境界確認:
+  - 初回接続 commit `2ad766f883e171b3fde2b4270f7029a1de2003d6`
+  - CI #1048 `failure`
+  - 原因は `change_summary` 内の禁止語 `trade`。P0が安全側に停止したため、意図を変えず表現のみ修正。
+- RED:
+  - boundary-safe test commit `ec5a15ac28da80029f5cc000b30d5f025ec676e4`
+  - CI #1049 `failure`
+  - Candidate側decisionに `policy_version` が存在せず、独自Policy実装であることを再現。
+- Product fix:
+  - `capital_filter.py` をCandidate形式のadapter + `policy_engine.evaluate_trade()` 委譲へ変更。
+  - 全資本1品ルールの正本を `policy_engine` へ一本化。
+  - repair commit `6791e7a8300af042485077497767aa7f2c1797e4`
+  - exact-SHA CI #1050 `completed / success`
+- P0 finalize:
+  - before `ec5a15a...` -> after `6791e7a...`
+  - path `capital_filter.py`
+  - exact-SHA CI evidenceをcontrollerへ投入。
+  - audit / ledger / `advance_problem_queue` を固定。
+  - evidence commit `63e609e2c780b68daf0b571b940f407e6242aee2`
+  - CI #1051 `completed / success`
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用完成: 未判定。
+
 ### 次の実問題
 
-**PG-003: legacy market/policy経路とCandidate経路のPolicy適用方式を一本化する。**
+**PG-004: 実商品候補評価の主要項目を統一契約にする。**
 
 狙い:
-- 2経路で同じ「全資本1品」ルールを別実装し続ける状態を解消する。
-- Policyの正本を1か所に寄せ、Candidate側も同じ判定契約を使う。
-- 既存のProduct-first P0ラインでRED → 最小修復 → exact-SHA Green → audit/ledgerまで進める。
+- 価格・流動性・想定売却期間・手数料・真贋・返品をCandidate契約に揃える。
+- 欠落項目はfail-closedまたは明示的な未評価状態にする。
+- 実商品候補が同じ契約で比較・保存できる状態へ進める。
