@@ -1,4 +1,4 @@
-"""Targeted state-transition tests for the bounded repair execution controller.\n\nThis file also serves as the safe single-file live-write probe for Improvement 001.\n"""
+"""Targeted state-transition tests for the bounded repair execution controller.\n\nThis file also serves as the safe single-file live-write probe for Improvement 001.\nThe probe completed on exact-SHA CI #1025 before milestone finalization.\n"""
 from research_lab.repair_execution_controller import control_repair_execution
 
 A = "a" * 40
