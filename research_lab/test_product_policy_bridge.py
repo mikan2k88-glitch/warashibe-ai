@@ -33,7 +33,7 @@ def main():
             "target": "candidate policy bridge",
             "rationale": "make candidate capital decisions use policy_engine as the single policy source",
             "path": "capital_filter.py",
-            "change_summary": "delegate candidate capital policy decision to policy_engine.evaluate_trade",
+            "change_summary": "delegate candidate capital decision to the shared policy engine",
             "expected_test": "research_lab.test_product_policy_bridge",
         },
     )
