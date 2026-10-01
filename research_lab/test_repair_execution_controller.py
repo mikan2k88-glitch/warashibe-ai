@@ -57,8 +57,8 @@ def main():
     assert live["status"] == "repair_pipeline_complete"
     assert live["milestone_reached"] is True
     assert live["next_action"] == "advance_problem_queue"
-    assert live["audit_ready"] is True
-    assert live["ledger_ready"] is True
+    assert live["result"]["audit"]["status"] == "repair_audit_record_ready"
+    assert live["result"]["ledger"]["status"] == "repair_ledger_ready"
 
     failed = control_repair_execution(
         state="ci", write_evidence=WRITE,
