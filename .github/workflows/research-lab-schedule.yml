@@ -1,4 +1,5 @@
 name: Warashibe AI Research Lab Schedule
+# Supabase queue bridge uses GitHub OIDC; no Supabase secret is stored in GitHub.
 
 on:
   schedule:
