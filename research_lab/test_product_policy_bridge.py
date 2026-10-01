@@ -106,6 +106,28 @@ def main():
     assert evaluation["authenticity_status"] == "verified"
     assert evaluation["return_risk"] == "low"
 
+    pg004_repair = control_repair_execution(
+        state="ci",
+        write_evidence={
+            "before_sha": "ad84f241be7e317e1512b497a3a079e9ed47d90f",
+            "after_sha": "ebc4431a1f01a9d3d678a0a99ee71d827860f035",
+            "path": "candidate_engine.py",
+            "expected_test": "research_lab.test_product_policy_bridge",
+        },
+        ci_evidence={
+            "cycle_id": "product-gap-pg004-1055",
+            "repair_id": "pg004-candidate-evaluation-contract",
+            "observed_sha": "ebc4431a1f01a9d3d678a0a99ee71d827860f035",
+            "ci_status": "completed",
+            "ci_conclusion": "success",
+        },
+    )
+    assert pg004_repair["status"] == "repair_pipeline_complete"
+    assert pg004_repair["milestone_reached"] is True
+    assert pg004_repair["next_action"] == "advance_problem_queue"
+    assert pg004_repair["result"]["audit"]["status"] == "repair_audit_record_ready"
+    assert pg004_repair["result"]["ledger"]["status"] == "repair_ledger_ready"
+
     repair = control_repair_execution(
         state="ci",
         write_evidence={
