@@ -2,22 +2,51 @@ name: Warashibe AI Research Lab Schedule
 
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
-
-permissions:
-  contents: read
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/research-lab-schedule.yml"
 
 concurrency:
   group: warashibe-ai-research-lab
   cancel-in-progress: false
 
 jobs:
-  research-cycle:
+  queue-executor:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          ref: research-lab
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Process one Supabase development queue item
+        run: python -m research_lab.dev_queue_executor
+
+  research-cycle:
+    needs: queue-executor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout latest research branch
         uses: actions/checkout@v4
         with:
           ref: research-lab
