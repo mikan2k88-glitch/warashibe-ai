@@ -51,7 +51,7 @@ v1.0は「実売買の完全自動化」ではない。
 | ID | Gap | v1.0 | 依存 | 優先 |
 | --- | --- | --- | --- | --- |
 | PG-001 | Candidate経路のcapital filterが「資本以下」を許可し、全資本1品ルールと不一致 | 必須 | なし | DONE（実証完成） |
-| PG-002 | `START_CAPITAL=100` が初期実運用想定約3,000円と不一致。市場段階も100円起点 | 必須 | PG-001 | P1 |
+| PG-002 | `START_CAPITAL=100` が初期実運用想定約3,000円と不一致。市場段階も100円起点 | 必須 | PG-001 | DONE（実証完成） |
 | PG-003 | legacy market/policy経路とCandidate経路でPolicy適用方式が二重化し、同一ルール保証が弱い | 必須 | PG-001 | P1 |
 | PG-004 | 実商品候補評価で、価格・流動性・想定売却期間・手数料・真贋・返品の主要項目が統一契約になっていない | 必須 | PG-001, PG-003 | P1 |
 | PG-005 | confidenceを仮想success rateとして使う箇所があり、「情報信頼度」と「取引成功確率」の意味が混在 | 必須 | PG-004 | P1 |
@@ -144,14 +144,41 @@ Post-v1:
 - 実証完成: 完了。
 - 運用完成: 未判定。定時/定常の自律サイクルから別の製品Gapを同じP0経路で完遂できた時点で判定する。
 
+### PG-002 — 実証完成
+
+- P0 planning:
+  - `policy_engine.py` を限定single-file repair対象としてcontrollerがwrite-readyを返すことを確認。
+- ベースライン:
+  - test追加 commit `afb0b6ee6c48cc4b11234bd317cd9c881663bf23`
+  - CI #1042 `completed / success`
+- RED:
+  - build profile接続 commit `fed644480232c493f48ddf9e06ca197e55998076`
+  - CI #1043 `failure`
+  - failureは `START_CAPITAL == 3_000` のassertのみで再現。
+- Product fix:
+  - `policy_engine.START_CAPITAL` を `100 -> 3000` に変更。
+  - repair commit `24ef74142c0e5ed651acf56a78a8e991469625b9`
+  - exact-SHA CI #1044 `completed / success`
+- P0 finalize:
+  - before `fed6444...` -> after `24ef741...`
+  - path `policy_engine.py`
+  - exact-SHA CI evidenceをcontrollerへ投入。
+  - audit / ledger / `advance_problem_queue` を固定。
+  - evidence commit `8d6630085dc57e9422939a33ced93f7d23f45fba`
+  - CI #1045 `completed / success`
+- 市場側:
+  - `market_engine` には既に3,000円価格帯の商品が存在したため、PG-002では市場データの追加変更は不要と判定。
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用完成: 未判定。
+
 ### 次の実問題
 
-**PG-002: v1.0開始資本を約3,000円へ整合する。**
+**PG-003: legacy market/policy経路とCandidate経路のPolicy適用方式を一本化する。**
 
-対象候補:
-- `policy_engine.START_CAPITAL`
-- 仮想市場の開始段階
-- campaign / journey / routeの開始資本契約
-- 既存100円前提テスト
-
-PG-002も、P0 planning → targeted RED → single-file repair → exact-SHA CI → audit/ledger → Greenの順で処理する。
+狙い:
+- 2経路で同じ「全資本1品」ルールを別実装し続ける状態を解消する。
+- Policyの正本を1か所に寄せ、Candidate側も同じ判定契約を使う。
+- 既存のProduct-first P0ラインでRED → 最小修復 → exact-SHA Green → audit/ledgerまで進める。
