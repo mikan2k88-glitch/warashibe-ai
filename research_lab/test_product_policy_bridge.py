@@ -52,6 +52,28 @@ def main():
             == policy_decision["rule_summary"]["full_capital_purchase_required"]
         )
 
+    repair = control_repair_execution(
+        state="ci",
+        write_evidence={
+            "before_sha": "ec5a15ac28da80029f5cc000b30d5f025ec676e4",
+            "after_sha": "6791e7a8300af042485077497767aa7f2c1797e4",
+            "path": "capital_filter.py",
+            "expected_test": "research_lab.test_product_policy_bridge",
+        },
+        ci_evidence={
+            "cycle_id": "product-gap-pg003-1050",
+            "repair_id": "pg003-shared-policy-bridge",
+            "observed_sha": "6791e7a8300af042485077497767aa7f2c1797e4",
+            "ci_status": "completed",
+            "ci_conclusion": "success",
+        },
+    )
+    assert repair["status"] == "repair_pipeline_complete"
+    assert repair["milestone_reached"] is True
+    assert repair["next_action"] == "advance_problem_queue"
+    assert repair["result"]["audit"]["status"] == "repair_audit_record_ready"
+    assert repair["result"]["ledger"]["status"] == "repair_ledger_ready"
+
 
 if __name__ == "__main__":
     main()
