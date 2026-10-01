@@ -3,6 +3,25 @@ from research_lab.repair_execution_controller import control_repair_execution
 
 
 def main():
+    planned = control_repair_execution(
+        state="plan",
+        planning={
+            "recurrence_result": {
+                "status": "recurrence_not_contained",
+                "guardrail_effective": False,
+            },
+            "repair_kind": "tighten_gate",
+            "target": "capital filter product policy",
+            "rationale": "align candidate capital rule with the product policy",
+            "path": "capital_filter.py",
+            "change_summary": "require exact full-capital fit for one candidate",
+            "expected_test": "research_lab.test_product_capital_policy",
+        },
+    )
+    assert planned["controller_state"] == "write"
+    assert planned["next_action"] == "execute_single_file_git_write"
+    assert planned["execution_plan"]["path"] == "capital_filter.py"
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
