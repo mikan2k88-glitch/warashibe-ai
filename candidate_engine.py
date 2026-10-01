@@ -4,7 +4,7 @@
 from demand_engine import get_demand
 from value_engine import get_value_transformation
 
-CANDIDATE_VERSION = "1.2"
+CANDIDATE_VERSION = "1.3"
 
 
 def create_candidate(
@@ -14,6 +14,7 @@ def create_candidate(
     source,
     category="unknown",
     confidence=0.0,
+    success_probability=None,
     metadata=None,
     liquidity_score=None,
     estimated_days_to_sell=None,
@@ -53,6 +54,7 @@ def create_candidate(
         "expected_profit": expected_profit,
         "expected_profit_rate": expected_profit_rate,
         "confidence": confidence,
+        "success_probability": success_probability,
         "demand": get_demand(asset),
         "value_transformation": get_value_transformation(asset),
         "evaluation": evaluation,
