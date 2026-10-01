@@ -29,10 +29,16 @@ def build_repair_audit_record(
         return dict(base, reasons=("invalid_audit_input",))
 
     normalized_path = path.strip().replace("\\", "/")
+    path_parts = normalized_path.split("/")
+    product_path_allowed = (
+        len(path_parts) == 1
+        or normalized_path.startswith("routes/")
+        or normalized_path.startswith("research_lab/")
+    )
     if (
         normalized_path.startswith("/")
-        or ".." in normalized_path.split("/")
-        or not normalized_path.startswith("research_lab/")
+        or ".." in path_parts
+        or not product_path_allowed
         or not normalized_path.endswith(".py")
     ):
         return dict(base, reasons=("path_not_allowed",))
