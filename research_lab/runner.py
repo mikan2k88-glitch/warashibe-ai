@@ -65,14 +65,28 @@ def decide_runner_handoff(event, passed, profile):
         }
     if event == "schedule":
         return {
-            "stage": "build_cycle_ready",
-            "next_action": "apply_one_safe_fix",
-            "decision_reason": "scheduled_targeted_checks_passed",
+            "stage": "repair_cycle_ready",
+            "next_action": "finalize_bounded_repair_cycle",
+            "decision_reason": "scheduled_repair_pipeline_passed",
+            "repair_pipeline": {
+                "candidate": "ready",
+                "ai_decision": "required",
+                "execution_boundary": "enforced",
+                "exact_sha_validation": "required",
+                "audit_ledger": "required",
+            },
         }
     return {
         "stage": "targeted_checks_passed",
         "next_action": "continue_current_problem",
         "decision_reason": f"{profile}_profile_passed",
+        "repair_pipeline": {
+            "candidate": "ready",
+            "ai_decision": "required",
+            "execution_boundary": "enforced",
+            "exact_sha_validation": "required",
+            "audit_ledger": "required",
+        } if profile in {"build", "repair"} else None,
     }
 
 
