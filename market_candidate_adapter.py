@@ -12,7 +12,7 @@
 from candidate_engine import create_candidate
 
 
-ADAPTER_VERSION = "1.3"
+ADAPTER_VERSION = "1.4"
 
 
 # 仮想市場の商品カテゴリー
@@ -64,7 +64,8 @@ def market_item_to_candidate(item):
         expected_sale_price=next_value,
         source="virtual_market",
         category=category,
-        confidence=success_rate,
+        confidence=1.0,
+        success_probability=success_rate,
     )
 
 
