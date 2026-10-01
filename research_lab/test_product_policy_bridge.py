@@ -4,6 +4,7 @@ from candidate_strategy_adapter import candidate_to_strategy_item
 from danger_filter import evaluate_candidate
 from market_candidate_adapter import market_item_to_candidate
 from ranking_engine import calculate_expected_value
+import simulation_engine
 from policy_engine import POLICY_VERSION, evaluate_trade
 from research_lab.repair_execution_controller import control_repair_execution
 
@@ -159,6 +160,50 @@ def main():
     })
     assert virtual["confidence"] == 1.0
     assert virtual["success_probability"] == 0.8
+
+    original_select_candidate_item = simulation_engine.select_candidate_item
+    original_random = simulation_engine.random.random
+    try:
+        simulation_engine.select_candidate_item = lambda capital, strategy: {
+            "name": "probability semantics",
+            "purchase_price": 3_000,
+            "expected_sale_price": 4_500,
+            "confidence": 0.99,
+            "success_probability": 0.4,
+            "source": "test",
+            "score": 1,
+        }
+        simulation_engine.random.random = lambda: 0.5
+        simulation_result = simulation_engine.run_candidate_cycle("safe")
+    finally:
+        simulation_engine.select_candidate_item = original_select_candidate_item
+        simulation_engine.random.random = original_random
+
+    assert simulation_result["status"] == "failed"
+    assert simulation_result["history"][0]["success_rate"] == 0.4
+    assert simulation_result["history"][0]["random_value"] == 0.5
+
+    pg005_repair = control_repair_execution(
+        state="ci",
+        write_evidence={
+            "before_sha": "ea6374bd2db55b6a1937277b411d3516a7a19ff0",
+            "after_sha": "6502be77815f4cd022cbcf60f19d5b1ba4f82469",
+            "path": "simulation_engine.py",
+            "expected_test": "research_lab.test_product_policy_bridge",
+        },
+        ci_evidence={
+            "cycle_id": "product-gap-pg005-1065",
+            "repair_id": "pg005-confidence-probability-separation",
+            "observed_sha": "6502be77815f4cd022cbcf60f19d5b1ba4f82469",
+            "ci_status": "completed",
+            "ci_conclusion": "success",
+        },
+    )
+    assert pg005_repair["status"] == "repair_pipeline_complete"
+    assert pg005_repair["milestone_reached"] is True
+    assert pg005_repair["next_action"] == "advance_problem_queue"
+    assert pg005_repair["result"]["audit"]["status"] == "repair_audit_record_ready"
+    assert pg005_repair["result"]["ledger"]["status"] == "repair_ledger_ready"
 
     pg004_repair = control_repair_execution(
         state="ci",
