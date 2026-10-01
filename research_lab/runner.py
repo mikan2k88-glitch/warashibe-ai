@@ -21,6 +21,7 @@ PROFILES = {
         "research_lab.test_problem_repair_ai_decision",
         "research_lab.test_problem_repair_execution_boundary",
         "research_lab.test_problem_repair_validation_gate",
+        "research_lab.test_problem_repair_cycle",
         "research_lab.test_hourly_research_scheduler_contract",
         "research_lab.test_scheduler_live_connector",
     ],
@@ -42,6 +43,7 @@ PROFILES = {
         "research_lab.test_problem_repair_validation_gate",
         "research_lab.test_problem_repair_audit_record",
         "research_lab.test_problem_repair_ledger",
+        "research_lab.test_problem_repair_cycle",
     ],
     "core": [
         "research_lab.test_warashibe_core_mode",
