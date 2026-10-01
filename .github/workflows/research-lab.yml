@@ -5,6 +5,17 @@ on:
     branches:
       - research-lab
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Targeted test profile
+        required: false
+        default: build
+        type: choice
+        options:
+          - build
+          - repair
+          - scheduler
+          - core
 
 permissions:
   contents: read
@@ -14,14 +25,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  research-cycle:
+  build-cycle:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    env:
+      WARASHIBE_LAB_PROFILE: ${{ inputs.profile || 'build' }}
     steps:
-      - name: Checkout research branch
+      - name: Checkout triggering commit
         uses: actions/checkout@v4
         with:
-          # Pin checkout to the triggering commit, not a moving branch head.
           ref: ${{ github.sha }}
 
       - name: Set up Python
@@ -32,106 +44,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run autonomous research cycle
+      - name: Run targeted build-first cycle
         run: python -m research_lab.runner
 
-      - name: Test sale evidence attestation gate offline
-        run: python -m research_lab.test_sale_evidence_attestation_gate
-
-      - name: Test problem guardrail candidate synthesis offline
-        run: python -m research_lab.test_problem_guardrail_candidate
-
-      - name: Test problem guardrail recurrence offline
-        run: python -m research_lab.test_problem_guardrail_recurrence
-
-      - name: Test recurring-problem repair candidate offline
-        run: python -m research_lab.test_problem_repair_candidate
-
-      - name: Test AI-only bounded repair decision offline
-        run: python -m research_lab.test_problem_repair_ai_decision
-
-      - name: Test bounded AI repair execution plan offline
-        run: python -m research_lab.test_problem_repair_execution_boundary
-
-      - name: Test exact-SHA AI repair validation offline
-        run: python -m research_lab.test_problem_repair_validation_gate
-
-      - name: Test reproducible AI repair audit record offline
-        run: python -m research_lab.test_problem_repair_audit_record
-
-      - name: Test single-repair cycle ledger offline
-        run: python -m research_lab.test_problem_repair_ledger
-
-      - name: Test cross-cycle repair continuity offline
-        run: python -m research_lab.test_problem_repair_cross_cycle
-
-      - name: Test repair history snapshot offline
-        run: python -m research_lab.test_problem_repair_history_snapshot
-
-      - name: Test repair history integrity digest offline
-        run: python -m research_lab.test_problem_repair_history_digest
-
-      - name: Test repair history exact-SHA CI proof offline
-        run: python -m research_lab.test_problem_repair_history_ci_proof
-
-      - name: Test repair history CI proof digest offline
-        run: python -m research_lab.test_problem_repair_history_proof_digest
-
-      - name: Test final repair attestation envelope offline
-        run: python -m research_lab.test_problem_repair_attestation
-
-      - name: Test final attestation integrity digest offline
-        run: python -m research_lab.test_problem_repair_attestation_digest
-
-      - name: Test public-safe repair audit summary offline
-        run: python -m research_lab.test_problem_repair_public_audit_summary
-
-      - name: Test public audit summary digest offline
-        run: python -m research_lab.test_problem_repair_public_audit_digest
-
-      - name: Test public repair audit package offline
-        run: python -m research_lab.test_problem_repair_public_audit_package
-
-      - name: Test public audit package roundtrip offline
-        run: python -m research_lab.test_problem_repair_public_audit_roundtrip
-
-      - name: Test audit distribution metadata contract offline
-        run: python -m research_lab.test_problem_repair_audit_distribution_metadata
-
-      - name: Test canonical audit distribution bundle offline
-        run: python -m research_lab.test_problem_repair_audit_distribution_bundle
-
-      - name: Test audit distribution bundle roundtrip offline
-        run: python -m research_lab.test_problem_repair_audit_distribution_bundle_roundtrip
-
-      - name: Test consumer-facing audit verification contract offline
-        run: python -m research_lab.test_problem_repair_audit_consumer_verification
-
-      - name: Test AI consumer state transition contract offline
-        run: python -m research_lab.test_autonomous_research_consumer_state_transition
-
-      - name: Test hourly research scheduler contract offline
-        run: python -m research_lab.test_hourly_research_scheduler_contract
-
-      - name: Test live scheduler connector offline
-        run: python -m research_lab.test_scheduler_live_connector
-
-      - name: Test Gemini fallback without API calls
-        run: python -m research_lab.test_gemini_fallback_offline
-
-      - name: Test Gemini assignment without API calls
-        run: python -m research_lab.test_gemini_assignment_offline
-
-      - name: Test persistent Gemini assignment gate
-        run: python -m research_lab.test_gemini_assignment_send_gate
-
-      - name: Test durable Gemini assignment integration without API calls
-        run: python -m research_lab.test_gemini_assignment_durable_integration
-
-      - name: Test Gemini assignment budget and human preflight offline
-        run: python -m research_lab.test_gemini_assignment_preflight
-
-      - name: Upload research snapshot
+      - name: Upload cycle snapshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
