@@ -19,15 +19,15 @@ def _candidate_to_policy_item(candidate):
         candidate.get("next_value", 0)
     )
 
-    confidence = candidate.get(
-        "confidence",
-        candidate.get("success_rate", 1.0)
-    )
+    success_probability = candidate.get("success_probability")
+
+    if success_probability is None:
+        success_probability = candidate.get("success_rate", 1.0)
 
     return {
         "name": candidate.get("name", "candidate"),
         "price": purchase_price,
-        "success_rate": confidence,
+        "success_rate": success_probability,
         "next_value": expected_sale_price if expected_sale_price > 0 else 1,
     }
 
