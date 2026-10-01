@@ -45,7 +45,8 @@ class TestProblemRepairCandidate(unittest.TestCase):
         self.assertEqual(result["status"], "repair_candidate_reviewable")
         self.assertIs(result["reviewable"], True)
         self.assertEqual(result["repair_candidate"]["scope"], "research-lab")
-        self.assertIs(result["repair_candidate"]["requires_ai_decision"], True)\n        self.assertIs(result["repair_candidate"]["human_gate_required"], False)
+        self.assertIs(result["repair_candidate"]["requires_ai_decision"], True)
+        self.assertIs(result["repair_candidate"]["human_gate_required"], False)
         self.assertIs(result["repair_candidate"]["single_repair_only"], True)
         self.assert_safe(result)
 
