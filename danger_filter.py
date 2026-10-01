@@ -11,7 +11,7 @@
 # リスク情報を候補へ付加する。
 
 
-DANGER_FILTER_VERSION = "1.1"
+DANGER_FILTER_VERSION = "1.2"
 
 MIN_CONFIDENCE = 0.10
 MIN_PROFIT = 0
@@ -60,11 +60,15 @@ def evaluate_candidate(candidate):
     expected_profit = candidate.get("expected_profit", 0)
     expected_profit_rate = candidate.get("expected_profit_rate", 0)
     confidence = candidate.get("confidence", 0)
+    success_probability = candidate.get("success_probability")
+
+    if success_probability is None:
+        success_probability = 0
 
     multiplier = calculate_multiplier(candidate)
 
     risk_level = classify_risk(
-        confidence,
+        success_probability,
         multiplier
     )
 
@@ -100,7 +104,9 @@ def evaluate_candidate(candidate):
         "filter_version": DANGER_FILTER_VERSION,
         "reasons": reasons,
         "risk_level": risk_level,
-        "success_rate": confidence,
+        "information_confidence": confidence,
+        "success_probability": success_probability,
+        "success_rate": success_probability,
         "multiplier": round(multiplier, 2),
         "risk_summary": {
             "minimum_confidence": MIN_CONFIDENCE,
@@ -124,6 +130,8 @@ def filter_candidates(candidates):
 
             allowed_candidate["risk"] = {
                 "risk_level": decision["risk_level"],
+                "information_confidence": decision["information_confidence"],
+                "success_probability": decision["success_probability"],
                 "success_rate": decision["success_rate"],
                 "multiplier": decision["multiplier"],
                 "filter_version": decision["filter_version"],
@@ -138,6 +146,8 @@ def filter_candidates(candidates):
                     "reasons": decision["reasons"],
                     "risk": {
                         "risk_level": decision["risk_level"],
+                        "information_confidence": decision["information_confidence"],
+                        "success_probability": decision["success_probability"],
                         "success_rate": decision["success_rate"],
                         "multiplier": decision["multiplier"],
                         "filter_version": decision["filter_version"],
