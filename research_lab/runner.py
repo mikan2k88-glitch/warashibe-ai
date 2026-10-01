@@ -17,6 +17,7 @@ HISTORY_LIMIT = 120
 
 PROFILES = {
     "build": [
+        "research_lab.test_product_policy_bridge",
         "research_lab.test_product_start_capital",
         "research_lab.test_product_capital_policy",
         "research_lab.test_problem_repair_candidate",
