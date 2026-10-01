@@ -1,4 +1,5 @@
 from capital_filter import evaluate_capital_fit
+from candidate_engine import create_candidate
 from policy_engine import POLICY_VERSION, evaluate_trade
 from research_lab.repair_execution_controller import control_repair_execution
 
@@ -51,6 +52,59 @@ def main():
             candidate_decision["rule_summary"]["full_capital_purchase_required"]
             == policy_decision["rule_summary"]["full_capital_purchase_required"]
         )
+
+    pg004_plan = control_repair_execution(
+        state="plan",
+        planning={
+            "recurrence_result": {
+                "status": "recurrence_not_contained",
+                "guardrail_effective": False,
+            },
+            "repair_kind": "tighten_gate",
+            "target": "candidate evaluation contract",
+            "rationale": "normalize v1 product evaluation fields on every candidate",
+            "path": "candidate_engine.py",
+            "change_summary": "add a normalized evaluation contract with explicit unassessed values",
+            "expected_test": "research_lab.test_product_candidate_contract",
+        },
+    )
+    assert pg004_plan["controller_state"] == "write"
+    assert pg004_plan["execution_plan"]["path"] == "candidate_engine.py"
+
+    incomplete = create_candidate(
+        name="incomplete",
+        purchase_price=3_000,
+        expected_sale_price=4_500,
+        source="test",
+        confidence=0.8,
+    )
+    evaluation = incomplete["evaluation"]
+    assert evaluation["purchase_price"] == 3_000
+    assert evaluation["expected_sale_price"] == 4_500
+    assert evaluation["liquidity_score"] is None
+    assert evaluation["estimated_days_to_sell"] is None
+    assert evaluation["estimated_fees"] is None
+    assert evaluation["authenticity_status"] == "unassessed"
+    assert evaluation["return_risk"] == "unassessed"
+
+    complete = create_candidate(
+        name="complete",
+        purchase_price=3_000,
+        expected_sale_price=4_500,
+        source="test",
+        confidence=0.8,
+        liquidity_score=0.7,
+        estimated_days_to_sell=7,
+        estimated_fees=450,
+        authenticity_status="verified",
+        return_risk="low",
+    )
+    evaluation = complete["evaluation"]
+    assert evaluation["liquidity_score"] == 0.7
+    assert evaluation["estimated_days_to_sell"] == 7
+    assert evaluation["estimated_fees"] == 450
+    assert evaluation["authenticity_status"] == "verified"
+    assert evaluation["return_risk"] == "low"
 
     repair = control_repair_execution(
         state="ci",
