@@ -8,7 +8,7 @@
 # ・スコア順に候補をランキングする
 
 
-RANKING_VERSION = "1.2"
+RANKING_VERSION = "1.3"
 
 
 def calculate_expected_value(candidate):
@@ -28,12 +28,14 @@ def calculate_expected_value(candidate):
         0
     )
 
-    confidence = candidate.get(
-        "confidence",
-        0
+    success_probability = candidate.get(
+        "success_probability"
     )
 
-    return expected_sale_price * confidence
+    if success_probability is None:
+        success_probability = 0
+
+    return expected_sale_price * success_probability
 
 
 def calculate_expected_profit(candidate):
@@ -99,6 +101,13 @@ def calculate_score(candidate):
         0
     )
 
+    success_probability = candidate.get(
+        "success_probability"
+    )
+
+    if success_probability is None:
+        success_probability = 0
+
     demand = candidate.get(
         "demand",
         {}
@@ -146,7 +155,8 @@ def calculate_score(candidate):
 
     score = (
         risk_adjusted_profit_rate * 100
-        + confidence * 50
+        + success_probability * 40
+        + confidence * 10
         + expected_profit / 100
         + demand_score * 20
         + freshness_score * 10
