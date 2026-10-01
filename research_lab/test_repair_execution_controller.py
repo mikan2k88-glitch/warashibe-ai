@@ -41,7 +41,7 @@ def main():
     assert complete["milestone_reached"] is True
     assert complete["next_action"] == "advance_problem_queue"
 
-    failed = control_repair_execution(
+    live = control_repair_execution(\n        state="ci",\n        write_evidence={"before_sha": "5b4e490325ea4816df86b8a658c1528ff8785998",\n                        "after_sha": "5412354e4610e344b904b4a3ffdeb352f5f4edcd",\n                        "path": "research_lab/repair_execution_controller.py",\n                        "expected_test": "research_lab.test_repair_execution_controller"},\n        ci_evidence={"cycle_id": "p0-live-1027", "repair_id": "exact-sha-finalization",\n                     "observed_sha": "5412354e4610e344b904b4a3ffdeb352f5f4edcd",\n                     "ci_status": "completed", "ci_conclusion": "success"})\n    assert live["status"] == "repair_pipeline_complete"\n    assert live["milestone_reached"] is True\n    assert live["next_action"] == "advance_problem_queue"\n    assert live["audit_ready"] is True\n    assert live["ledger_ready"] is True\n\n    failed = control_repair_execution(
         state="ci", write_evidence=WRITE,
         ci_evidence={"cycle_id": "cycle-controller", "repair_id": "repair-controller",
                      "observed_sha": B, "ci_status": "completed",
