@@ -64,7 +64,7 @@ def allowed_path(raw: str) -> Path:
 def fixed_tests(target: Path) -> tuple[bool, str]:
     checks = [
         [sys.executable, "-m", "py_compile", str(target)],
-        [sys.executable, "test_runner.py"],
+        [sys.executable, "-m", "research_lab.runner"],
     ]
     logs: list[str] = []
     for command in checks:
