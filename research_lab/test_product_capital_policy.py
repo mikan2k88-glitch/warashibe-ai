@@ -171,6 +171,52 @@ def main():
     assert stale_queue["status"] == "degraded"
     assert stale_queue["next_action"] == "inspect_queue"
 
+    # PG-009 targeted RED: one read-only call must be able to fetch
+    # an eBay Browse payload and ingest it into canonical market evidence.
+    from research_lab.ebay_browse_ingestion_bridge import (
+        fetch_and_ingest_browse_search,
+    )
+
+    fetch_calls = []
+    def _fake_fetch(query, access_token, *, marketplace_id, limit, timeout):
+        fetch_calls.append({
+            "query": query,
+            "token": access_token,
+            "marketplace_id": marketplace_id,
+            "limit": limit,
+            "timeout": timeout,
+        })
+        return {
+            "itemSummaries": [{
+                "itemId": "pg009|1",
+                "title": "PG-009 Used Camera",
+                "price": {"value": "3000", "currency": "JPY"},
+                "categories": [{"categoryName": "Digital Cameras"}],
+            }]
+        }
+
+    pg009 = fetch_and_ingest_browse_search(
+        "used camera",
+        "test-token",
+        marketplace_id="EBAY_JP",
+        limit=5,
+        timeout=3,
+        fetch_payload=_fake_fetch,
+        observed_at="2026-10-02T00:00:00+00:00",
+    )
+    assert fetch_calls == [{
+        "query": "used camera",
+        "token": "test-token",
+        "marketplace_id": "EBAY_JP",
+        "limit": 5,
+        "timeout": 3,
+    }]
+    assert pg009.accepted_count == 1
+    assert pg009.accepted[0].external_id == "pg009|1"
+    assert pg009.accepted[0].source == "ebay_browse"
+    assert pg009.accepted[0].purchase_price == 3000
+    assert pg009.accepted[0].metadata["asking_price_only"] is True
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
