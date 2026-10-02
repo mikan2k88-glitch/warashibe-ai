@@ -86,3 +86,54 @@ Yahoo!商品検索結果では配送サイズ・重量が常に保証されな�
 - Yahoo!ショッピング 商品検索(v3): https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html
 - リクエストURL: https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch
 - 必須資格情報: appid (Client ID)
+
+
+## 2026-10-02 追記：PG-013 楽天Product Search＋国内JAN比較
+
+PG-013では、第2の国内公式read-only providerとして楽天Product Searchを追加し、
+Yahoo!ショッピングとの同一商品照合をJANコードで行う。
+
+楽天公式仕様:
+- Rakuten Product Search API:
+  `https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801`
+- `productCode` はJANコードとして定義される。
+- App IDとAccess Keyが必要。
+- Access KeyはHTTP headerでも送信可能。
+- `formatVersion=2` を使用し、flat JSON itemsを受け取る。
+
+実装:
+- `research_lab/rakuten_product_ingestion_bridge.py`
+- `research_lab/domestic_market_comparison.py`
+- Yahoo側は `janCode` を canonical metadata `gtin` へ流す。
+
+安全境界:
+- Rakuten connectorはGET/HTTPS/固定host/固定pathのみ。
+- Access Keyはquery stringへ含めずHTTP headerへ送る。
+- redirect拒否。
+- credential不足はfail-closed。
+- 購入、注文、決済、出品、account mutationなし。
+- 同一商品判定は既存 `market_identity_resolution` を利用。
+- validated GTIN/JANが一致しない候補は `identity_mismatch` として比較しない。
+- fuzzy/AI推測による商品同一化は行わない。
+
+データ経路:
+`Yahoo janCode`
+→ `metadata.gtin`
+
+`Rakuten productCode(JAN)`
+→ `metadata.gtin`
+
+両方を `market_identity_resolution.identity_key()` で照合し、
+同一identityが確定した場合だけasking-priceを比較する。
+
+実証:
+- RED: `5cf6c024eafc86e23226dbb9218697a5e0df51d6`
+  - CI #1100 failure。
+- Yahoo JAN bridge: `dbe21b262acbc25a66e7f8a621fe8e462c7366fe`
+  - CI #1101 failure（楽天/比較モジュール未実装を継続確認）。
+- Rakuten connector: `4605428ef0c5db7265c7b32e0ec1cc1a5f37174f`
+  - CI #1102 failure（比較モジュール未実装を確認）。
+- domestic comparison: `e248c9ebc0799e5b387a00e11df5a900ca36c3e1`
+  - CI #1103 success。
+- safety regression: `fea68449f9ed7ba115366a7f937c13a41cb769db`
+  - CI #1104 success。
