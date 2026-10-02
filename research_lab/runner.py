@@ -26,6 +26,7 @@ PROFILES = {
         "research_lab.test_history_dashboard_api",
         "research_lab.test_preflight_safety_gate",
         "research_lab.test_human_pilot_session",
+        "research_lab.test_purchase_intent",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
