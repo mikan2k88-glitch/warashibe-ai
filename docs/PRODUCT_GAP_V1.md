@@ -77,6 +77,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-025 | Human Go/No-Go Decision | Post-v1拡張 | PG-024 | DONE（開発エンドポイント到達） |
 | PG-026 | Live Pilot Guard | Post-v1拡張 | PG-025 | DONE（開発エンドポイント到達） |
 | PG-027 | Live Commerce Adapter Interface | Post-v1拡張 | PG-026 | DONE（開発エンドポイント到達） |
+| PG-028 | Single Purchase Execution | Post-v1拡張 | PG-027 | DONE（開発エンドポイント到達・実注文未実行） |
 
 ## 4. 依存関係
 
@@ -2113,3 +2114,119 @@ PG-027到達時点で、
 
 submit_order / get_order_status / cancel_order はPG-028 Human Gate前のため必ずblocked。
 次のPG-028は初めて実金銭が動く可能性があるため、ここでHuman Gateを置く。
+
+
+### PG-028 — Single Purchase Execution 開発エンドポイント到達
+
+目的:
+- PG-027 live-adapter validation後に、明示的Human Final Buyを1注文だけ実行可能な契約へ変換する。
+- Human Final Buy / expiry / provider / item / quantity / max cost / approved budget / kill switch / live enable / idempotencyを全て強制する。
+- 開発runでは実注文を発生させず、fake adapterと合成DB proofのみで実行境界を検証する。
+
+実装:
+- `research_lab/human_final_buy.py`
+- `research_lab/single_purchase_execution.py`
+- `research_lab/supabase_pg028_repositories.py`
+- `research_lab/test_single_purchase_execution.py`
+- `docs/migrations/2026-10-03_pg028_single_purchase_execution.sql`
+- build profileへPG-028 contract testを追加。
+
+Human Final Buy:
+- source validationは `live_adapter_validation_ready`。
+- decision=`buy / do_not_buy`。
+- provider / item / quantity=1を固定。
+- validated total costとapproved pilot budgetを再確認。
+- max total costを明示。
+- confirmed_at / expires_atを保持。
+- `execution_authorized_for_single_order=True` はdecision=buyの場合のみ。
+
+Single Purchase Execution:
+- explicit `live_execution_enabled=True` が必要。
+- emergency kill switch engaged時は必ずblocked。
+- Human Final Buy expiry前のみ実行可能。
+- provider / item / quantity / total cost一致必須。
+- idempotency key必須。
+- 同一idempotency key再呼び出しではadapterを再度呼ばず、保存済み結果を返す。
+- execution count=1。
+- adapter charged amountがHuman Final Buy上限またはapproved budgetを超えた場合は異常扱い。
+- live_execution_enabled=False時は `single_purchase_blocked / live_execution_disabled`。
+- kill switch時は `single_purchase_blocked / emergency_kill_switch_engaged`。
+
+検証:
+- fake live adapterによる成功パス:
+  - order reference=`fake-order-028`
+  - charged amount=2,950円
+  - execution count=1
+- 同一idempotency key再実行:
+  - `idempotency_reused=True`
+  - adapter call countは1のまま。
+- disabled / kill-switch pathはadapter callなしでblocked。
+
+Supabase:
+- `public.warashibe_human_final_buy_confirmations`
+  - confirmation_key unique。
+  - decision check buy/do_not_buy。
+  - confirmed_at / expires_at。
+  - RLS enabled。
+  - anon/authenticated grants明示revoke。
+- `public.warashibe_single_purchase_executions`
+  - idempotency_key unique。
+  - confirmation_key unique。
+  - Human Final Buyへのforeign key。
+  - RLS enabled。
+  - anon/authenticated grants明示revoke。
+- public/anon/authenticated policyなし。
+- server-side専用closed-by-default。
+
+実DB proof:
+- `pg028-final-buy-proof-20261003`
+- `pg028-idem-proof-20261003`
+- synthetic DB proofのみ。
+- execution_environment=`synthetic_db_proof`。
+- network_call_attempted=false。
+- external_write_attempted=false。
+- decision=buy / max_total_cost=3,000円。
+- insert / join read-back / cleanup成功。
+- 最終row count=0。
+- **実際の外部注文・決済は行っていない。**
+
+Supabase current security verification:
+- current Supabase API security docsを再確認。
+- 両PG-028テーブルでRLS enabled。
+- anon SELECT/INSERT=false。
+- authenticated SELECT/INSERT=false。
+- advisorのrls_enabled_no_policyは、明示revoke＋server-side closed-by-default設計では意図したINFO。
+
+CI:
+- contract `eb201ccf4d563f1d0064b24c10057c5a1c2a1f4d` — #1194 success。
+- RED `e21c3285b9174eb528242958d1133986adc8f596` — #1195 failure。
+- execution engine `5d77da52aa5b0cb81a25a64067b20fcfc8cda4d8` — #1196 success。
+- Human Final Buy artifact `02224bdf7eaa41388e9742cabd546e4875c47045` — #1197 success。
+- Human Final Buy integration test `dbc5d48bd851d45096c4df6b32eed7fdfa6266cd` — #1198 success。
+- repositories `5ca31248f7a490126277f8d4957cf7993742824f` — #1199 success。
+- migration source `6bb9f65ea19a8040666545f98f085bbf5169eb33` — #1200 success。
+
+判定:
+- Human Final Buy artifact: 完了。
+- single-order execution contract: 完了。
+- kill switch: 完了。
+- explicit live enable gate: 完了。
+- idempotency / duplicate execution prevention: 完了。
+- append-only audit schema: 完了。
+- synthetic DB proof: 完了。
+- **real marketplace order: 未実行。**
+- **PG-028開発エンドポイント: 到達。**
+
+## 28. PG-028 開発エンドポイント
+
+PG-028到達時点で、
+`Live Pilot Guard`
+→ `Live Commerce Adapter validation`
+→ `Human Final Buy`
+→ `Single Purchase Execution engine`
+→ `idempotent execution audit`
+まで実装済み。
+
+ただし今回の開発runでは実注文を送信していない。
+実際の外部注文には、具体的な商品・provider live adapter・有効な認証情報・最新Guard/validation・Human Final Buyが別途必要。
+次の自然な開発対象はPG-029 Purchase Receipt / Reconciliation。
