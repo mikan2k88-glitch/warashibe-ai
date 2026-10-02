@@ -12,6 +12,7 @@ def _guard():
         "guard_passed":True,
         "eligible_for_live_adapter_validation":True,
         "quantity":1,
+        "approved_budget_jpy":3000,
         "provider":"yahoo_shopping",
         "human_final_buy_required":True,
         "live_execution_authorized":False,
