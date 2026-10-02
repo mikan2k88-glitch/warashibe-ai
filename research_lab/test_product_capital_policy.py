@@ -111,6 +111,66 @@ def main():
     else:
         raise AssertionError("duplicate record_key must fail closed")
 
+    # PG-008 targeted RED: GPT scheduled supervision needs one deterministic
+    # contract for classifying GitHub/Supabase/Render operational health.
+    from research_lab.system_health_contract import evaluate_system_health
+
+    healthy = evaluate_system_health({
+        "github": {
+            "head_sha": "abc",
+            "ci_head_sha": "abc",
+            "ci_status": "completed",
+            "ci_conclusion": "success",
+        },
+        "supabase": {
+            "read_ok": True,
+            "write_ok": True,
+            "stale_pending_count": 0,
+        },
+        "render": {"deploy_status": "live"},
+        "product": {"next_gap": "PG-008"},
+    })
+    assert healthy["status"] == "healthy"
+    assert healthy["next_action"] == "continue_product_gap"
+    assert healthy["anomalies"] == []
+
+    broken_ci = evaluate_system_health({
+        "github": {
+            "head_sha": "abc",
+            "ci_head_sha": "abc",
+            "ci_status": "completed",
+            "ci_conclusion": "failure",
+        },
+        "supabase": {
+            "read_ok": True,
+            "write_ok": True,
+            "stale_pending_count": 0,
+        },
+        "render": {"deploy_status": "live"},
+        "product": {"next_gap": "PG-008"},
+    })
+    assert broken_ci["status"] == "blocked"
+    assert broken_ci["next_action"] == "repair_current_problem"
+    assert "github_ci_failure" in broken_ci["anomalies"]
+
+    stale_queue = evaluate_system_health({
+        "github": {
+            "head_sha": "abc",
+            "ci_head_sha": "abc",
+            "ci_status": "completed",
+            "ci_conclusion": "success",
+        },
+        "supabase": {
+            "read_ok": True,
+            "write_ok": True,
+            "stale_pending_count": 1,
+        },
+        "render": {"deploy_status": "live"},
+        "product": {"next_gap": "PG-008"},
+    })
+    assert stale_queue["status"] == "degraded"
+    assert stale_queue["next_action"] == "inspect_queue"
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
