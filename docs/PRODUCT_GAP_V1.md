@@ -68,6 +68,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-016 | Human Review API/UI＋approve/reject監査記録 | Post-v1拡張 | PG-015 | DONE（開発エンドポイント到達） |
 | PG-017 | Approved Proposal → Dry-run Commerce Plan | Post-v1拡張 | PG-016 | DONE（開発エンドポイント到達） |
 | PG-018 | Realistic Cost / Profit / Stop-loss Model | Post-v1拡張 | PG-017 | DONE（開発エンドポイント到達） |
+| PG-019 | Human Review / Price History Dashboard | Post-v1拡張 | PG-018 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1343,3 +1344,85 @@ PG-018到達時点で、
 
 経済合理性が高くても実購入・決済・販売は開始しない。
 次の自然な開発対象は、過去価格・review・plan・economic assessmentをまとめるHuman Review/Price History Dashboardである。
+
+
+### PG-019 — Human Review / Price History Dashboard 開発エンドポイント到達
+
+目的:
+- PG-015〜018の履歴をidentity単位で一画面へ統合する。
+- price / proposal / review / dry-run plan / economicsをread-onlyで確認可能にする。
+- 履歴閲覧をcommerce executionへ接続しない。
+
+実装:
+- `research_lab/history_dashboard_api.py`
+- `research_lab/test_history_dashboard_api.py`
+- `app.py` へ `history_dashboard_bp` 登録。
+- build profileへPG-019 contract testを追加。
+
+API/UI:
+- `GET /history`
+  - browser dashboard。
+  - Identity Key / Review Code入力。
+  - 閲覧専用であることを明示。
+- `POST /api/history`
+  - identity単位で以下をまとめて返す:
+    - cross-market records
+    - Human Review decisions
+    - dry-run plans
+    - economic assessments
+  - latest snapshot:
+    - lowest/highest asking price
+    - latest review decision
+    - latest plan key
+    - expected net profit
+    - break-even
+    - stop-loss
+    - economically viable
+- review codeはconstant-time比較。
+- runtime dependency不足時はfail-closed。
+
+安全境界:
+- read-only。
+- 新規DB mutationなし。
+- `execution_triggered=False`
+- `commerce_authorized=False`
+- `external_action_authorized=False`
+- purchase/payment/sale actionなし。
+
+CI:
+- contract commit: `62ecbcadf1e86de5d1a88997c4d9d0779b13f969`
+  - CI #1140 success。
+- RED activation: `8507a29a8aeaf2e360c2d12de505f8a8927b696e`
+  - CI #1141 failure。
+- repair: `751aaccf8a9d1ed999da49e109fa3b8342595a86`
+  - CI #1142 success。
+- route registration: `c3e312b032977fd3edf185b211c983130f42918b`
+  - CI #1143 success。
+
+Render:
+- exact SHA `c3e312b032977fd3edf185b211c983130f42918b` live。
+- `GET /history` live画面確認済み。
+- heading: `Warashibe AI History Dashboard`
+- 「閲覧専用。ここから購入・決済・販売は実行されない」表示を確認。
+
+判定:
+- cross-market history view: 完了。
+- review history view: 完了。
+- dry-run plan history view: 完了。
+- economics history view: 完了。
+- browser dashboard: 完了。
+- live route: 完了。
+- commerce mutation: なし。
+- live commerce: blocked。
+- **PG-019開発エンドポイント: 到達。**
+
+## 19. PG-019 開発エンドポイント
+
+PG-019到達時点で、
+`market observation history`
+→ `Human Review history`
+→ `dry-run plan history`
+→ `economics history`
+をidentity単位で人間が一画面確認できる。
+
+次の開発対象はPG-020のPre-flight Safety Gateである。
