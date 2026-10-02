@@ -330,6 +330,56 @@ def main():
     else:
         raise AssertionError("over-capital commerce request must fail closed")
 
+    # PG-011 targeted RED: initial real-world operation must enforce
+    # Tokyo/small-parcel physical constraints and classify domestic data sources.
+    from research_lab.initial_physical_operation_policy import (
+        evaluate_initial_physical_fit,
+        domestic_market_access_snapshot,
+    )
+
+    small = evaluate_initial_physical_fit({
+        "package_size_class": "compact",
+        "weight_grams": 350,
+        "fragility_score": 0.1,
+        "storage_score": 0.9,
+        "domestic_shipping": True,
+        "shipping_cost_jpy": 450,
+    })
+    assert small["allowed"] is True
+    assert small["physical_fit"] == "preferred"
+
+    large = evaluate_initial_physical_fit({
+        "package_size_class": "large",
+        "weight_grams": 8000,
+        "fragility_score": 0.2,
+        "storage_score": 0.2,
+        "domestic_shipping": True,
+        "shipping_cost_jpy": 2200,
+    })
+    assert large["allowed"] is False
+    assert "package_too_large" in large["reasons"]
+
+    unknown = evaluate_initial_physical_fit({
+        "package_size_class": None,
+        "weight_grams": None,
+        "fragility_score": None,
+        "storage_score": None,
+        "domestic_shipping": None,
+        "shipping_cost_jpy": None,
+    })
+    assert unknown["allowed"] is False
+    assert unknown["physical_fit"] == "insufficient_data"
+
+    markets = domestic_market_access_snapshot()
+    assert markets["target_region"] == "Tokyo, Japan"
+    assert markets["initial_package_policy"] == "small_first"
+    assert markets["providers"]["rakuten_ichiba"]["access"] == "official_read_only_api"
+    assert markets["providers"]["yahoo_shopping"]["access"] == "official_read_only_api"
+    assert markets["providers"]["ebay_browse"]["role"] == "comparison_market"
+    assert markets["providers"]["mercari"]["access"] == "research_only_until_official_path_confirmed"
+    assert markets["providers"]["yahoo_auctions"]["access"] == "research_only_until_official_path_confirmed"
+    assert markets["commerce_authorized"] is False
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
