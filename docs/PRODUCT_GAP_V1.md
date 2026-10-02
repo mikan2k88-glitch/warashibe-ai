@@ -72,6 +72,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-020 | Pre-flight Safety Gate | Post-v1拡張 | PG-019 | DONE（開発エンドポイント到達） |
 | PG-021 | Human Pilot Session | Post-v1拡張 | PG-020 | DONE（開発エンドポイント到達） |
 | PG-022 | Purchase Intent Record | Post-v1拡張 | PG-021 | DONE（開発エンドポイント到達） |
+| PG-023 | Commerce Adapter Sandbox | Post-v1拡張 | PG-022 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1710,3 +1711,73 @@ Purchase Intentは「人間が条件付きで購入意思を記録した」だ�
 `order_submission_authorized=False` と PG-010 live-commerce blockを維持する。
 
 次の自然な開発対象はPG-023 Commerce Adapter Sandboxである。
+
+
+### PG-023 — Commerce Adapter Sandbox 開発エンドポイント到達
+
+目的:
+- PG-022 Purchase Intentを入力に、将来のcommerce adapter呼び出し境界をsandbox/no-opで固定する。
+- purchase/sale要求を受けても外部ネットワークwriteを一切行わない。
+- sandbox試行をappend-only監査保存する。
+
+実装:
+- `research_lab/commerce_adapter_sandbox.py`
+- `research_lab/supabase_sandbox_commerce_attempt_repository.py`
+- `research_lab/test_commerce_adapter_sandbox.py`
+- `docs/migrations/2026-10-03_pg023_sandbox_commerce_attempts.sql`
+- build profileへPG-023 contract testを追加。
+
+adapter contract:
+- `adapter_mode=sandbox_noop`
+- purchase/saleの両要求を `status=sandbox_blocked` で返す。
+- `network_call_attempted=False`
+- `external_write_attempted=False`
+- `order_created=False`
+- `payment_created=False`
+- `listing_created=False`
+- `sale_created=False`
+- `execution_triggered=False`
+- commerce/external/purchase/payment/sale authorizationは全てFalse。
+- reason=`live_commerce_disabled`。
+
+Supabase:
+- table: `public.warashibe_sandbox_commerce_attempts`
+- append-only `attempt_key`。
+- intent/provider/requested_action/result/attempted_atを保持。
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB往復:
+- test key: `pg023-live-proof-20261003`
+- provider=yahoo_shopping / action=submit_purchase。
+- insert/read-back成功。
+- sandbox_noop / network_call_attempted=false / external_write_attempted=false / order_created=false / commerce_authorized=falseを確認。
+- cleanup成功。テストrowは残していない。
+
+CI:
+- contract `992707d0d10c2db5b841f0aaec8a466571e25192` — CI #1163 success。
+- RED `416031c0d10b7f488b3adfaf66ae877733d58741` — CI #1164 failure。
+- implementation `2f65702133e3f0c55591b7b0b93735af6f2f82a1` — CI #1165 success。
+- repository `dc61b234b4be110920b274062da4cecb4eff945c` — CI #1166 success。
+- migration source `0c21be5e8f4acd58e6d8ef787946bdc561be6190` — CI #1167 success。
+
+判定:
+- sandbox purchase adapter: 完了。
+- sandbox sale adapter: 完了。
+- external network/write prohibition: 完了。
+- append-only audit: 完了。
+- live DB roundtrip: 完了。
+- live commerce: blocked。
+- **PG-023開発エンドポイント: 到達。**
+
+## 23. PG-023 開発エンドポイント
+
+PG-023到達時点で、
+`Human Purchase Intent`
+→ `Commerce Adapter Sandbox`
+→ `sandbox_blocked/no-op audit`
+までを一周できる。
+
+このadapterは実注文を実行できない。
+次の開発対象はPG-024 Live-readiness Auditである。
