@@ -31,6 +31,7 @@ PROFILES = {
         "research_lab.test_live_readiness_audit",
         "research_lab.test_human_go_no_go",
         "research_lab.test_live_pilot_guard",
+        "research_lab.test_live_commerce_adapter",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
