@@ -3,8 +3,9 @@
 
 from demand_engine import get_demand
 from value_engine import get_value_transformation
+from research_lab.initial_physical_operation_policy import evaluate_initial_physical_fit
 
-CANDIDATE_VERSION = "1.3"
+CANDIDATE_VERSION = "1.4"
 
 
 def create_candidate(
@@ -21,6 +22,12 @@ def create_candidate(
     estimated_fees=None,
     authenticity_status="unassessed",
     return_risk="unassessed",
+    package_size_class=None,
+    weight_grams=None,
+    shipping_cost_jpy=None,
+    fragility_score=None,
+    storage_score=None,
+    domestic_shipping=None,
 ):
     if metadata is None:
         metadata = {}
@@ -34,6 +41,16 @@ def create_candidate(
         "category": category,
     }
 
+    physical_input = {
+        "package_size_class": package_size_class,
+        "weight_grams": weight_grams,
+        "shipping_cost_jpy": shipping_cost_jpy,
+        "fragility_score": fragility_score,
+        "storage_score": storage_score,
+        "domestic_shipping": domestic_shipping,
+    }
+    physical_policy = evaluate_initial_physical_fit(physical_input)
+
     evaluation = {
         "purchase_price": purchase_price,
         "expected_sale_price": expected_sale_price,
@@ -42,6 +59,10 @@ def create_candidate(
         "estimated_fees": estimated_fees,
         "authenticity_status": authenticity_status,
         "return_risk": return_risk,
+        "physical": {
+            **physical_input,
+            "policy": physical_policy,
+        },
     }
 
     return {
