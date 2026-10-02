@@ -22,6 +22,27 @@ def main():
     assert planned["next_action"] == "execute_single_file_git_write"
     assert planned["execution_plan"]["path"] == "capital_filter.py"
 
+    # PG-006 targeted RED: candidate selection must expose one common
+    # selection record that can be persisted/audited by later product stages.
+    from candidate_engine import create_candidate
+    from candidate_pipeline import evaluate_candidates
+
+    candidate = create_candidate(
+        name="PG-006 exact-capital candidate",
+        purchase_price=10_000,
+        expected_sale_price=12_000,
+        source="product_test",
+        category="book",
+        confidence=0.9,
+        success_probability=0.8,
+    )
+    selection = evaluate_candidates([candidate], 10_000)
+    record = selection["selection_record"]
+    assert record["selected_candidate"] == selection["best_candidate"]
+    assert record["selection_reason"]
+    assert record["strategy_result"] is not None
+    assert "simulation_result" in record
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
