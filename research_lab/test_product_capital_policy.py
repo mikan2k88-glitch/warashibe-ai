@@ -43,6 +43,74 @@ def main():
     assert record["strategy_result"] is not None
     assert "simulation_result" in record
 
+    # PG-007 targeted RED: the product selection record must have a
+    # server-side Supabase repository contract that can write, read back,
+    # and reject duplicate record keys.
+    from research_lab.supabase_selection_record_repository import (
+        SupabaseSelectionRecordRepository,
+    )
+
+    class _Response:
+        def __init__(self, data=None):
+            self.data = data or []
+
+    class _Table:
+        def __init__(self):
+            self.rows = []
+            self._op = None
+            self._payload = None
+            self._key = None
+
+        def insert(self, payload):
+            self._op = "insert"
+            self._payload = dict(payload)
+            return self
+
+        def select(self, _fields):
+            self._op = "select"
+            return self
+
+        def eq(self, key, value):
+            self._key = (key, value)
+            return self
+
+        def limit(self, _count):
+            return self
+
+        def execute(self):
+            if self._op == "insert":
+                key = self._payload["record_key"]
+                if any(row["record_key"] == key for row in self.rows):
+                    raise ValueError("duplicate")
+                self.rows.append(dict(self._payload))
+                return _Response([dict(self._payload)])
+            rows = list(self.rows)
+            if self._key is not None:
+                key, value = self._key
+                rows = [row for row in rows if row.get(key) == value]
+            return _Response([dict(row) for row in rows])
+
+    class _Client:
+        def __init__(self):
+            self.selection_records = _Table()
+
+        def table(self, name):
+            assert name == "warashibe_selection_records"
+            return self.selection_records
+
+    repository = SupabaseSelectionRecordRepository(_Client())
+    stored = repository.append("pg007-test-record", record)
+    loaded = repository.get("pg007-test-record")
+    assert stored["record_key"] == "pg007-test-record"
+    assert loaded["selection_record"] == record
+
+    try:
+        repository.append("pg007-test-record", record)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("duplicate record_key must fail closed")
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
