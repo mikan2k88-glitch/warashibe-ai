@@ -60,7 +60,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | DONE（実証完成・運用確認済み） |
 | PG-009 | 実市場APIからの自動商品取得 | Post-v1拡張 | PG-008 | DONE（開発エンドポイント到達） |
 | PG-010 | 実購入・実決済・実販売の無人実行 | Post-v1拡張 | PG-009 + Human Gate | DONE（安全実行境界・dry-runエンドポイント到達） |
-| PG-011 | P0 research-lab監査チェーンの追加拡張 | 原則不要 | 製品阻害時のみ | Defer |
+| PG-011 | 国内市場アクセス調査＋初期物理運用Policy | Post-v1拡張 | PG-009, PG-010 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -527,3 +527,95 @@ Human Gate・資本上限・idempotency・監査・dry-runを強制する境界�
 
 したがって、**PG-010安全実行境界・dry-run開発エンドポイントは到達済み**と判定する。
 実commerceの有効化はHuman Gateと別途の運用承認を必要とする。
+
+
+### PG-011 — 国内市場アクセス＋初期物理運用Policy 開発エンドポイント到達
+
+目的:
+- 東京での初期実運用を前提に、受取・保管・発送負荷の小さい商品を優先する。
+- 初期段階は小型・軽量・低破損リスク・保管容易・国内配送の商品に絞る。
+- eBay単独依存ではなく、国内公式read-only市場を調査し、複数市場へ拡張できる入口を固定する。
+- 実購入・実決済・実販売はPG-010のHuman Gate / live-block境界を維持する。
+
+国内市場アクセス調査:
+- 楽天市場:
+  - 公式楽天Web Serviceの商品検索APIを確認。
+  - App ID / Access Keyで商品情報取得が可能。
+  - フリマ/C2C/オークション掲載は商品検索API対象外。
+  - PG-011分類: `official_read_only_api`。
+- Yahoo!ショッピング:
+  - 公式商品検索(v3)を確認。
+  - キーワード、JAN、カテゴリ、ブランド、ストア、中古/新品等で検索可能。
+  - PG-011分類: `official_read_only_api`。
+- eBay Browse:
+  - PG-009で実装済みread-only比較市場として維持。
+- メルカリ / Yahoo!オークション:
+  - PG-011時点では自動取得へ採用する公式read-only経路を未確定。
+  - 無理なスクレイピングを行わず `research_only_until_official_path_confirmed` とする。
+
+物理運用Policy:
+- 新規 `research_lab/initial_physical_operation_policy.py`。
+- target region: Tokyo, Japan。
+- initial package policy: `small_first`。
+- preferred package classes: compact / small / 60。
+- 初期上限:
+  - weight <= 2,000g
+  - fragility_score <= 0.4
+  - storage_score >= 0.6
+  - shipping_cost_jpy <= 1,000
+  - domestic_shipping == True
+- 物理データ不足は `insufficient_data` としてfail-closed。
+- commerce authorizationは常にFalse。
+
+PG-011 RED / repair:
+- RED 1:
+  - commit `f3e19cc4550d9c5f98f27e601cf3230ce2e37f8f`
+  - CI #1088 `completed / failure`
+  - `research_lab.initial_physical_operation_policy` 未実装を再現。
+- repair 1:
+  - commit `d27625511ed8f87fa1b108f2d67897b8e8b80832`
+  - 国内市場アクセスsnapshotと初期物理運用Policyを実装。
+  - CI #1089 `completed / success`。
+- RED 2:
+  - commit `459ef8c9e9ae653126f0b59646c8d826ebd50ff5`
+  - CI #1090 `completed / failure`
+  - Candidateが `package_size_class` 等の物理情報を受け取れないことを再現。
+- repair 2:
+  - commit `92f4b9313bcede99bd98c2685baf266d18fb37f2`
+  - `candidate_engine.py` v1.4。
+  - Candidate evaluationへ `physical` 契約を追加。
+  - package size / weight / shipping cost / fragility / storage / domestic shippingを保持し、PG-011 Policy評価を埋め込む。
+  - CI #1091 `completed / success`。
+- contract整合:
+  - commit `05172346b57be1020c1ff2844c519662d64911c0`
+  - Candidate契約テストをphysical評価へ更新。
+  - CI #1092 `completed / success`。
+- 国内市場棚卸し:
+  - commit `5b160e72f6c016e3627505775ecb8678a7c7c02b`
+  - `docs/MARKET_DATA_ACCESS_INVENTORY.md` に公式read-only国内市場分類と物理運用方針を固定。
+  - CI #1093 `completed / success`。
+
+判定:
+- 国内市場アクセス調査: 完了。
+- 初期物理運用Policy: 完了。
+- Candidate物理契約: 完了。
+- small-first fail-closed評価: 完了。
+- 公式read-only / research-only市場分類: 完了。
+- 実commerce境界: PG-010のlive-blockを維持。
+- **PG-011開発エンドポイント: 到達。**
+
+旧PG-011として記載していた「P0 research-lab監査チェーンの追加拡張」は、製品GapではなくDefer研究項目として扱い、具体的な製品阻害が生じた場合のみ再採番する。
+
+## 11. PG-011 開発エンドポイント
+
+PG-011到達時点で、わらしべAIは
+「実市場候補を取得する」だけでなく、
+「東京で現実に受け取り・保管・発送しやすい小型商品か」
+をCandidateの共通評価契約で判定できる。
+
+初期実運用では大型・重量・高破損・高送料・海外配送中心の商品をfail-closedまたは低優先とし、
+国内公式read-only市場を次のconnector候補として扱う。
+
+次の自然な開発対象は、楽天市場またはYahoo!ショッピングのread-only connectorを実装し、
+国内実データ → common observation → Candidate → PG-011 physical policy
+を一周させることである。
