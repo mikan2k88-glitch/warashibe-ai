@@ -23,6 +23,7 @@ PROFILES = {
         "research_lab.test_human_review_api",
         "research_lab.test_dry_run_commerce_plan",
         "research_lab.test_commerce_economics",
+        "research_lab.test_history_dashboard_api",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
