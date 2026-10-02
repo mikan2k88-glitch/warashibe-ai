@@ -10,6 +10,7 @@ REQUIRED_EVALUATION_FIELDS = (
     "estimated_fees",
     "authenticity_status",
     "return_risk",
+    "physical",
 )
 
 
@@ -48,6 +49,8 @@ def main():
     assert evaluation["estimated_fees"] is None
     assert evaluation["authenticity_status"] == "unassessed"
     assert evaluation["return_risk"] == "unassessed"
+    assert evaluation["physical"]["policy"]["allowed"] is False
+    assert evaluation["physical"]["policy"]["physical_fit"] == "insufficient_data"
 
     complete = create_candidate(
         name="complete",
@@ -60,6 +63,12 @@ def main():
         estimated_fees=450,
         authenticity_status="verified",
         return_risk="low",
+        package_size_class="compact",
+        weight_grams=350,
+        shipping_cost_jpy=450,
+        fragility_score=0.1,
+        storage_score=0.9,
+        domestic_shipping=True,
     )
     evaluation = complete["evaluation"]
     assert evaluation["liquidity_score"] == 0.7
@@ -67,6 +76,9 @@ def main():
     assert evaluation["estimated_fees"] == 450
     assert evaluation["authenticity_status"] == "verified"
     assert evaluation["return_risk"] == "low"
+    assert evaluation["physical"]["package_size_class"] == "compact"
+    assert evaluation["physical"]["weight_grams"] == 350
+    assert evaluation["physical"]["policy"]["allowed"] is True
 
 
 if __name__ == "__main__":
