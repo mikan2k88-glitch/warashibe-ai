@@ -404,6 +404,61 @@ def main():
     assert markets["providers"]["yahoo_auctions"]["access"] == "research_only_until_official_path_confirmed"
     assert markets["commerce_authorized"] is False
 
+    # PG-012 targeted RED: Yahoo! Shopping official read-only search
+    # must flow into MarketObservation -> Candidate -> PG-011 physical policy.
+    from research_lab.yahoo_shopping_ingestion_bridge import (
+        fetch_and_ingest_yahoo_shopping_from_environment,
+        yahoo_observation_to_candidate,
+    )
+
+    yahoo_calls = []
+    def _fake_yahoo_fetch(query, appid, *, results, condition, timeout):
+        yahoo_calls.append((query, appid, results, condition, timeout))
+        return {
+            "hits": [{
+                "code": "seller:item-001",
+                "name": "PG-012 Compact Item",
+                "price": 3000,
+                "condition": "used",
+                "url": "https://shopping.yahoo.co.jp/products/example",
+                "seller": {"name": "fixture-store"},
+                "genreCategory": {"name": "small electronics"},
+            }]
+        }
+
+    yahoo_result = fetch_and_ingest_yahoo_shopping_from_environment(
+        "compact item",
+        environ={"YAHOO_SHOPPING_APP_ID": "test-appid"},
+        results=5,
+        condition="used",
+        timeout=3,
+        fetch_payload=_fake_yahoo_fetch,
+        observed_at="2026-10-02T00:00:00+00:00",
+    )
+    assert yahoo_calls == [("compact item", "test-appid", 5, "used", 3)]
+    assert yahoo_result.accepted_count == 1
+    yahoo_observation = yahoo_result.accepted[0]
+    assert yahoo_observation.source == "yahoo_shopping"
+    assert yahoo_observation.currency == "JPY"
+    assert yahoo_observation.purchase_price == 3000
+    assert yahoo_observation.metadata["asking_price_only"] is True
+
+    yahoo_candidate = yahoo_observation_to_candidate(yahoo_observation)
+    assert yahoo_candidate["source"] == "yahoo_shopping"
+    assert yahoo_candidate["evaluation"]["physical"]["policy"]["allowed"] is False
+    assert yahoo_candidate["evaluation"]["physical"]["policy"]["physical_fit"] == "insufficient_data"
+
+    try:
+        fetch_and_ingest_yahoo_shopping_from_environment(
+            "compact item",
+            environ={},
+            fetch_payload=_fake_yahoo_fetch,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "Yahoo! Shopping app ID is not configured"
+    else:
+        raise AssertionError("missing Yahoo app ID must fail closed")
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
