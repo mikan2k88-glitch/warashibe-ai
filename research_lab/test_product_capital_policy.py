@@ -658,6 +658,63 @@ def main():
     assert mismatch["status"] == "identity_mismatch"
     assert mismatch["lowest_asking_price_jpy"] is None
 
+    # PG-014 targeted RED: deterministic physical evidence with matching
+    # GTIN must enrich a domestic candidate and only then allow a proposal.
+    from research_lab.real_market_adapter import observation_to_candidate
+    from research_lab.physical_evidence_enrichment import (
+        enrich_candidate_with_physical_evidence,
+    )
+    from research_lab.cross_market_proposal import (
+        build_cross_market_proposal,
+    )
+
+    pg014_candidate = observation_to_candidate(rakuten_observation)
+    assert pg014_candidate["metadata"]["gtin"] == "4901234567894"
+    assert pg014_candidate["evaluation"]["physical"]["policy"]["physical_fit"] == "insufficient_data"
+
+    physical_evidence = {
+        "gtin": "4901234567894",
+        "source_kind": "manufacturer_spec",
+        "source_ref": "manufacturer:pg014-camera",
+        "observed_at": "2026-10-02T00:00:00+00:00",
+        "package_size_class": "compact",
+        "weight_grams": 420,
+        "shipping_cost_jpy": 450,
+        "fragility_score": 0.2,
+        "storage_score": 0.9,
+        "domestic_shipping": True,
+    }
+    enriched = enrich_candidate_with_physical_evidence(
+        pg014_candidate,
+        physical_evidence,
+    )
+    assert enriched["status"] == "enriched"
+    assert enriched["candidate"]["evaluation"]["physical"]["policy"]["allowed"] is True
+    assert enriched["candidate"]["metadata"]["physical_evidence"]["source_kind"] == "manufacturer_spec"
+
+    proposal = build_cross_market_proposal(
+        comparison,
+        enriched["candidate"],
+    )
+    assert proposal["status"] == "proposal_ready"
+    assert proposal["proposal_type"] == "review_candidate"
+    assert proposal["candidate_source"] == "rakuten_product"
+    assert proposal["reference_price_spread_jpy"] == 200
+    assert proposal["human_review_required"] is True
+    assert proposal["commerce_authorized"] is False
+    assert proposal["external_action_authorized"] is False
+
+    mismatched_evidence = dict(
+        physical_evidence,
+        gtin="4905524535815",
+    )
+    rejected_enrichment = enrich_candidate_with_physical_evidence(
+        pg014_candidate,
+        mismatched_evidence,
+    )
+    assert rejected_enrichment["status"] == "rejected"
+    assert rejected_enrichment["reason"] == "identity_mismatch"
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
