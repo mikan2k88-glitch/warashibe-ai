@@ -40,3 +40,49 @@
 - Yahoo!ショッピング API一覧: https://developer.yahoo.co.jp/webapi/shopping/
 
 PG-011では市場への購入・出品・決済操作を追加しない。国内市場APIの実HTTP connector実装は次の独立PGで行い、まずアクセス可否・データ契約・物理運用Policyを固定する。
+
+
+## 2026-10-02 追記：PG-012 Yahoo!ショッピング read-only connector 実装
+
+PG-012では、国内公式read-only市場の最初の実装対象として Yahoo!ショッピング 商品検索(v3) を採用した。
+
+実装:
+- `research_lab/yahoo_shopping_ingestion_bridge.py`
+- 許可先:
+  - scheme: `https`
+  - host: `shopping.yahooapis.jp`
+  - path: `/ShoppingWebService/V3/itemSearch`
+  - method: `GET`
+- query / results / condition(new|used) を明示的に組み立てる。
+- redirectを拒否する。
+- 注文、決済、出品、account mutationのAPIは実装しない。
+- `YAHOO_SHOPPING_APP_ID` は環境変数からのみ取得し、未設定時はfail-closed。
+- Client IDをMarketObservation / Candidate /ログ用recordへ含めない。
+
+データ経路:
+`Yahoo! Shopping itemSearch JSON`
+→ `yahoo_search_to_records()`
+→ `live_market_evidence_ingestion.ingest_records()`
+→ `MarketObservation`
+→ `real_market_adapter.observation_to_candidate()`
+→ `Candidate evaluation.physical.policy`
+
+Yahoo!商品検索結果では配送サイズ・重量が常に保証されないため、PG-012では未知の物理情報を推測しない。
+`package_size_class / weight_grams / shipping_cost_jpy / fragility_score / storage_score / domestic_shipping`
+が未取得の場合はPG-011の `insufficient_data` としてfail-closedし、商品を自動購入可能へ昇格させない。
+
+実証:
+- RED: `3f18d25e0799110d3e13c37527955951d1855b4e`
+  - CI #1095 failure
+  - connector未実装を再現。
+- repair: `d20844d311aceadbf9ddb86fc3452ae4350bedb4`
+  - Yahoo read-only connectorを追加。
+  - CI #1096 success。
+- safety regression: `be63828e6c30dd5b3a70850b4a7c49056fdaf7ae`
+  - GET/HTTPS/固定host/固定path、redirect拒否、資格情報不足fail-closedを固定。
+  - CI #1097 success。
+
+公式仕様確認:
+- Yahoo!ショッピング 商品検索(v3): https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html
+- リクエストURL: https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch
+- 必須資格情報: appid (Client ID)
