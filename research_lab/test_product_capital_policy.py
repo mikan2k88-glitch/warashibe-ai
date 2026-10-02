@@ -579,6 +579,85 @@ def main():
     assert comparison["price_spread_jpy"] == 200
     assert comparison["commerce_authorized"] is False
 
+    from dataclasses import replace
+    from urllib.parse import parse_qs, urlparse
+    from unittest.mock import patch
+    from research_lab import rakuten_product_ingestion_bridge as rakuten_bridge
+
+    rakuten_request = rakuten_bridge.build_product_search_request(
+        "4901234567894",
+        "test-appid",
+        "test-access-key",
+        hits=7,
+    )
+    rakuten_url = urlparse(rakuten_request.full_url)
+    rakuten_params = parse_qs(rakuten_url.query)
+    assert rakuten_request.get_method() == "GET"
+    assert rakuten_url.scheme == "https"
+    assert rakuten_url.netloc == "openapi.rakuten.co.jp"
+    assert rakuten_url.path == "/ichibaproduct/api/Product/Search/20250801"
+    assert rakuten_params["productCode"] == ["4901234567894"]
+    assert rakuten_params["applicationId"] == ["test-appid"]
+    assert "accessKey" not in rakuten_params
+    assert any(
+        key.lower() == "accesskey" and value == "test-access-key"
+        for key, value in rakuten_request.headers.items()
+    )
+
+    for wrong_url in (
+        "https://other.invalid/ichibaproduct/api/Product/Search/20250801",
+        "http://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801",
+        "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701",
+    ):
+        with patch.object(rakuten_bridge, "RAKUTEN_PRODUCT_SEARCH_URL", wrong_url):
+            try:
+                rakuten_bridge.build_product_search_request(
+                    "4901234567894",
+                    "test-appid",
+                    "test-access-key",
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("non-allowlisted Rakuten destination accepted")
+
+    try:
+        rakuten_bridge.NoRedirectHandler().redirect_request(
+            rakuten_request,
+            None,
+            302,
+            "redirect",
+            {},
+            "https://other.invalid/collect",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Rakuten redirect accepted")
+
+    try:
+        fetch_and_ingest_rakuten_product_from_environment(
+            "4901234567894",
+            environ={},
+            fetch_payload=_fake_rakuten_fetch,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "Rakuten application ID is not configured"
+    else:
+        raise AssertionError("missing Rakuten application ID must fail closed")
+
+    mismatched = replace(
+        rakuten_observation,
+        metadata={**rakuten_observation.metadata, "gtin": "4905524535815"},
+    )
+    mismatch = compare_domestic_observations(
+        yahoo_jan_observation,
+        mismatched,
+    )
+    assert mismatch["same_identity"] is False
+    assert mismatch["status"] == "identity_mismatch"
+    assert mismatch["lowest_asking_price_jpy"] is None
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
