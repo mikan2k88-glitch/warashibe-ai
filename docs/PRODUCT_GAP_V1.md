@@ -67,6 +67,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-015 | cross-market proposal/comparisonのSupabase永続化＋鮮度評価 | Post-v1拡張 | PG-014 | DONE（開発エンドポイント到達） |
 | PG-016 | Human Review API/UI＋approve/reject監査記録 | Post-v1拡張 | PG-015 | DONE（開発エンドポイント到達） |
 | PG-017 | Approved Proposal → Dry-run Commerce Plan | Post-v1拡張 | PG-016 | DONE（開発エンドポイント到達） |
+| PG-018 | Realistic Cost / Profit / Stop-loss Model | Post-v1拡張 | PG-017 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1243,3 +1244,102 @@ PG-017到達時点で、
 
 dry-run planは取引計画の監査artifactであり、注文・決済・出品・販売を一切実行しない。
 次の開発対象はPG-018の現実的な費用・利益・損切りモデルである。
+
+
+### PG-018 — Realistic Cost / Profit / Stop-loss Model 開発エンドポイント到達
+
+目的:
+- PG-017 dry-run planを現実的な費用構造で評価する。
+- 単純な売価−仕入ではなく、送料・梱包・販売手数料・決済手数料・返品等リスク引当を含める。
+- break-even価格と最大許容損失からstop-loss価格を逆算する。
+- 経済合理性を実行許可へ変換しない。
+
+実装:
+- `research_lab/commerce_economics.py`
+- `research_lab/supabase_economic_assessment_repository.py`
+- `research_lab/test_commerce_economics.py`
+- `docs/migrations/2026-10-02_pg018_economic_assessments.sql`
+- build profileへPG-018 contract testを追加。
+
+経済モデル:
+- fixed cost =
+  `purchase_price + inbound_shipping + packaging_cost + return_risk_reserve`
+- selling fee = `expected_sale_price * selling_fee_rate`
+- payment fee = `expected_sale_price * payment_fee_rate`
+- expected net profit =
+  `sale_price - fixed_cost - selling_fee - payment_fee`
+- expected margin = `expected_net_profit / sale_price`
+- break-even price =
+  `ceil(fixed_cost / (1 - total_fee_rate))`
+- stop-loss price =
+  `ceil((fixed_cost - max_loss) / (1 - total_fee_rate))`
+- `max_hold_days` を明示。
+- `profit_gate.economically_viable` は
+  `min_net_profit_jpy` と `min_margin_rate` の両方を満たす場合のみTrue。
+
+安全境界:
+- economicsは分析結果のみ。
+- `execution_mode=dry_run`
+- `execution_triggered=False`
+- `commerce_authorized=False`
+- `external_action_authorized=False`
+- purchase/payment/sale authorization=False。
+- profit gate通過は購入許可ではない。
+
+Supabase:
+- table: `public.warashibe_economic_assessments`
+- `assessment_key` uniqueのappend-only監査保存。
+- `plan_key` / `identity_key` / `economics jsonb` / `evaluated_at` を保持。
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB往復:
+- test key: `pg018-live-proof-20261002`
+- insert成功。
+- read-back:
+  - expected net profit = 520円
+  - break-even = 4399円
+  - stop-loss = 3820円
+  - economically viable = true
+  - commerce authorized = false
+- cleanup delete成功。
+- テストrowは残していない。
+
+主要commits:
+- contract test: `1e1b88035a5a01dba46997ea59e2090b3525c9c1`
+- RED activation: `ce454a3adfe1fb48060234a2c4e1c13df262d8e7`
+- economics implementation: `56752c08018b25bb6b2a99ec9ccf6a31739ee7e5`
+- repository: `6af7532e4e23b39e5ad135adc8ca9acc6aaa0b95`
+- migration source: `71efdc29f1b6a24a267c923497ae04f563397f99`
+
+Render:
+- economics implementation SHAはlive。
+- repository SHAはbuild successfulと新instance起動をlogで確認。
+- status APIは長めにupdate_in_progressを返し、その後続migration source deployはqueued表示。
+- コード起因のbuild failure証拠はなく、反映status遅延として継続扱い。
+
+判定:
+- realistic cost model: 完了。
+- expected net profit / margin: 完了。
+- break-even: 完了。
+- max-loss based stop-loss: 完了。
+- profit gate: 完了。
+- economic assessment persistence: 完了。
+- live DB roundtrip: 完了。
+- test row cleanup: 完了。
+- live commerce: blocked。
+- **PG-018開発エンドポイント: 到達。**
+
+## 18. PG-018 開発エンドポイント
+
+PG-018到達時点で、
+`Human Review approve`
+→ `dry-run commerce plan`
+→ `realistic economics`
+→ `profit / break-even / stop-loss gate`
+→ `Supabase append-only assessment history`
+までを一周できる。
+
+経済合理性が高くても実購入・決済・販売は開始しない。
+次の自然な開発対象は、過去価格・review・plan・economic assessmentをまとめるHuman Review/Price History Dashboardである。
