@@ -57,7 +57,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-005 | confidenceを仮想success rateとして使う箇所があり、「情報信頼度」と「取引成功確率」の意味が混在 | 必須 | PG-004 | DONE（実証完成） |
 | PG-006 | Candidate選択結果を製品側の結果保存/監査へ一貫して残す運用経路が未完成 | 必須 | PG-004 | DONE（実証完成） |
 | PG-007 | Supabaseのwarashibe専用テーブル契約はあるが、v1.0製品経路から安全にread/writeする運用完成証拠が不足 | 条件付き必須 | PG-006 | DONE（実証完成） |
-| PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | P2 |
+| PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | DONE（実証完成・運用確認済み） |
 | PG-009 | 実市場APIからの自動商品取得 | 不要 | v1.0後 | Post-v1 |
 | PG-010 | 実購入・実決済・実販売の無人実行 | 不要 | v1.0後 + Human Gate | Post-v1 |
 | PG-011 | P0 research-lab監査チェーンの追加拡張 | 原則不要 | 製品阻害時のみ | Defer |
@@ -345,3 +345,39 @@ Post-v1:
 - 設計完成: 完了。
 - 実証完成: 完了。
 - 運用完成: PG-008のv1.0定常運用経路で最終確認する。
+
+
+### PG-008 — 実証完成・運用確認済み
+
+- RED:
+  - commit `5c2197197b905fe21a4fd77c2000e08a905a5a20`
+  - CI #1075 `completed / failure`
+  - `research_lab.system_health_contract` 未実装を再現。
+- Product fix:
+  - `research_lab/system_health_contract.py` を追加。
+  - GitHub HEAD/CI、Supabase read/write・stale pending、Render deploy、Product Gap観測を `healthy / degraded / blocked` に分類。
+  - commit `3eff41b43a836501339deee323e5e189c7143f17`
+  - CI #1076 failureで stale queue時のnext_action差分を検出。
+- Minimal repair:
+  - stale queue時のnext_actionを `inspect_queue` に修正。
+  - commit `02d0e5c1e1156b0fef9b5baafe0a56ce93833b4c`
+  - exact-SHA CI #1077 `completed / success`。
+- Live operational check:
+  - Render `warashibe-ai-research-lab` は同一SHA `02d0e5c1...` で `live`。
+  - Supabase `warashibe_dev_queue` に新規pending/leased滞留なし。
+  - PG-006/007の保存・Supabase接続実証を前提に、GitHub/Supabase/Renderの定常監督契約がGreen。
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用確認: 完了。
+- v1.0 Product Gapの必須項目 PG-001〜PG-008 は、PG-009/010のPost-v1項目を除き到達。
+
+
+## 8. v1.0 Product-first 開発エンドポイント
+
+2026-10-02時点で、PG-001〜PG-008の必須/条件付き必須項目は設計・実証・必要な運用確認まで到達した。
+PG-009（実市場API自動取得）とPG-010（実購入・実決済・実販売の無人実行）は明示的にPost-v1であり、本エンドポイントには含めない。
+
+したがって、本書で定義したv1.0 Product-first開発エンドポイントは到達済みと判定する。
+次フェーズへ進む場合は、新しい完成条件とHuman Gate境界を別途定義してから開始する。
