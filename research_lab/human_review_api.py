@@ -94,30 +94,81 @@ def create_human_review_blueprint(
 <style>
 body{max-width:760px;margin:32px auto;padding:20px;font-family:sans-serif;line-height:1.6}
 section{padding:18px;margin:18px 0;background:#f5f5f5;border-radius:10px}
-input,select,textarea,button{width:100%;box-sizing:border-box;padding:10px;margin:6px 0 14px}
-.warning{border-left:5px solid #b71c1c;padding-left:12px}
-code{background:#eee;padding:2px 5px}
+input,textarea,button{width:100%;box-sizing:border-box;padding:10px;margin:6px 0 14px}
+button{cursor:pointer}.warning{border-left:5px solid #b71c1c;padding-left:12px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#eee;padding:12px;border-radius:8px}
 </style>
 </head>
 <body>
 <h1>Warashibe AI Human Review</h1>
 <p class="warning">approve は購入命令ではありません。レビュー監査記録だけを作成します。</p>
 <section>
-<h2>候補を確認</h2>
-<p>API: <code>POST /api/review/latest</code></p>
-<label>Identity Key</label><input name="identity_key" placeholder="gtin:...:JPY">
-<label>Review Code</label><input type="password" name="review_code">
+<label>Identity Key</label>
+<input id="identityKey" placeholder="gtin:...:JPY">
+<label>Review Code</label>
+<input id="reviewCode" type="password" autocomplete="one-time-code">
+<button type="button" onclick="loadReview()">最新候補を読み込む</button>
 </section>
 <section>
-<h2>判断を記録</h2>
-<p>API: <code>POST /api/review/decision</code></p>
-<label>Record Key</label><input name="record_key">
-<label>Decision</label>
-<select name="decision"><option value="approve">approve</option><option value="reject">reject</option></select>
-<label>Reason</label><textarea name="reason"></textarea>
-<label>Review Code</label><input type="password" name="decision_review_code">
+<h2>レビュー対象</h2>
+<pre id="recordView">未読込</pre>
+<label>Reason</label>
+<textarea id="reason" placeholder="判断理由を入力"></textarea>
+<div class="actions">
+<button type="button" onclick="submitDecision('approve')">approve</button>
+<button type="button" onclick="submitDecision('reject')">reject</button>
+</div>
+</section>
+<section>
+<h2>結果</h2>
+<pre id="resultView">未実行</pre>
 </section>
 <p>commerce authorization は常に false のままです。</p>
+<script>
+let loadedRecordKey = null;
+async function postJson(path, body){
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  const data = await response.json();
+  return {status: response.status, data};
+}
+async function loadReview(){
+  loadedRecordKey = null;
+  const result = await postJson("/api/review/latest", {
+    identity_key: document.getElementById("identityKey").value,
+    review_code: document.getElementById("reviewCode").value
+  });
+  document.getElementById("recordView").textContent =
+    JSON.stringify(result.data, null, 2);
+  document.getElementById("resultView").textContent =
+    "HTTP " + result.status;
+  if(result.status === 200 && result.data.record){
+    loadedRecordKey = result.data.record.record_key;
+  }
+}
+async function submitDecision(decision){
+  if(!loadedRecordKey){
+    document.getElementById("resultView").textContent =
+      "先に最新候補を読み込んでください。";
+    return;
+  }
+  const result = await postJson("/api/review/decision", {
+    record_key: loadedRecordKey,
+    decision,
+    reason: document.getElementById("reason").value,
+    review_code: document.getElementById("reviewCode").value
+  });
+  document.getElementById("resultView").textContent =
+    "HTTP " + result.status + "\n" + JSON.stringify(result.data, null, 2);
+  if(result.status === 200){
+    loadedRecordKey = null;
+  }
+}
+</script>
 </body></html>"""
         )
 
