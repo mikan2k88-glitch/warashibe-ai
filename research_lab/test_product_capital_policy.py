@@ -294,6 +294,24 @@ def main():
     assert pg010_ready["external_action_authorized"] is False
     assert pg010_ready["execution_plan"]["operation"] == "sale"
 
+    pg010_live_blocked = prepare_commerce_execution(
+        {
+            "trade_id": "pg010-trade-live",
+            "operation": "purchase",
+            "item_id": "pg010-item-live",
+            "amount_jpy": 3000,
+            "capital_before_jpy": 3000,
+            "idempotency_key": "pg010-trade-live-purchase",
+        },
+        human_approved=True,
+        dry_run=False,
+    )
+    assert pg010_live_blocked["status"] == "live_execution_blocked"
+    assert pg010_live_blocked["external_action_authorized"] is False
+    assert pg010_live_blocked["purchase_authorized"] is False
+    assert pg010_live_blocked["payment_authorized"] is False
+    assert pg010_live_blocked["sale_authorized"] is False
+
     try:
         prepare_commerce_execution(
             {
