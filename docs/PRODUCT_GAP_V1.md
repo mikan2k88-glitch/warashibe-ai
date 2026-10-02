@@ -66,6 +66,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-014 | 物理証拠補完＋安全なcross-market proposal | Post-v1拡張 | PG-013 | DONE（開発エンドポイント到達） |
 | PG-015 | cross-market proposal/comparisonのSupabase永続化＋鮮度評価 | Post-v1拡張 | PG-014 | DONE（開発エンドポイント到達） |
 | PG-016 | Human Review API/UI＋approve/reject監査記録 | Post-v1拡張 | PG-015 | DONE（開発エンドポイント到達） |
+| PG-017 | Approved Proposal → Dry-run Commerce Plan | Post-v1拡張 | PG-016 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1163,3 +1164,82 @@ approveは「人間が候補を確認し、次段階の検討を許可した」�
 2. 過去review/価格履歴のダッシュボード、
 3. 有人パイロット向けの最終確認フロー、
 である。
+
+
+### PG-017 — Approved Proposal → Dry-run Commerce Plan 開発エンドポイント到達
+
+目的:
+- PG-016のapprove監査済みproposalだけをdry-run commerce planへ変換する。
+- dry-run planをappend-onlyの監査artifactとしてSupabaseへ保存できるようにする。
+- approveを実購入・決済・販売の許可へ昇格させない。
+
+実装:
+- `research_lab/dry_run_commerce_plan.py`
+- `research_lab/supabase_dry_run_plan_repository.py`
+- `research_lab/test_dry_run_commerce_plan.py`
+- `docs/migrations/2026-10-02_pg017_dry_run_plans.sql`
+- build profileへPG-017 contract testを追加。
+
+dry-run contract:
+- source review decisionは `approve` のみ。
+- reviewの `record_key` / `identity_key` はsource proposal recordと一致必須。
+- proposalは `proposal_ready` かつ Human Review必須。
+- `execution_mode=dry_run`。
+- `human_final_confirmation_required=True`。
+- `execution_triggered=False`。
+- `commerce_authorized=False`。
+- `external_action_authorized=False`。
+- purchase/payment/sale authorizationは全てFalse。
+- reject済みproposalはplan生成不可。
+
+Supabase:
+- table: `public.warashibe_dry_run_plans`
+- append-only plan key。
+- columns:
+  - `id bigint identity primary key`
+  - `plan_key text unique not null`
+  - `source_record_key text not null`
+  - `identity_key text not null`
+  - `review_decision text check (approve only)`
+  - `plan jsonb not null`
+  - `generated_at timestamptz not null`
+  - `created_at timestamptz default now()`
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB往復:
+- test key: `pg017-live-proof-20261002`
+- insert成功。
+- read-backでplan key / source record / identity / approve / dry_run / commerce_authorized=Falseを確認。
+- cleanup delete成功。
+- テストrowは残していない。
+
+主要commits:
+- contract test: `90d2c19f295ba93170f640000f25281444e247d3`
+- RED activation: `17b2e1c771724006e2bb2529d3a141fc1bcc31ec`
+- plan implementation: `c849506e4e3111b6c1bfb3bc41576e1788880917`
+- Supabase repository: `c9a2da7a32cd63923ba3703e6172fa32e85f2fd7`
+- migration source: `6b9f411406b1aa7cacac6693f605b2c03bba2880`
+
+判定:
+- approved-only plan generation: 完了。
+- rejected review fail-closed: 完了。
+- dry-run authorization boundary: 完了。
+- Supabase append-only persistence: 完了。
+- live DB roundtrip: 完了。
+- test row cleanup: 完了。
+- live commerce: blocked。
+- **PG-017開発エンドポイント: 到達。**
+
+## 17. PG-017 開発エンドポイント
+
+PG-017到達時点で、
+`fresh proposal`
+→ `Human Review approve`
+→ `dry-run commerce plan`
+→ `Supabase append-only history`
+までを一周できる。
+
+dry-run planは取引計画の監査artifactであり、注文・決済・出品・販売を一切実行しない。
+次の開発対象はPG-018の現実的な費用・利益・損切りモデルである。
