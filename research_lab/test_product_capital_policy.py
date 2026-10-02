@@ -448,6 +448,53 @@ def main():
     assert yahoo_candidate["evaluation"]["physical"]["policy"]["allowed"] is False
     assert yahoo_candidate["evaluation"]["physical"]["policy"]["physical_fit"] == "insufficient_data"
 
+    from urllib.parse import parse_qs, urlparse
+    from unittest.mock import patch
+    from research_lab import yahoo_shopping_ingestion_bridge as yahoo_bridge
+
+    yahoo_request = yahoo_bridge.build_item_search_request(
+        "camera & case",
+        "test-appid",
+        results=7,
+        condition="used",
+    )
+    yahoo_url = urlparse(yahoo_request.full_url)
+    yahoo_params = parse_qs(yahoo_url.query)
+    assert yahoo_request.get_method() == "GET"
+    assert yahoo_url.scheme == "https"
+    assert yahoo_url.netloc == "shopping.yahooapis.jp"
+    assert yahoo_url.path == "/ShoppingWebService/V3/itemSearch"
+    assert yahoo_params["query"] == ["camera & case"]
+    assert yahoo_params["results"] == ["7"]
+    assert yahoo_params["condition"] == ["used"]
+
+    for wrong_url in (
+        "https://other.invalid/ShoppingWebService/V3/itemSearch",
+        "http://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch",
+        "https://shopping.yahooapis.jp/ShoppingWebService/V3/order",
+    ):
+        with patch.object(yahoo_bridge, "YAHOO_ITEM_SEARCH_URL", wrong_url):
+            try:
+                yahoo_bridge.build_item_search_request("camera", "test-appid")
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("non-allowlisted Yahoo destination accepted")
+
+    try:
+        yahoo_bridge.NoRedirectHandler().redirect_request(
+            yahoo_request,
+            None,
+            302,
+            "redirect",
+            {},
+            "https://other.invalid/collect",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Yahoo redirect accepted")
+
     try:
         fetch_and_ingest_yahoo_shopping_from_environment(
             "compact item",
