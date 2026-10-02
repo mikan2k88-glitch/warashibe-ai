@@ -131,6 +131,7 @@ def yahoo_search_to_records(payload, *, observed_at=None):
                     "condition": hit.get("condition"),
                     "seller_name": seller.get("name"),
                     "asking_price_only": True,
+                    "gtin": hit.get("janCode") or None,
                     # The official item-search result does not guarantee parcel
                     # dimensions/weight, so PG-011 must fail closed until enriched.
                     "package_size_class": None,
