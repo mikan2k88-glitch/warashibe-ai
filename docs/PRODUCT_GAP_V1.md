@@ -71,6 +71,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-019 | Human Review / Price History Dashboard | Post-v1拡張 | PG-018 | DONE（開発エンドポイント到達） |
 | PG-020 | Pre-flight Safety Gate | Post-v1拡張 | PG-019 | DONE（開発エンドポイント到達） |
 | PG-021 | Human Pilot Session | Post-v1拡張 | PG-020 | DONE（開発エンドポイント到達） |
+| PG-022 | Purchase Intent Record | Post-v1拡張 | PG-021 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1623,3 +1624,89 @@ PG-021到達時点で、
 までを監査可能な状態で一周できる。
 
 次の開発対象はPG-022 Purchase Intent Recordである。
+
+
+### PG-022 — Purchase Intent Record 開発エンドポイント到達
+
+目的:
+- PG-021 Human Pilot Sessionで最終確認待ちの1候補について、人間の「この条件なら購入してよい」という意思を監査記録として保存する。
+- intentに価格上限・総額上限・有効期限を持たせる。
+- intentを注文・決済・販売の実行権限へ変換しない。
+
+実装:
+- `research_lab/purchase_intent.py`
+- `research_lab/supabase_purchase_intent_repository.py`
+- `research_lab/test_purchase_intent.py`
+- `docs/migrations/2026-10-03_pg022_purchase_intents.sql`
+- build profileへPG-022 contract testを追加。
+
+Purchase Intent contract:
+- source sessionは `pilot_session_ready`。
+- `session_state=awaiting_human_final_confirmation`。
+- `human_final_confirmation_required=True`。
+- sessionあたりintentは1件のみ。
+- `quantity=1`。
+- `parallel_positions_allowed=False`。
+- `max_purchase_price_jpy <= max_total_cost_jpy`。
+- `max_total_cost_jpy <= available_capital_jpy`。
+- `max_total_cost_jpy >= current required cash`。
+- `expires_at > confirmed_at`。
+- `human_confirmation_recorded=True`。
+- `order_submission_authorized=False`。
+- `execution_mode=dry_run`。
+- `execution_triggered=False`。
+- commerce/external/purchase/payment/sale authorizationは全てFalse。
+
+Supabase:
+- table: `public.warashibe_purchase_intents`
+- `intent_key` unique。
+- `session_key` unique。
+- append-only intent audit。
+- confirmed_at / expires_atを保持。
+- expires_at > confirmed_at check。
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB往復:
+- test key: `pg022-live-proof-20261003`
+- max purchase price = 2,850円。
+- max total cost = 3,000円。
+- insert / read-back成功。
+- order_submission_authorized=false。
+- commerce_authorized=false。
+- quantity=1。
+- parallel_positions_allowed=false。
+- cleanup成功。テストrowは残していない。
+
+CI:
+- contract `fa9fa7a1a883839a3624bc0fd8fc2fa712d91d15` — CI #1157 success。
+- RED `84ad522643f1543c7dcb970bf52a991b8b016860` — CI #1158 failure。
+- implementation `6fe5a597b9a09502c7bcb2351ff74122c6a5c950` — CI #1159 success。
+- repository `6093ee88f99f7a70f6908640b63c4a36f47693ab` — CI #1160 success。
+- migration source `a19d55359366cdf4fcab68e1f4761241a69d92c8` — CI #1161 success。
+
+判定:
+- Human Pilot Session → Purchase Intent: 完了。
+- price/cost/time bounds: 完了。
+- one intent per session: 完了。
+- single-item/no-parallel rule: 維持。
+- append-only persistence: 完了。
+- live DB roundtrip: 完了。
+- order submission authorization: blocked。
+- live commerce: blocked。
+- **PG-022開発エンドポイント: 到達。**
+
+## 22. PG-022 開発エンドポイント
+
+PG-022到達時点で、
+`Pre-flight Safety Gate`
+→ `Human Pilot Session`
+→ `Human Purchase Intent`
+までを、価格・総額・期限つきで監査保存できる。
+
+Purchase Intentは「人間が条件付きで購入意思を記録した」だけであり、
+注文API・決済API・出品APIを呼ぶ権限ではない。
+`order_submission_authorized=False` と PG-010 live-commerce blockを維持する。
+
+次の自然な開発対象はPG-023 Commerce Adapter Sandboxである。
