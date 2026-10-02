@@ -58,7 +58,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-006 | Candidate選択結果を製品側の結果保存/監査へ一貫して残す運用経路が未完成 | 必須 | PG-004 | DONE（実証完成） |
 | PG-007 | Supabaseのwarashibe専用テーブル契約はあるが、v1.0製品経路から安全にread/writeする運用完成証拠が不足 | 条件付き必須 | PG-006 | DONE（実証完成） |
 | PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | DONE（実証完成・運用確認済み） |
-| PG-009 | 実市場APIからの自動商品取得 | 不要 | v1.0後 | Post-v1 |
+| PG-009 | 実市場APIからの自動商品取得 | Post-v1拡張 | PG-008 | DONE（開発エンドポイント到達） |
 | PG-010 | 実購入・実決済・実販売の無人実行 | 不要 | v1.0後 + Human Gate | Post-v1 |
 | PG-011 | P0 research-lab監査チェーンの追加拡張 | 原則不要 | 製品阻害時のみ | Defer |
 
@@ -381,3 +381,75 @@ PG-009（実市場API自動取得）とPG-010（実購入・実決済・実販�
 
 したがって、本書で定義したv1.0 Product-first開発エンドポイントは到達済みと判定する。
 次フェーズへ進む場合は、新しい完成条件とHuman Gate境界を別途定義してから開始する。
+
+
+### PG-009 — 開発エンドポイント到達
+
+目的:
+- 実市場APIから商品情報を自動取得し、既存のcanonical market evidenceへread-onlyで流し込む。
+- 実購入・出品・決済などのcommerce操作は一切許可しない。
+- 認証情報は環境変数からのみ読み、コード・返却値・ログへ露出しない。
+
+既存資産:
+- `research_lab/ebay_browse_transport.py`
+  - eBay Browse `GET /buy/browse/v1/item_summary/search` のみに固定。
+  - HTTPS / api.ebay.com / 固定pathを検証。
+  - redirect拒否。
+  - cart/order/offer/payment操作なし。
+- `research_lab/ebay_browse_adapter.py`
+  - Browse payloadをasking-price evidenceへ正規化。
+- `research_lab/live_market_evidence_ingestion.py`
+  - 取得済みrecordをcanonical MarketObservationへ検証・正規化。
+
+PG-009 RED / repair:
+- RED 1:
+  - commit `f5bd79d6df21f017adcf929835108a912f981efb`
+  - CI #1079 `completed / failure`
+  - `fetch_and_ingest_browse_search` 未実装を再現。
+- repair 1:
+  - commit `76badf9823545c23a5c64847355bfb183ba3c23e`
+  - 既存eBay read-only transport → Browse adapter → canonical ingestionを1関数で接続。
+  - CI #1080 `completed / success`。
+- RED 2:
+  - commit `e6c37345e5b17e8cdadc0ed5f8db4d12df008798`
+  - CI #1081 `completed / failure`
+  - environment-driven runtime入口未実装を再現。
+- repair 2:
+  - commit `c12e74f61c118620cc3c5d59957b441e4a19a7d8`
+  - `fetch_and_ingest_browse_from_environment()` を追加。
+  - `EBAY_BROWSE_ACCESS_TOKEN` を環境からのみ取得。
+  - token未設定時はfail-closed。
+  - tokenはingestion resultへ含めない。
+  - CI #1082 `completed / success`。
+  - Render `warashibe-ai-research-lab` は同一SHA `c12e74f6...` で `live`。
+
+安全境界:
+- read-only GETのみ。
+- 購入、出品、order、payment、account mutationなし。
+- redirectでbearer tokenを外部へ転送しない。
+- 認証情報の新規発行・表示・変更はHuman Gate。
+- CIでは実API通信せず、injected fake transportで自動取得経路を再現。
+- 実行環境では既存credentialが設定されている場合のみlive fetch可能。credential未設定は安全停止。
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- runtime接続: 完了。
+- Render配備確認: 完了。
+- 実市場credentialの存在・値・live API応答は秘密情報/外部依存として別管理し、PG-009開発エンドポイント判定を巻き戻さない。
+- **PG-009開発エンドポイント: 到達。**
+
+### 次の境界
+
+PG-010は実購入・実決済・実販売の無人実行でありHuman Gate対象。
+PG-009到達後は、明示的な新しい完成条件とHuman Gate承認なしにPG-010へ自動進行しない。
+
+
+## 9. PG-009 開発エンドポイント
+
+2026-10-02時点で、PG-009のread-only自動市場取得経路は、
+eBay Browse transport → adapter → canonical ingestion → environment-driven runtime入口
+まで接続され、targeted RED/repair/GreenとRender配備を確認した。
+
+したがって、**PG-009開発エンドポイントは到達済み**と判定する。
+PG-010は実commerceを含むため、自動継続対象ではなくHuman Gateを要求する。
