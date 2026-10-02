@@ -68,6 +68,9 @@ def evaluate_system_health(snapshot):
     if any(item in blocking for item in anomalies):
         status = "blocked"
         next_action = "repair_current_problem"
+    elif "supabase_stale_pending" in anomalies:
+        status = "degraded"
+        next_action = "inspect_queue"
     elif anomalies:
         status = "degraded"
         next_action = "wait_or_recheck"
