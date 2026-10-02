@@ -65,6 +65,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-013 | 楽天Product Search＋国内JAN同一商品比較 | Post-v1拡張 | PG-012 | DONE（開発エンドポイント到達） |
 | PG-014 | 物理証拠補完＋安全なcross-market proposal | Post-v1拡張 | PG-013 | DONE（開発エンドポイント到達） |
 | PG-015 | cross-market proposal/comparisonのSupabase永続化＋鮮度評価 | Post-v1拡張 | PG-014 | DONE（開発エンドポイント到達） |
+| PG-016 | Human Review API/UI＋approve/reject監査記録 | Post-v1拡張 | PG-015 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1022,3 +1023,143 @@ Human Review用の現行候補として再利用しない。
 2. 最新recordと過去recordの価格差分・トレンド評価、
 3. review approve/rejectの監査記録、
 のいずれかである。
+
+
+### PG-016 — Human Review API/UI＋approve/reject監査記録 開発エンドポイント到達
+
+目的:
+- PG-015で保存されたfreshなproposalだけを人間が確認できるようにする。
+- approve/rejectをappend-only監査記録としてSupabaseへ保存する。
+- approveをcommerce authorizationへ変換しない。
+- stale proposal、認証不足、二重reviewはfail-closedする。
+
+実装:
+- `research_lab/human_review_decision.py`
+- `research_lab/supabase_review_decision_repository.py`
+- `research_lab/human_review_api.py`
+- `research_lab/test_human_review_api.py`
+- `app.py` へ `human_review_bp` 登録。
+- build profileへHuman Review API回帰テストを追加。
+
+Human Review契約:
+- decision: `approve` / `reject` のみ。
+- `reviewer_id` / `reason` / `reviewed_at` を必須化。
+- PG-015 freshnessが `fresh` のrecordのみreview可。
+- 同一 `record_key` は1回だけreview可能。
+- approveでも:
+  - `commerce_authorized=False`
+  - `external_action_authorized=False`
+  - `purchase_authorized=False`
+  - `payment_authorized=False`
+  - `sale_authorized=False`
+
+API/UI:
+- `GET /review`
+  - Human ReviewブラウザUI。
+  - Identity Key / Review Code入力。
+  - 最新候補読込。
+  - approve / reject。
+  - 判断理由入力。
+- `POST /api/review/latest`
+  - identity単位で最新record取得。
+  - freshness再評価。
+  - staleは409で拒否。
+  - 既review済みrecordは409。
+- `POST /api/review/decision`
+  - approve/reject監査記録を作成。
+  - commerce execution関数は呼ばない。
+  - responseに `execution_triggered=False`。
+
+レビュー認証:
+- `WARASHIBE_REVIEW_CODE` 環境変数必須。
+- 未設定時は `review_runtime_not_configured` で503 fail-closed。
+- review codeはURLへ含めない。
+- review codeをSupabase監査rowへ保存しない。
+- 比較にはconstant-time `hmac.compare_digest` を使用。
+- PG-016開発ではsecret値の新規設定・表示・変更は行わない。
+
+Supabase:
+- table: `public.warashibe_review_decisions`
+- schema:
+  - `id bigint identity primary key`
+  - `record_key text unique not null`
+  - `identity_key text not null`
+  - `decision text check (approve/reject)`
+  - `reviewer_id text not null`
+  - `reason text not null`
+  - `reviewed_at timestamptz not null`
+  - `created_at timestamptz default now()`
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+- migration source:
+  `docs/migrations/2026-10-02_pg016_review_decisions.sql`
+
+実DB往復:
+- test record `pg016-live-proof-20261002`
+- approve監査row insert成功。
+- read-back成功。
+- record_key / identity_key / decision / reviewer / reason / reviewed_at一致を確認。
+- cleanup delete成功。
+- テストrowは残していない。
+
+RED / repair / CI:
+- decision contract RED:
+  - commit `feadfa91f288e6fdd5303f50a0b0aa47f24e52b8`
+  - CI #1118 failure。
+- decision/repository実装:
+  - `dc1dbf065b7ca057e875e968524174afa5873a39`
+  - `becbec9ede87dd2576d8204296a0b17474143088`
+  - CI #1120 success。
+- API/UI RED:
+  - `771db7f732bf65ab3d93360d097398944cb341be`
+  - build profile追加 `0c2f200f9fe7b23d261cfd68fb1ddf704d92dd0d`
+  - CI #1122 failure。
+- API/UI repair:
+  - `6f80da5f03920f071fad430cd08b1b2e38ffc183`
+  - app registration `0f71974c1e5bcee5e4dcda896febac52b48fcdd8`
+  - CI #1124 success。
+- Supabase migration:
+  - `add_warashibe_review_decisions` success。
+  - RLS enabledを確認。
+  - live insert/read-back/cleanup成功。
+- migration source:
+  - `6d21b654bc2709dd772623d461af8e2c9bdfd9ba`
+  - CI #1125 success。
+- interactive UI:
+  - `91f9ad6f10a8526a36f2209763b6eb9c0775afad`
+  - CI #1126 success。
+
+判定:
+- Human Review decision contract: 完了。
+- fresh-only review gate: 完了。
+- approve/reject API: 完了。
+- browser Human Review UI: 完了。
+- append-only Supabase audit: 完了。
+- live DB roundtrip: 完了。
+- duplicate review rejection: 完了。
+- stale review rejection: 完了。
+- approve→commerce非接続: 完了。
+- review secret runtime dependency: fail-closed。
+- live commerce: blocked。
+- **PG-016開発エンドポイント: 到達。**
+
+## 16. PG-016 開発エンドポイント
+
+PG-016到達時点で、
+`cross-market proposal`
+→ `freshness gate`
+→ `Human Review UI/API`
+→ `approve/reject audit`
+→ `Supabase append-only history`
+までを一周できる。
+
+approveは「人間が候補を確認し、次段階の検討を許可した」という監査イベントであり、
+購入・決済・販売を実行する権限ではない。
+実commerceはPG-010のlive-blockを維持する。
+
+次の自然な開発対象は、
+1. review後のdry-run commerce plan連携、
+2. 過去review/価格履歴のダッシュボード、
+3. 有人パイロット向けの最終確認フロー、
+である。
