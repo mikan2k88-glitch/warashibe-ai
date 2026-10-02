@@ -76,6 +76,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-024 | Live-readiness Audit | Post-v1拡張 | PG-023 | DONE（開発エンドポイント到達） |
 | PG-025 | Human Go/No-Go Decision | Post-v1拡張 | PG-024 | DONE（開発エンドポイント到達） |
 | PG-026 | Live Pilot Guard | Post-v1拡張 | PG-025 | DONE（開発エンドポイント到達） |
+| PG-027 | Live Commerce Adapter Interface | Post-v1拡張 | PG-026 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -2024,3 +2025,91 @@ PG-026到達時点で、
 Guard通過は実購入許可ではない。
 次の自然な開発対象はPG-027 Live Commerce Adapter Interfaceであり、
 実金銭を動かすPG-028より前にHuman Gateを維持する。
+
+
+### PG-027 — Live Commerce Adapter Interface 開発エンドポイント到達
+
+目的:
+- PG-026 Live Pilot Guard通過後に利用するlive commerce adapterの共通interfaceを定義する。
+- prepare / validate / submit / status / cancelの契約を固定する。
+- PG-028 Human Gate前では外部ネットワークwriteを一切行わず、submit/status/cancelを必ずblockedにする。
+
+実装:
+- `research_lab/live_commerce_adapter.py`
+- `research_lab/supabase_live_adapter_validation_repository.py`
+- `research_lab/test_live_commerce_adapter.py`
+- `docs/migrations/2026-10-03_pg027_live_adapter_validations.sql`
+
+interface:
+- `LiveCommerceAdapterInterface.prepare_order()`
+- `validate_order()`
+- `submit_order()`
+- `get_order_status()`
+- `cancel_order()`
+
+DisabledLiveCommerceAdapter:
+- `adapter_mode=live_interface_disabled`
+- prepare_orderはPG-026 Guard / provider / quantity / approved budgetを再検証。
+- validate_orderはローカル検証のみ。
+- validation pass時:
+  - `status=live_adapter_validation_ready`
+  - `eligible_for_human_final_buy=True`
+  - `order_submission_authorized=False`
+- submit/status/cancel:
+  - `status=live_adapter_blocked`
+  - reason=`human_gate_before_pg028`
+  - `network_call_attempted=False`
+  - `external_write_attempted=False`
+  - `order_created=False`
+  - `live_execution_authorized=False`
+  - commerce/external/purchase/payment/sale authorization=False。
+
+Supabase:
+- table: `public.warashibe_live_adapter_validations`
+- validation_key unique / append-only。
+- provider/item/validation/validated_atを保持。
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB:
+- test key: `pg027-live-proof-20261003`
+- provider=yahoo_shopping。
+- purchase price=2,800円 / total cost=2,950円 / approved budget=3,000円。
+- validation_passed=true。
+- eligible_for_human_final_buy=true。
+- network_call_attempted=false。
+- external_write_attempted=false。
+- live_execution_authorized=false。
+- order_submission_authorized=false。
+- commerce_authorized=false。
+- cleanup済み。
+
+CI:
+- contract `5d9de7de56b141ef08150a7d35799be2266eb148` — #1187 success。
+- RED `3a0c4f2730c6e4e94a2dbb300cf62ebd456f5191` — #1188 failure。
+- implementation `0b423a88fdaff887465a9ddc316c7c2f332f7b23` — #1189 failure（fixtureにapproved_budget_jpy欠落）。
+- fixture repair `bd2d0491cd34b9d7b89c0d652ef92a04e8990b87` — #1190 success。
+- repository `35c54c727d909aaa9ce96a6442e6e2af319b782a` — #1191 success。
+- migration source `e23cb8924000a5f69a011ab017c3c2312929233c` — #1192 success。
+
+判定:
+- common adapter interface: 完了。
+- live-shaped prepare/validate: 完了。
+- PG-028前submit/status/cancel block: 完了。
+- external network/write prohibition: 完了。
+- append-only validation audit: 完了。
+- live execution authorization: blocked。
+- **PG-027開発エンドポイント: 到達。**
+
+## 27. PG-027 開発エンドポイント
+
+PG-027到達時点で、
+`Human GO`
+→ `Live Pilot Guard`
+→ `Live Commerce Adapter prepare/validate`
+→ `eligible_for_human_final_buy`
+まで進める。
+
+submit_order / get_order_status / cancel_order はPG-028 Human Gate前のため必ずblocked。
+次のPG-028は初めて実金銭が動く可能性があるため、ここでHuman Gateを置く。
