@@ -255,6 +255,63 @@ def main():
     else:
         raise AssertionError("missing eBay token must fail closed")
 
+    # PG-010 targeted RED: real commerce must have one common fail-closed
+    # execution gate and produce an auditable dry-run plan without moving money.
+    from research_lab.commerce_execution_gate import (
+        prepare_commerce_execution,
+    )
+
+    pg010 = prepare_commerce_execution(
+        {
+            "trade_id": "pg010-trade-001",
+            "operation": "purchase",
+            "item_id": "pg010-item-001",
+            "amount_jpy": 3000,
+            "capital_before_jpy": 3000,
+            "idempotency_key": "pg010-trade-001-purchase",
+        },
+        human_approved=False,
+        dry_run=True,
+    )
+    assert pg010["status"] == "human_gate_required"
+    assert pg010["dry_run"] is True
+    assert pg010["external_action_authorized"] is False
+    assert pg010["audit_record"]["trade_id"] == "pg010-trade-001"
+
+    pg010_ready = prepare_commerce_execution(
+        {
+            "trade_id": "pg010-trade-002",
+            "operation": "sale",
+            "item_id": "pg010-item-002",
+            "amount_jpy": 4500,
+            "capital_before_jpy": 3000,
+            "idempotency_key": "pg010-trade-002-sale",
+        },
+        human_approved=True,
+        dry_run=True,
+    )
+    assert pg010_ready["status"] == "dry_run_ready"
+    assert pg010_ready["external_action_authorized"] is False
+    assert pg010_ready["execution_plan"]["operation"] == "sale"
+
+    try:
+        prepare_commerce_execution(
+            {
+                "trade_id": "pg010-trade-003",
+                "operation": "payment",
+                "item_id": "pg010-item-003",
+                "amount_jpy": 3001,
+                "capital_before_jpy": 3000,
+                "idempotency_key": "pg010-trade-003-payment",
+            },
+            human_approved=True,
+            dry_run=True,
+        )
+    except ValueError as exc:
+        assert "amount exceeds available capital" in str(exc)
+    else:
+        raise AssertionError("over-capital commerce request must fail closed")
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
