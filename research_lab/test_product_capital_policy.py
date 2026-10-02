@@ -715,6 +715,48 @@ def main():
     assert rejected_enrichment["status"] == "rejected"
     assert rejected_enrichment["reason"] == "identity_mismatch"
 
+    bad_provenance = dict(
+        physical_evidence,
+        source_kind="unknown_source",
+    )
+    rejected_provenance = enrich_candidate_with_physical_evidence(
+        pg014_candidate,
+        bad_provenance,
+    )
+    assert rejected_provenance["status"] == "rejected"
+    assert rejected_provenance["reason"] == "invalid_provenance"
+
+    incomplete_evidence = dict(physical_evidence)
+    incomplete_evidence["weight_grams"] = None
+    rejected_incomplete = enrich_candidate_with_physical_evidence(
+        pg014_candidate,
+        incomplete_evidence,
+    )
+    assert rejected_incomplete["status"] == "rejected"
+    assert rejected_incomplete["reason"] == "physical_evidence_incomplete"
+
+    oversized_evidence = dict(
+        physical_evidence,
+        package_size_class="large",
+        weight_grams=8000,
+        shipping_cost_jpy=2200,
+        storage_score=0.2,
+    )
+    oversized = enrich_candidate_with_physical_evidence(
+        pg014_candidate,
+        oversized_evidence,
+    )
+    assert oversized["status"] == "enriched"
+    assert oversized["candidate"]["evaluation"]["physical"]["policy"]["allowed"] is False
+
+    blocked_proposal = build_cross_market_proposal(
+        comparison,
+        oversized["candidate"],
+    )
+    assert blocked_proposal["status"] == "blocked"
+    assert blocked_proposal["reason"] == "physical_policy_not_allowed"
+    assert blocked_proposal["commerce_authorized"] is False
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
