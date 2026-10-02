@@ -59,7 +59,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-007 | Supabaseのwarashibe専用テーブル契約はあるが、v1.0製品経路から安全にread/writeする運用完成証拠が不足 | 条件付き必須 | PG-006 | DONE（実証完成） |
 | PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | DONE（実証完成・運用確認済み） |
 | PG-009 | 実市場APIからの自動商品取得 | Post-v1拡張 | PG-008 | DONE（開発エンドポイント到達） |
-| PG-010 | 実購入・実決済・実販売の無人実行 | 不要 | v1.0後 + Human Gate | Post-v1 |
+| PG-010 | 実購入・実決済・実販売の無人実行 | Post-v1拡張 | PG-009 + Human Gate | DONE（安全実行境界・dry-runエンドポイント到達） |
 | PG-011 | P0 research-lab監査チェーンの追加拡張 | 原則不要 | 製品阻害時のみ | Defer |
 
 ## 4. 依存関係
@@ -453,3 +453,77 @@ eBay Browse transport → adapter → canonical ingestion → environment-driven
 
 したがって、**PG-009開発エンドポイントは到達済み**と判定する。
 PG-010は実commerceを含むため、自動継続対象ではなくHuman Gateを要求する。
+
+
+### PG-010 — 安全実行境界・dry-run開発エンドポイント到達
+
+目的:
+- purchase / payment / sale を共通のcommerce execution contractで扱う。
+- 実購入・実決済・実販売を自動実行する前に、Human Gate・資本上限・idempotency・監査を必須化する。
+- 開発エンドポイントでは実資金を動かさず、dry-run実行計画と監査記録までを完成させる。
+
+既存資産:
+- `research_lab/stripe_sandbox_adapter_design.py`
+  - sandbox key / idempotency / webhook / failure classification設計。
+- `research_lab/sandbox_trade_ledger_design.py`
+  - append-only ephemeral ledgerとrealized PnL設計。
+- `research_lab/sandbox_stripe_webhook_ledger_pipeline.py`
+  - verified fixture webhook → ledgerのoffline pipeline。
+- `research_lab/trade_monitor_guard.py`
+  - approval / capital / duplicate / API errorをfail-closed監視。
+
+PG-010 RED / repair:
+- RED:
+  - commit `02b96e4cc56904ee6e47413c36c3f6eb9920773f`
+  - CI #1084 `completed / failure`
+  - `research_lab.commerce_execution_gate` 未実装を再現。
+- repair:
+  - commit `ddc8ff61ae9fe0c40f5d9c4936bb765430ffc56a`
+  - `research_lab/commerce_execution_gate.py` を追加。
+  - purchase / payment / saleの共通request validationを実装。
+  - `trade_id`, `item_id`, `operation`, `amount_jpy`, `capital_before_jpy`, `idempotency_key` を必須化。
+  - purchase/paymentでamountがcapitalを超える場合はfail-closed。
+  - Human Gate未承認なら `human_gate_required`。
+  - Human Gate承認済みでも `dry_run=False` は `live_execution_blocked`。
+  - dry-runのみ `dry_run_ready` とし、execution planとaudit recordを生成。
+  - purchase/payment/sale authorizationは常にFalse。実外部actionはこのモジュールから許可しない。
+  - CI #1085 `completed / success`。
+  - Renderは同一SHA `ddc8ff61...` で `live`。
+- live-block回帰:
+  - commit `98e7d9c3712c2766d6f510e5f8182b91162713b7`
+  - Human Gate承認済みでも `dry_run=False` のlive commerceが必ずblockedであることを回帰テスト化。
+  - CI #1086 `completed / success`。
+
+安全境界:
+- 実購入・実決済・実販売は実行しない。
+- 実commerceの外部API呼び出し、実資金移動、production mutationはHuman Gate対象。
+- Human Gate承認は、このgateを自動的にlive execution可能へ昇格させない。
+- idempotency keyを必須化し、重複実行設計を防ぐ。
+- dry-runのexecution plan / audit recordのみ自動生成可能。
+- amount > capitalはpurchase/paymentで拒否。
+- malformed requestはfail-closed。
+
+判定:
+- 設計完成: 完了。
+- 共通commerce execution contract: 完了。
+- Human Gate enforcement: 完了。
+- dry-run実証: 完了。
+- live execution fail-closed実証: 完了。
+- CI exact-SHA evidence: 完了。
+- Render配備: 完了。
+- **PG-010の安全実行境界・dry-run開発エンドポイント: 到達。**
+- 実commerceそのものの有効化は、本エンドポイントとは分離しHuman Gate後の別運用フェーズとする。
+
+## 10. PG-010 開発エンドポイント
+
+2026-10-02時点で、PG-010は
+candidate/market側の判断結果を、purchase / payment / saleの共通commerce execution gateへ渡し、
+Human Gate・資本上限・idempotency・監査・dry-runを強制する境界まで到達した。
+
+重要:
+- `human_approved=True` だけではlive commerceは許可されない。
+- `dry_run=False` は `live_execution_blocked` となる。
+- 実資金移動・実購入・実販売はこの開発エンドポイントでは一切行っていない。
+
+したがって、**PG-010安全実行境界・dry-run開発エンドポイントは到達済み**と判定する。
+実commerceの有効化はHuman Gateと別途の運用承認を必要とする。
