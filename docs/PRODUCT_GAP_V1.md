@@ -73,6 +73,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-021 | Human Pilot Session | Post-v1拡張 | PG-020 | DONE（開発エンドポイント到達） |
 | PG-022 | Purchase Intent Record | Post-v1拡張 | PG-021 | DONE（開発エンドポイント到達） |
 | PG-023 | Commerce Adapter Sandbox | Post-v1拡張 | PG-022 | DONE（開発エンドポイント到達） |
+| PG-024 | Live-readiness Audit | Post-v1拡張 | PG-023 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1781,3 +1782,105 @@ PG-023到達時点で、
 
 このadapterは実注文を実行できない。
 次の開発対象はPG-024 Live-readiness Auditである。
+
+
+### PG-024 — Live-readiness Audit 開発エンドポイント到達
+
+目的:
+- PG-011〜023で構築した安全・監査・dry-run系統を総合監査する。
+- 全required check通過時も、実取引許可ではなくHuman go/no-go判定へ進めるだけにする。
+- readiness gapが1つでもあればfail-closedでHuman go/no-go不可にする。
+
+実装:
+- `research_lab/live_readiness_audit.py`
+- `research_lab/supabase_live_readiness_audit_repository.py`
+- `research_lab/test_live_readiness_audit.py`
+- `docs/migrations/2026-10-03_pg024_live_readiness_audits.sql`
+- build profileへPG-024 contract testを追加。
+
+required checks:
+- identity match。
+- physical policy。
+- freshness。
+- Human Review approve。
+- economics viable。
+- preflight ready。
+- pilot session ready。
+- purchase intent valid。
+- sandbox adapter verified。
+- sandbox network call not attempted。
+- sandbox external write not attempted。
+- duplicate transaction guard。
+- single-item guard。
+- parallel positions disabled。
+- RLS enabled。
+- public/anon write policy absent。
+- audit cleanup verified。
+- live-commerce block enabled。
+- rollback plan documented。
+- refund/cancel path documented。
+- marketplace terms review requirement maintained。
+- secrets server-side only。
+
+出力:
+- `status=live_readiness_audit_complete`
+- `all_required_checks_passed=True/False`
+- `ready_for_human_go_no_go=True/False`
+- `human_go_no_go_required=True`
+- pass時 `recommended_next_stage=human_live_pilot_decision`
+- fail時 `recommended_next_stage=repair_readiness_gaps`
+- `live_commerce_authorized=False`
+- `execution_mode=audit_only`
+- `execution_triggered=False`
+- commerce/external/purchase/payment/sale authorizationは全てFalse。
+
+Supabase:
+- table: `public.warashibe_live_readiness_audits`
+- append-only `audit_key`。
+- auditor_id/audited_at/audit jsonbを保持。
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB往復:
+- test key: `pg024-live-proof-20261003`
+- all_required_checks_passed=true。
+- ready_for_human_go_no_go=true。
+- human_go_no_go_required=true。
+- live_commerce_authorized=false。
+- commerce_authorized=false。
+- insert/read-back成功。
+- cleanup成功。テストrowは残していない。
+
+CI:
+- contract `6cb2dc602bded467f3a35de266d51f956f1d00f6` — CI #1169 success。
+- RED `9b3b6c2e9f54aab94763faba9b499de323b691f6` — CI #1170 failure。
+- implementation `13905ea34fb0bbdf37ee17c449927538f7a6d1f6` — CI #1171 success。
+- repository `dc68b9facd4176280db7ac7d98567784571aabe7` — CI #1172 success。
+- migration source `648022d840fe9a3c7cae9c6e92a265c8df6556d0` — CI #1173 success。
+
+判定:
+- end-to-end readiness checklist: 完了。
+- fail-closed readiness gap handling: 完了。
+- Human go/no-go boundary: 完了。
+- append-only audit persistence: 完了。
+- live DB roundtrip: 完了。
+- live commerce authorization: blocked。
+- **PG-024開発エンドポイント: 到達。**
+
+## 24. PG-024 開発エンドポイント
+
+PG-024到達時点で、
+`market discovery`
+→ `identity/physical evidence`
+→ `Human Review`
+→ `dry-run plan/economics`
+→ `Pre-flight`
+→ `Human Pilot Session`
+→ `Purchase Intent`
+→ `Commerce Adapter Sandbox`
+→ `Live-readiness Audit`
+までを監査可能な状態で一周できる。
+
+全チェックが通っても実購入・決済・販売は開始しない。
+次の段階はHuman go/no-goによるLimited Live Pilot判断であり、PG-010 live-commerce blockは現在も維持する。
