@@ -370,6 +370,30 @@ def main():
     assert unknown["allowed"] is False
     assert unknown["physical_fit"] == "insufficient_data"
 
+    physical_candidate = create_candidate(
+        name="PG-011 compact candidate",
+        purchase_price=3000,
+        expected_sale_price=4200,
+        source="domestic_fixture",
+        category="small_electronics",
+        confidence=0.8,
+        success_probability=0.7,
+        package_size_class="compact",
+        weight_grams=350,
+        shipping_cost_jpy=450,
+        fragility_score=0.1,
+        storage_score=0.9,
+        domestic_shipping=True,
+    )
+    physical_eval = physical_candidate["evaluation"]["physical"]
+    assert physical_eval["package_size_class"] == "compact"
+    assert physical_eval["weight_grams"] == 350
+    assert physical_eval["shipping_cost_jpy"] == 450
+    assert physical_eval["fragility_score"] == 0.1
+    assert physical_eval["storage_score"] == 0.9
+    assert physical_eval["domestic_shipping"] is True
+    assert physical_eval["policy"]["allowed"] is True
+
     markets = domestic_market_access_snapshot()
     assert markets["target_region"] == "Tokyo, Japan"
     assert markets["initial_package_policy"] == "small_first"
