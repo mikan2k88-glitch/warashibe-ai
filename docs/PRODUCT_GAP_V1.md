@@ -70,6 +70,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-018 | Realistic Cost / Profit / Stop-loss Model | Post-v1拡張 | PG-017 | DONE（開発エンドポイント到達） |
 | PG-019 | Human Review / Price History Dashboard | Post-v1拡張 | PG-018 | DONE（開発エンドポイント到達） |
 | PG-020 | Pre-flight Safety Gate | Post-v1拡張 | PG-019 | DONE（開発エンドポイント到達） |
+| PG-021 | Human Pilot Session | Post-v1拡張 | PG-020 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1550,3 +1551,75 @@ PG-020到達時点で、
 PG-010 live-commerce blockを維持する。
 
 次の自然な開発対象はPG-021 Human Pilot Sessionである。
+
+
+### PG-021 — Human Pilot Session 開発エンドポイント到達
+
+目的:
+- PG-020でpreflight_readyとなった1候補を、人間が最終確認するための有人pilot sessionへ束ねる。
+- 1セッション=1候補=1品を維持する。
+- pilot sessionをappend-onlyで監査保存する。
+- 実購入・決済・販売は起動しない。
+
+実装:
+- `research_lab/human_pilot_session.py`
+- `research_lab/supabase_pilot_session_repository.py`
+- `research_lab/test_human_pilot_session.py`
+- `docs/migrations/2026-10-03_pg021_pilot_sessions.sql`
+- build profileへPG-021 contract testを追加。
+
+session contract:
+- source preflightは `preflight_ready` のみ。
+- `ready_for_human_purchase_confirmation=True` 必須。
+- `human_final_confirmation_required=True` 維持。
+- `session_state=awaiting_human_final_confirmation`。
+- `quantity=1`。
+- `capital_commitment_mode=single_item`。
+- `parallel_positions_allowed=False`。
+- `purchase_intent_recorded=False`。
+- `execution_mode=dry_run`。
+- `execution_triggered=False`。
+- commerce/external/purchase/payment/sale authorizationは全てFalse。
+- preflight_blockedからsession生成不可。
+
+Supabase:
+- table: `public.warashibe_pilot_sessions`
+- append-only `session_key`。
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+
+実DB往復:
+- test key: `pg021-live-proof-20261003`
+- insert / read-back成功。
+- quantity=1、parallel_positions_allowed=false、
+  human_final_confirmation_required=true、
+  commerce_authorized=falseを確認。
+- cleanup成功。テストrowは残していない。
+
+CI:
+- contract commit `c52071d056b2598cdb5358385b6e18e2cfdea77f` — CI #1151 success。
+- RED `239751a739cd3af1ca5d5212af97063f9c7cc912` — CI #1152 failure。
+- implementation `3f1ef2e606db88ea946387d36b3fcd3aa6097b2f` — CI #1153 success。
+- repository `3d7e257c55519386fcee6adb305df952113831f0` — CI #1154 success。
+- migration source `b5311ee3e2bcedff2bd568b4ab5e66616c061644` — CI #1155 success。
+
+判定:
+- preflight-ready → pilot session: 完了。
+- blocked preflight rejection: 完了。
+- single-item / no-parallel-position: 完了。
+- append-only persistence: 完了。
+- live DB roundtrip: 完了。
+- Human final confirmation gate: 維持。
+- live commerce: blocked。
+- **PG-021開発エンドポイント: 到達。**
+
+## 21. PG-021 開発エンドポイント
+
+PG-021到達時点で、
+`Pre-flight Safety Gate`
+→ `Human Pilot Session`
+→ `awaiting_human_final_confirmation`
+までを監査可能な状態で一周できる。
+
+次の開発対象はPG-022 Purchase Intent Recordである。
