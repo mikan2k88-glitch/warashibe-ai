@@ -1,5 +1,5 @@
 # ============================================================
-# Warashibe AI v1.1
+# Warashibe AI v1.2
 # Candidate Pipeline
 #
 # 役割：
@@ -7,10 +7,7 @@
 # 1. 危険フィルター
 # 2. 資本フィルター
 # 3. ランキング
-# の順番で処理する。
-#
-# Demand / Value 評価は Candidate Engine で付加され、
-# Ranking Engine がそれらを総合評価する。
+# の順番で処理し、選択結果を共通recordとして返す。
 # ============================================================
 
 from danger_filter import filter_candidates
@@ -18,7 +15,29 @@ from capital_filter import filter_by_capital
 from ranking_engine import rank_candidates
 
 
-PIPELINE_VERSION = "1.1"
+PIPELINE_VERSION = "1.2"
+
+
+def _build_selection_record(best_candidate, ranked_candidates):
+    """PG-006: 後段で保存・監査できる共通の選択recordを作る。"""
+    if best_candidate is None:
+        reason = "no_candidate_selected"
+    else:
+        reason = "highest_ranked_allowed_candidate"
+
+    return {
+        "selected_candidate": best_candidate,
+        "selection_reason": reason,
+        "candidate_result": {
+            "ranked_count": len(ranked_candidates),
+            "selected": best_candidate,
+        },
+        "strategy_result": {
+            "status": "not_applied",
+            "strategy": None,
+        },
+        "simulation_result": None,
+    }
 
 
 def evaluate_candidates(
@@ -30,19 +49,11 @@ def evaluate_candidates(
     ランキングで評価する。
     """
 
-    # ========================================================
-    # 1. 候補商品の安全性チェック
-    # ========================================================
-
     danger_allowed, danger_blocked = (
         filter_candidates(
             candidates
         )
     )
-
-    # ========================================================
-    # 2. 現在資本によるフィルター
-    # ========================================================
 
     capital_allowed, capital_blocked = (
         filter_by_capital(
@@ -51,29 +62,19 @@ def evaluate_candidates(
         )
     )
 
-    # ========================================================
-    # 3. 総合ランキング
-    #
-    # 利益・信頼度に加えて、
-    # Demand / Value の評価も使用する。
-    # ========================================================
-
     ranked_candidates = rank_candidates(
         capital_allowed
     )
-
-    # ========================================================
-    # 4. BEST候補
-    # ========================================================
 
     best_candidate = None
 
     if ranked_candidates:
         best_candidate = ranked_candidates[0]
 
-    # ========================================================
-    # 結果
-    # ========================================================
+    selection_record = _build_selection_record(
+        best_candidate,
+        ranked_candidates,
+    )
 
     return {
         "version": PIPELINE_VERSION,
@@ -107,5 +108,8 @@ def evaluate_candidates(
             ranked_candidates,
 
         "best_candidate":
-            best_candidate
+            best_candidate,
+
+        "selection_record":
+            selection_record,
     }
