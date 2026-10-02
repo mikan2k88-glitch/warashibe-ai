@@ -16,12 +16,14 @@ from strategy_api import strategy_bp
 from research_lab.web import lab_bp
 from real_world_api import real_world_bp
 from research_lab.dev_queue_trigger import dev_queue_trigger_bp
+from research_lab.human_review_api import human_review_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
 app.register_blueprint(lab_bp)
 app.register_blueprint(real_world_bp)
 app.register_blueprint(dev_queue_trigger_bp)
+app.register_blueprint(human_review_bp)
 
 
 @app.before_request
