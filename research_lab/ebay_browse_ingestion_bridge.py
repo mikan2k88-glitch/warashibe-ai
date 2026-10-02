@@ -5,6 +5,7 @@ network calls, purchases, listings, payments, or sale-outcome persistence.
 """
 
 from dataclasses import dataclass
+import os
 
 from research_lab.ebay_browse_adapter import browse_search_to_records
 from research_lab.ebay_browse_transport import fetch_search_payload
@@ -83,3 +84,33 @@ def fetch_and_ingest_browse_search(
         timeout=timeout,
     )
     return ingest_browse_search_payload(payload, observed_at=observed_at)
+
+
+def fetch_and_ingest_browse_from_environment(
+    query,
+    *,
+    environ=None,
+    marketplace_id="EBAY_US",
+    limit=20,
+    timeout=10,
+    fetch_payload=fetch_search_payload,
+    observed_at=None,
+):
+    """Read the eBay token from environment and run one read-only ingestion.
+
+    Missing credentials fail closed. The token is passed only to the transport
+    call and is never included in the returned ingestion result.
+    """
+    env = os.environ if environ is None else environ
+    token = str(env.get("EBAY_BROWSE_ACCESS_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("eBay Browse access token is not configured")
+    return fetch_and_ingest_browse_search(
+        query,
+        token,
+        marketplace_id=marketplace_id,
+        limit=limit,
+        timeout=timeout,
+        fetch_payload=fetch_payload,
+        observed_at=observed_at,
+    )
