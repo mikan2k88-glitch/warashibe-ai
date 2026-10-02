@@ -55,8 +55,8 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-003 | legacy market/policy経路とCandidate経路でPolicy適用方式が二重化し、同一ルール保証が弱い | 必須 | PG-001 | DONE（実証完成） |
 | PG-004 | 実商品候補評価で、価格・流動性・想定売却期間・手数料・真贋・返品の主要項目が統一契約になっていない | 必須 | PG-001, PG-003 | DONE（実証完成） |
 | PG-005 | confidenceを仮想success rateとして使う箇所があり、「情報信頼度」と「取引成功確率」の意味が混在 | 必須 | PG-004 | DONE（実証完成） |
-| PG-006 | Candidate選択結果を製品側の結果保存/監査へ一貫して残す運用経路が未完成 | 必須 | PG-004 | P1 |
-| PG-007 | Supabaseのwarashibe専用テーブル契約はあるが、v1.0製品経路から安全にread/writeする運用完成証拠が不足 | 条件付き必須 | PG-006 | P2 |
+| PG-006 | Candidate選択結果を製品側の結果保存/監査へ一貫して残す運用経路が未完成 | 必須 | PG-004 | DONE（実証完成） |
+| PG-007 | Supabaseのwarashibe専用テーブル契約はあるが、v1.0製品経路から安全にread/writeする運用完成証拠が不足 | 条件付き必須 | PG-006 | DONE（実証完成） |
 | PG-008 | Render / GitHub / Supabaseの接続状態は個別に存在するが、v1.0製品フローとしての運用チェックが未固定 | 必須 | PG-006 | P2 |
 | PG-009 | 実市場APIからの自動商品取得 | 不要 | v1.0後 | Post-v1 |
 | PG-010 | 実購入・実決済・実販売の無人実行 | 不要 | v1.0後 + Human Gate | Post-v1 |
@@ -295,9 +295,53 @@ Post-v1:
 
 ### 次の実問題
 
-**PG-006: Candidate選択結果を製品側の結果保存/監査へ一貫して残す。**
+**PG-008: Render / GitHub / Supabaseをv1.0製品フローとして定常監視・運用確認する。**
 
 狙い:
-- 選択された1候補と評価理由を共通結果形式へ保存する。
-- candidate / strategy / simulation の結果を同じ監査契約で追跡できるようにする。
-- PG-007/008のSupabase・運用接続へ渡せる製品側recordを作る。
+- GPT定時を監督役としてGitHub HEAD/CI、Supabase queue、Render deploy、Product Gapを横断確認する。
+- 異常時は同じ問題を修復対象として記録し、正常時は次のProduct Gapへ進む。
+- MAIN/production、Secrets、実購入・実決済・課金などはHuman Gateを維持する。
+
+
+### PG-006 — 実証完成
+
+- RED:
+  - queue task `scheduled-pg006-red-919f3e19`。
+  - `selection_record` が存在しない状態を固定し、fixed tests failureを確認。
+- Product fix:
+  - `candidate_pipeline.py` v1.2。
+  - `selected_candidate`、`selection_reason`、`candidate_result`、`strategy_result`、`simulation_result` を共通recordとして返す。
+  - repair commit `8306e31b4aedd985361cbd7688c5835ef4df9344`。
+- Green固定:
+  - 同じtargeted testをqueue経路から再投入。
+  - commit `d21f5cff5380938a94565aa39ce366a3e2cd75f7`。
+  - executor fixed tests success。
+- その後のHEAD `73d6d37af253b73a69998f9ef71dfeff5920f75a` でも Research Lab CI Greenを確認。
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用完成: PG-008の定常監視・運用経路で最終確認する。
+
+### PG-007 — 実証完成
+
+- RED:
+  - commit `3de312811db15989153e83db2721d4bb9c4b98b1`。
+  - CI #1072 failure。
+  - `ModuleNotFoundError: research_lab.supabase_selection_record_repository` で未実装を再現。
+- Product fix:
+  - `research_lab/supabase_selection_record_repository.py` を追加。
+  - server-side injected client方式で、secretをコード・返却値・ログへ出さない。
+  - record key validation、selection record必須キー検証、duplicate fail-closed、write/read-back契約を実装。
+  - repair commit `7823c7d418de1489a3b79c31c02b1c59cc330244`。
+  - exact-SHA CI #1073 `completed / success`。
+- Supabase:
+  - `public.warashibe_selection_records` を追加。
+  - `record_key text unique`、`selection_record jsonb`、`created_at`。
+  - RLS有効、公開policyなし。server/service-role境界を維持。
+  - probe recordで実write -> read-back一致 -> probe cleanupを確認。
+
+判定:
+- 設計完成: 完了。
+- 実証完成: 完了。
+- 運用完成: PG-008のv1.0定常運用経路で最終確認する。
