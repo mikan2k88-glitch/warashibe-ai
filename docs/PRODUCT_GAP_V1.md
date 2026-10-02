@@ -62,6 +62,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-010 | 実購入・実決済・実販売の無人実行 | Post-v1拡張 | PG-009 + Human Gate | DONE（安全実行境界・dry-runエンドポイント到達） |
 | PG-011 | 国内市場アクセス調査＋初期物理運用Policy | Post-v1拡張 | PG-009, PG-010 | DONE（開発エンドポイント到達） |
 | PG-012 | Yahoo!ショッピング公式read-only connector | Post-v1拡張 | PG-011 | DONE（開発エンドポイント到達） |
+| PG-013 | 楽天Product Search＋国内JAN同一商品比較 | Post-v1拡張 | PG-012 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -707,3 +708,107 @@ PG-011の東京・小型物流Policyで評価できる。
 次の自然な開発対象は、Yahoo!検索結果の不足物理情報を公式/許可された追加データで補完する、
 または楽天市場を第2の国内公式read-only providerとして追加し、
 複数国内市場の比較・価格差・同一商品照合へ進むことである。
+
+
+### PG-013 — 楽天Product Search＋国内JAN比較 開発エンドポイント到達
+
+目的:
+- Yahoo!ショッピングに加え、第2国内公式read-only市場として楽天Product Searchを接続する。
+- 商品名の曖昧一致ではなく、JAN/GTINを使って同一商品を保守的に照合する。
+- 同一identityが確定した場合だけ、国内市場間のasking-price差を比較する。
+- 実購入・注文・決済・出品は行わない。
+
+楽天公式provider:
+- endpoint:
+  `https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801`
+- method: GET。
+- `productCode` はJANコード。
+- required credential:
+  - `applicationId`
+  - `accessKey`
+- 実装ではAccess KeyをURL queryへ含めずHTTP headerへ送る。
+- `formatVersion=2` を使用。
+
+実装:
+- `research_lab/rakuten_product_ingestion_bridge.py`
+- `research_lab/domestic_market_comparison.py`
+- `research_lab/yahoo_shopping_ingestion_bridge.py`:
+  - Yahoo response `janCode` を canonical `metadata["gtin"]` へ追加。
+
+Rakuten normalization:
+- `productCode` → `metadata.gtin`
+- `productNo` → `metadata.model_number`
+- `salesMinPrice` を優先asking priceとして `purchase_price` へ格納。
+- `averagePrice` をaggregate asking-price evidenceとして保持。
+- `sale_probability=0.0`, `confidence=0.0`。
+- 実売却実績へ昇格しない。
+
+国内同一商品比較:
+- 既存 `market_identity_resolution.identity_key()` / `same_identity()` を再利用。
+- validated GTIN/JAN一致時のみ `comparison_ready`。
+- 不一致時は `identity_mismatch`。
+- fuzzy matching / AI推測で異なる商品をmergeしない。
+- comparison result:
+  - lowest asking price
+  - lowest asking source
+  - highest asking price
+  - price spread
+- commerce authorizationは常にFalse。
+
+PG-013 RED / repair:
+- RED:
+  - commit `5cf6c024eafc86e23226dbb9218697a5e0df51d6`
+  - CI #1100 failure。
+  - Rakuten connector / domestic comparison未実装を再現。
+- Yahoo JAN bridge:
+  - commit `dbe21b262acbc25a66e7f8a621fe8e462c7366fe`
+  - Yahoo `janCode` → canonical `gtin`。
+  - CI #1101 failureで楽天/比較未実装を継続確認。
+- Rakuten connector:
+  - commit `4605428ef0c5db7265c7b32e0ec1cc1a5f37174f`
+  - Rakuten Product Search read-only connectorを追加。
+  - CI #1102 failureで比較モジュール未実装を確認。
+- domestic comparison:
+  - commit `e248c9ebc0799e5b387a00e11df5a900ca36c3e1`
+  - JAN/GTIN identity一致時のみ国内価格比較を実装。
+  - CI #1103 success。
+- safety regression:
+  - commit `fea68449f9ed7ba115366a7f937c13a41cb769db`
+  - GET/HTTPS/固定host/固定path、Access Key URL非露出、redirect拒否、credential不足fail-closed、identity mismatch拒否を固定。
+  - CI #1104 success。
+- inventory:
+  - commit `7fab3e81031d7438b0c66958a4b6a8c99f9d67f5`
+  - 市場データ棚卸しへ第2国内providerとして反映。
+  - CI #1105 success。
+
+安全境界:
+- Rakuten/Yahooともread-only GETのみ。
+- credentialをMarketObservation / Candidate /比較結果へ含めない。
+- 実売却実績・成功確率をasking priceから推測しない。
+- JAN不一致は比較しない。
+- PG-011 physical情報が不足していれば、Candidateは引き続きfail-closed。
+- live commerceはPG-010でblockedのまま。
+
+判定:
+- 第2国内公式provider: 完了。
+- Yahoo JAN normalization: 完了。
+- Rakuten JAN normalization: 完了。
+- conservative identity resolution: 完了。
+- domestic asking-price comparison: 完了。
+- connector safety regression: 完了。
+- **PG-013開発エンドポイント: 到達。**
+
+## 13. PG-013 開発エンドポイント
+
+PG-013到達時点で、わらしべAIはYahoo!ショッピングと楽天Product Searchから得た
+国内市場データをJAN/GTINで同一商品として照合し、
+同一性が確定した場合だけ国内asking-price差を比較できる。
+
+これにより、
+`国内市場Aの候補 → JAN照合 → 国内市場B価格確認 → Candidate/物理Policy`
+という複数市場比較の基礎が成立した。
+
+次の自然な開発対象は、
+1. JAN一致候補の物理情報補完、
+2. 国内価格差から仕入れ/売却候補を推測せず安全に提案へ繋ぐcomparison policy、
+3. Supabaseへcross-market comparison recordを保存して履歴比較すること。
