@@ -217,6 +217,44 @@ def main():
     assert pg009.accepted[0].purchase_price == 3000
     assert pg009.accepted[0].metadata["asking_price_only"] is True
 
+    from research_lab.ebay_browse_ingestion_bridge import (
+        fetch_and_ingest_browse_from_environment,
+    )
+    runtime_calls = []
+    def _runtime_fetch(query, access_token, *, marketplace_id, limit, timeout):
+        runtime_calls.append((query, access_token, marketplace_id, limit, timeout))
+        return {
+            "itemSummaries": [{
+                "itemId": "pg009|runtime",
+                "title": "PG-009 Runtime Camera",
+                "price": {"value": "3000", "currency": "JPY"},
+                "categories": [{"categoryName": "Digital Cameras"}],
+            }]
+        }
+
+    runtime = fetch_and_ingest_browse_from_environment(
+        "used camera",
+        environ={"EBAY_BROWSE_ACCESS_TOKEN": "runtime-token"},
+        marketplace_id="EBAY_JP",
+        limit=3,
+        timeout=4,
+        fetch_payload=_runtime_fetch,
+        observed_at="2026-10-02T00:00:00+00:00",
+    )
+    assert runtime.accepted_count == 1
+    assert runtime_calls == [("used camera", "runtime-token", "EBAY_JP", 3, 4)]
+
+    try:
+        fetch_and_ingest_browse_from_environment(
+            "used camera",
+            environ={},
+            fetch_payload=_runtime_fetch,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "eBay Browse access token is not configured"
+    else:
+        raise AssertionError("missing eBay token must fail closed")
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
