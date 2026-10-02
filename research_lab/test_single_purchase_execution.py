@@ -1,5 +1,6 @@
 """PG-028 Single Purchase Execution contract tests."""
 
+from research_lab.human_final_buy import build_human_final_buy
 from research_lab.single_purchase_execution import execute_single_purchase
 
 
@@ -54,19 +55,16 @@ def _validation():
 
 
 def _final_buy():
-    return {
-        "status": "human_final_buy_recorded",
-        "decision": "buy",
-        "confirmation_key": "final-buy-028",
-        "provider": "yahoo_shopping",
-        "item_key": "item-028",
-        "quantity": 1,
-        "max_total_cost_jpy": 3000,
-        "confirmed_by": "human",
-        "confirmed_at": "2026-10-03T03:30:00+00:00",
-        "expires_at": "2026-10-03T03:45:00+00:00",
-        "execution_authorized_for_single_order": True,
-    }
+    return build_human_final_buy(
+        _validation(),
+        confirmation_key="final-buy-028",
+        decision="buy",
+        confirmed_by="human",
+        confirmed_at="2026-10-03T03:30:00+00:00",
+        expires_at="2026-10-03T03:45:00+00:00",
+        max_total_cost_jpy=3000,
+        reason="single live pilot order confirmed",
+    )
 
 
 def main():
