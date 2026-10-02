@@ -757,6 +757,114 @@ def main():
     assert blocked_proposal["reason"] == "physical_policy_not_allowed"
     assert blocked_proposal["commerce_authorized"] is False
 
+    # PG-015 targeted RED: cross-market comparison/proposal records must
+    # be append-only persistable and freshness-gated before review use.
+    from datetime import datetime, timezone
+    from research_lab.cross_market_record import (
+        build_cross_market_record,
+        evaluate_cross_market_record_freshness,
+    )
+    from research_lab.supabase_cross_market_record_repository import (
+        SupabaseCrossMarketRecordRepository,
+    )
+
+    pg015_record = build_cross_market_record(
+        record_key="pg015-4901234567894-001",
+        comparison=comparison,
+        proposal=proposal,
+        observed_at="2026-10-02T13:30:00+00:00",
+        captured_at="2026-10-02T13:31:00+00:00",
+    )
+    assert pg015_record["identity_key"] == "gtin:4901234567894:JPY"
+    assert pg015_record["proposal"]["status"] == "proposal_ready"
+
+    fresh = evaluate_cross_market_record_freshness(
+        pg015_record,
+        now=datetime(2026, 10, 2, 13, 45, tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )
+    assert fresh["status"] == "fresh"
+    assert fresh["review_allowed"] is True
+    assert fresh["commerce_authorized"] is False
+
+    stale = evaluate_cross_market_record_freshness(
+        pg015_record,
+        now=datetime(2026, 10, 2, 15, 0, tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )
+    assert stale["status"] == "stale"
+    assert stale["review_allowed"] is False
+
+    class _CrossResponse:
+        def __init__(self, data=None):
+            self.data = data or []
+
+    class _CrossTable:
+        def __init__(self):
+            self.rows = []
+            self._op = None
+            self._payload = None
+            self._key = None
+            self._order = None
+
+        def insert(self, payload):
+            self._op = "insert"
+            self._payload = dict(payload)
+            return self
+
+        def select(self, _fields):
+            self._op = "select"
+            return self
+
+        def eq(self, key, value):
+            self._key = (key, value)
+            return self
+
+        def order(self, key, desc=False):
+            self._order = (key, desc)
+            return self
+
+        def limit(self, _count):
+            return self
+
+        def execute(self):
+            if self._op == "insert":
+                key = self._payload["record_key"]
+                if any(row["record_key"] == key for row in self.rows):
+                    raise ValueError("duplicate")
+                self.rows.append(dict(self._payload))
+                return _CrossResponse([dict(self._payload)])
+            rows = list(self.rows)
+            if self._key is not None:
+                key, value = self._key
+                rows = [row for row in rows if row.get(key) == value]
+            if self._order is not None:
+                key, desc = self._order
+                rows.sort(key=lambda row: row.get(key) or "", reverse=desc)
+            return _CrossResponse([dict(row) for row in rows])
+
+    class _CrossClient:
+        def __init__(self):
+            self.records = _CrossTable()
+
+        def table(self, name):
+            assert name == "warashibe_cross_market_records"
+            return self.records
+
+    pg015_repo = SupabaseCrossMarketRecordRepository(_CrossClient())
+    stored_pg015 = pg015_repo.append(pg015_record)
+    loaded_pg015 = pg015_repo.get("pg015-4901234567894-001")
+    assert stored_pg015["record_key"] == "pg015-4901234567894-001"
+    assert loaded_pg015["comparison"] == comparison
+    assert loaded_pg015["proposal"] == proposal
+
+    try:
+        pg015_repo.append(pg015_record)
+    except ValueError as exc:
+        assert "already exists" in str(exc)
+    else:
+        raise AssertionError("duplicate cross-market record must fail closed")
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
