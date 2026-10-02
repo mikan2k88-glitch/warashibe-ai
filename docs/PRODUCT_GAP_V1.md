@@ -61,6 +61,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-009 | 実市場APIからの自動商品取得 | Post-v1拡張 | PG-008 | DONE（開発エンドポイント到達） |
 | PG-010 | 実購入・実決済・実販売の無人実行 | Post-v1拡張 | PG-009 + Human Gate | DONE（安全実行境界・dry-runエンドポイント到達） |
 | PG-011 | 国内市場アクセス調査＋初期物理運用Policy | Post-v1拡張 | PG-009, PG-010 | DONE（開発エンドポイント到達） |
+| PG-012 | Yahoo!ショッピング公式read-only connector | Post-v1拡張 | PG-011 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -619,3 +620,90 @@ PG-011到達時点で、わらしべAIは
 次の自然な開発対象は、楽天市場またはYahoo!ショッピングのread-only connectorを実装し、
 国内実データ → common observation → Candidate → PG-011 physical policy
 を一周させることである。
+
+
+### PG-012 — Yahoo!ショッピング公式read-only connector 開発エンドポイント到達
+
+目的:
+- 国内公式市場の実データをread-onlyで取得し、既存のcanonical market evidence / Candidate契約へ接続する。
+- PG-011の小型物流Policyを実データ候補へ適用する。
+- 物理情報が取得できない場合は推測せずfail-closedする。
+- 実購入・注文・決済・出品・account mutationは追加しない。
+
+採用市場:
+- Yahoo!ショッピング 商品検索(v3)。
+- 公式endpoint:
+  `https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch`
+- method: GET。
+- 必須資格情報: `appid` (Client ID)。
+- 実行環境では `YAHOO_SHOPPING_APP_ID` からのみ取得する。
+
+実装:
+- `research_lab/yahoo_shopping_ingestion_bridge.py`
+- 安全境界:
+  - HTTPS固定。
+  - host `shopping.yahooapis.jp` 固定。
+  - path `/ShoppingWebService/V3/itemSearch` 固定。
+  - GETのみ。
+  - redirect拒否。
+  - query / results / condition(new|used) のみを明示的に組み立てる。
+  - Client ID未設定はfail-closed。
+  - 資格情報をMarketObservation / Candidate /監査recordへ含めない。
+  - order/payment/listing/account mutation APIを持たない。
+
+データ経路:
+`Yahoo! Shopping itemSearch JSON`
+→ `yahoo_search_to_records()`
+→ `live_market_evidence_ingestion.ingest_records()`
+→ `MarketObservation`
+→ `real_market_adapter.observation_to_candidate()`
+→ `Candidate evaluation.physical.policy`
+
+市場データの意味:
+- Yahoo!商品検索価格はasking-price evidenceとして扱い、実売却実績へ昇格しない。
+- `sale_probability=0.0`, `confidence=0.0` で未評価を明示。
+- 商品検索結果で配送サイズ・重量等が保証されない場合、
+  `package_size_class / weight_grams / shipping_cost_jpy / fragility_score / storage_score / domestic_shipping`
+  は未知のまま保持し、PG-011の `insufficient_data` でfail-closedする。
+
+PG-012 RED / repair:
+- RED:
+  - commit `3f18d25e0799110d3e13c37527955951d1855b4e`
+  - CI #1095 `completed / failure`
+  - `research_lab.yahoo_shopping_ingestion_bridge` 未実装を再現。
+- repair:
+  - commit `d20844d311aceadbf9ddb86fc3452ae4350bedb4`
+  - Yahoo!ショッピング公式read-only connectorを実装。
+  - fixture payloadから MarketObservation → Candidate → PG-011 physical policyまで接続。
+  - CI #1096 `completed / success`。
+- safety regression:
+  - commit `be63828e6c30dd5b3a70850b4a7c49056fdaf7ae`
+  - GET / HTTPS / 固定host / 固定path / redirect拒否 / credential fail-closedを回帰固定。
+  - CI #1097 `completed / success`。
+- inventory:
+  - commit `9fc94483f6ae194201d5771d55998ecd8ff6bfe4`
+  - `docs/MARKET_DATA_ACCESS_INVENTORY.md` へ実装済みconnectorとして記録。
+  - CI #1098 `completed / success`。
+
+判定:
+- 国内公式read-only connector: 完了。
+- MarketObservation正規化: 完了。
+- Candidate接続: 完了。
+- PG-011 physical policy接続: 完了。
+- physical data不足時fail-closed: 完了。
+- connector安全境界: 完了。
+- live commerce: blocked。
+- **PG-012開発エンドポイント: 到達。**
+
+## 12. PG-012 開発エンドポイント
+
+PG-012到達時点で、わらしべAIはYahoo!ショッピング公式商品検索の国内商品データを
+read-onlyで取得し、canonical MarketObservationからCandidateへ変換し、
+PG-011の東京・小型物流Policyで評価できる。
+
+配送サイズ・重量などの物理データをYahoo!商品検索だけで確定できない場合は、
+推測で補完せず `insufficient_data` として停止する。
+
+次の自然な開発対象は、Yahoo!検索結果の不足物理情報を公式/許可された追加データで補完する、
+または楽天市場を第2の国内公式read-only providerとして追加し、
+複数国内市場の比較・価格差・同一商品照合へ進むことである。
