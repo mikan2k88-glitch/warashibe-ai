@@ -7,6 +7,7 @@ network calls, purchases, listings, payments, or sale-outcome persistence.
 from dataclasses import dataclass
 
 from research_lab.ebay_browse_adapter import browse_search_to_records
+from research_lab.ebay_browse_transport import fetch_search_payload
 from research_lab.ebay_listing_dd_bridge import listing_observation_to_dd_input
 from research_lab.live_market_evidence_ingestion import IngestionResult, ingest_records
 
@@ -56,3 +57,29 @@ def build_dd_input_batch(result: EbayBrowseIngestionResult) -> dict:
                              "reason": "dd_conversion_rejected"})
     return {"dd_inputs": tuple(inputs), "rejected": tuple(rejected),
             "external_action_authorized": False}
+
+
+def fetch_and_ingest_browse_search(
+    query,
+    access_token,
+    *,
+    marketplace_id="EBAY_US",
+    limit=20,
+    timeout=10,
+    fetch_payload=fetch_search_payload,
+    observed_at=None,
+):
+    """Fetch one read-only Browse search and ingest validated market evidence.
+
+    The injected fetcher keeps tests deterministic. The default transport is
+    restricted to eBay Browse GET item_summary/search and exposes no commerce
+    operation.
+    """
+    payload = fetch_payload(
+        query,
+        access_token,
+        marketplace_id=marketplace_id,
+        limit=limit,
+        timeout=timeout,
+    )
+    return ingest_browse_search_payload(payload, observed_at=observed_at)
