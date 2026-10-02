@@ -74,6 +74,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-022 | Purchase Intent Record | Post-v1拡張 | PG-021 | DONE（開発エンドポイント到達） |
 | PG-023 | Commerce Adapter Sandbox | Post-v1拡張 | PG-022 | DONE（開発エンドポイント到達） |
 | PG-024 | Live-readiness Audit | Post-v1拡張 | PG-023 | DONE（開発エンドポイント到達） |
+| PG-025 | Human Go/No-Go Decision | Post-v1拡張 | PG-024 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1884,3 +1885,62 @@ PG-024到達時点で、
 
 全チェックが通っても実購入・決済・販売は開始しない。
 次の段階はHuman go/no-goによるLimited Live Pilot判断であり、PG-010 live-commerce blockは現在も維持する。
+
+
+### PG-025 — Human Go/No-Go Decision 開発エンドポイント到達
+
+目的:
+- PG-024 readiness audit通過後のHuman GO/NO_GOを監査記録する。
+- GOでも実購入権限へ変換しない。
+- Limited Live Pilotのscopeだけを固定する。
+
+実装:
+- `research_lab/human_go_no_go.py`
+- `research_lab/supabase_live_pilot_decision_repository.py`
+- `research_lab/test_human_go_no_go.py`
+- `docs/migrations/2026-10-03_pg025_live_pilot_decisions.sql`
+
+GO scope:
+- approved budget = 最大3,000円。
+- max transactions = 1。
+- quantity per transaction = 1。
+- parallel positions = false。
+- approved provider allowlist。
+- valid_until必須。
+- Human final buy required。
+
+安全境界:
+- `live_execution_authorized=False`
+- `execution_triggered=False`
+- commerce/external/purchase/payment/sale authorization=False。
+
+Supabase:
+- table: `public.warashibe_live_pilot_decisions`
+- decision_key unique / append-only。
+- decision = go/no_go。
+- RLS enabled、public/anon policyなし。
+
+実DB:
+- `pg025-live-proof-20261003`
+- GO / budget=3000 / max_transactions=1をread-back。
+- live_execution_authorized=false / commerce_authorized=false確認。
+- cleanup済み。
+
+CI:
+- contract `23193f50c647dab6b2637ebf4b49965400d06ca9` — #1175 success。
+- RED `417f88bffee29536e8412758e1c8d2b5c943687f` — #1176 failure。
+- implementation `3c243986ec37d2ae8a5408d08257cef5aa4aa00e` — #1177 success。
+- repository `552ecb972d279aba74e5c834cce9cf782ec6a788` — #1178 success。
+- migration source `df72665c15a994d644882d86d8c1758fa8d55b7b` — #1179 success。
+
+判定:
+- Human GO/NO_GO audit: 完了。
+- bounded pilot scope: 完了。
+- live execution authorization: blocked。
+- **PG-025開発エンドポイント: 到達。**
+
+## 25. PG-025 開発エンドポイント
+
+PG-025到達時点で、PG-024 readiness auditからHuman GO/NO_GOを記録し、
+GOの場合でも「限定pilot scopeを承認した」だけの状態を保持する。
+次の開発対象はPG-026 Live Pilot Guard。
