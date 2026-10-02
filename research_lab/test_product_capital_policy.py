@@ -865,6 +865,129 @@ def main():
     else:
         raise AssertionError("duplicate cross-market record must fail closed")
 
+    # PG-016 targeted RED: only fresh PG-015 records may be reviewed,
+    # review decisions are append-only audits, and approval never authorizes commerce.
+    from research_lab.human_review_decision import (
+        build_human_review_decision,
+        evaluate_review_eligibility,
+    )
+    from research_lab.supabase_review_decision_repository import (
+        SupabaseReviewDecisionRepository,
+    )
+
+    review_eligibility = evaluate_review_eligibility(
+        pg015_record,
+        now=datetime(2026, 10, 2, 13, 45, tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )
+    assert review_eligibility["status"] == "review_ready"
+    assert review_eligibility["review_allowed"] is True
+    assert review_eligibility["commerce_authorized"] is False
+
+    approve_decision = build_human_review_decision(
+        pg015_record,
+        decision="approve",
+        reviewer_id="human",
+        reason="physical and market evidence reviewed",
+        reviewed_at="2026-10-02T13:46:00+00:00",
+        now=datetime(2026, 10, 2, 13, 46, tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )
+    assert approve_decision["decision"] == "approve"
+    assert approve_decision["record_key"] == "pg015-4901234567894-001"
+    assert approve_decision["human_review_completed"] is True
+    assert approve_decision["commerce_authorized"] is False
+    assert approve_decision["external_action_authorized"] is False
+    assert approve_decision["purchase_authorized"] is False
+
+    reject_decision = build_human_review_decision(
+        pg015_record,
+        decision="reject",
+        reviewer_id="human",
+        reason="skip this candidate",
+        reviewed_at="2026-10-02T13:47:00+00:00",
+        now=datetime(2026, 10, 2, 13, 47, tzinfo=timezone.utc),
+        max_age_seconds=3600,
+    )
+    assert reject_decision["decision"] == "reject"
+    assert reject_decision["commerce_authorized"] is False
+
+    try:
+        build_human_review_decision(
+            pg015_record,
+            decision="approve",
+            reviewer_id="human",
+            reason="stale must fail",
+            reviewed_at="2026-10-02T15:00:00+00:00",
+            now=datetime(2026, 10, 2, 15, 0, tzinfo=timezone.utc),
+            max_age_seconds=3600,
+        )
+    except ValueError as exc:
+        assert "record is not fresh" in str(exc)
+    else:
+        raise AssertionError("stale record review must fail closed")
+
+    class _ReviewResponse:
+        def __init__(self, data=None):
+            self.data = data or []
+
+    class _ReviewTable:
+        def __init__(self):
+            self.rows = []
+            self._op = None
+            self._payload = None
+            self._key = None
+
+        def insert(self, payload):
+            self._op = "insert"
+            self._payload = dict(payload)
+            return self
+
+        def select(self, _fields):
+            self._op = "select"
+            return self
+
+        def eq(self, key, value):
+            self._key = (key, value)
+            return self
+
+        def limit(self, _count):
+            return self
+
+        def execute(self):
+            if self._op == "insert":
+                record_key = self._payload["record_key"]
+                if any(row["record_key"] == record_key for row in self.rows):
+                    raise ValueError("duplicate")
+                self.rows.append(dict(self._payload))
+                return _ReviewResponse([dict(self._payload)])
+            rows = list(self.rows)
+            if self._key is not None:
+                key, value = self._key
+                rows = [row for row in rows if row.get(key) == value]
+            return _ReviewResponse([dict(row) for row in rows])
+
+    class _ReviewClient:
+        def __init__(self):
+            self.records = _ReviewTable()
+
+        def table(self, name):
+            assert name == "warashibe_review_decisions"
+            return self.records
+
+    review_repo = SupabaseReviewDecisionRepository(_ReviewClient())
+    stored_review = review_repo.append(approve_decision)
+    loaded_review = review_repo.get_by_record_key("pg015-4901234567894-001")
+    assert stored_review["decision"] == "approve"
+    assert loaded_review["decision"] == "approve"
+
+    try:
+        review_repo.append(reject_decision)
+    except ValueError as exc:
+        assert "already reviewed" in str(exc)
+    else:
+        raise AssertionError("second review for same record must fail closed")
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
