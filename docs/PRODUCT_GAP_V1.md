@@ -64,6 +64,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-012 | Yahoo!ショッピング公式read-only connector | Post-v1拡張 | PG-011 | DONE（開発エンドポイント到達） |
 | PG-013 | 楽天Product Search＋国内JAN同一商品比較 | Post-v1拡張 | PG-012 | DONE（開発エンドポイント到達） |
 | PG-014 | 物理証拠補完＋安全なcross-market proposal | Post-v1拡張 | PG-013 | DONE（開発エンドポイント到達） |
+| PG-015 | cross-market proposal/comparisonのSupabase永続化＋鮮度評価 | Post-v1拡張 | PG-014 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -903,4 +904,121 @@ PG-014到達時点で、わらしべAIは
 1. proposal/comparison recordのSupabase永続化、
 2. 過去価格との差分・鮮度評価、
 3. Human Review用のAPI/UI表示、
+のいずれかである。
+
+
+### PG-015 — Supabase永続化＋鮮度評価 開発エンドポイント到達
+
+目的:
+- PG-014で生成したcross-market comparison / proposalをappend-onlyで履歴保存する。
+- 保存前後に市場観測の鮮度を同一契約で評価する。
+- stale/future/invalid timestampはHuman Review利用不可としてfail-closedする。
+- 実購入・決済・販売は引き続きblockedとする。
+
+実装:
+- `research_lab/cross_market_record.py`
+- `research_lab/supabase_cross_market_record_repository.py`
+- migration:
+  `docs/migrations/2026-10-02_pg015_cross_market_records.sql`
+
+record contract:
+- `record_key`
+- `identity_key`
+- `comparison`
+- `proposal`
+- `observed_at`
+- `captured_at`
+- commerce / external action authorizationは常にFalse。
+
+freshness contract:
+- timezone付き `observed_at` / `captured_at` を必須化。
+- `captured_at >= observed_at`。
+- default `max_age_seconds=3600`。
+- status:
+  - `fresh`: Human Review利用可。
+  - `stale`: 利用不可。
+  - `future`: 利用不可。
+  - `invalid_timestamp_order`: 利用不可。
+- freshness判定はcommerce authorizationを変更しない。
+
+Supabase repository:
+- table: `warashibe_cross_market_records`
+- append-only record key。
+- duplicate `record_key` はfail-closed。
+- `get(record_key)`。
+- `latest_for_identity(identity_key)`。
+- server-side client injectionのみ。
+- credentialの読み出し・ログ出力なし。
+
+実Supabase migration:
+- 新規独立テーブルのみ追加。既存テーブルは変更・削除しない。
+- columns:
+  - `id bigint identity primary key`
+  - `record_key text unique not null`
+  - `identity_key text not null`
+  - `comparison jsonb not null`
+  - `proposal jsonb not null`
+  - `observed_at timestamptz not null`
+  - `captured_at timestamptz not null`
+  - `created_at timestamptz default now()`
+- `captured_at >= observed_at` check。
+- identity + captured_at index。
+- RLS enabled。
+- public/anon policyは作成せず、server-side専用。
+- security advisorの `rls_enabled_no_policy` はINFOであり、このclosed-by-default設計では意図した状態。
+
+実DB往復証拠:
+- test key: `pg015-live-proof-20261002`
+- insert成功。
+- same record_key read-back成功。
+- comparison / proposal / identity / timestamps一致を確認。
+- cleanup delete成功。
+- テストrowは残していない。
+
+PG-015 RED / repair:
+- RED:
+  - commit `bb2ffdb9182063f4f20e7b75fd87d208e2c3fdb2`
+  - CI #1113 failure。
+  - cross-market record / repository未実装を再現。
+- implementation:
+  - `73b0d246cba2810eb7bba5efd27bba44e531cfe5`
+  - `4da0653bbc47f8843c7d792765d72fc76e1cafcd`
+  - record freshness contract / Supabase repositoryを実装。
+  - CI #1115 success。
+- live Supabase:
+  - migration `add_warashibe_cross_market_records` success。
+  - RLS enabledを確認。
+  - insert → read-back → cleanup実証完了。
+- migration source:
+  - commit `4773146cb19cb57d75b7bdbd50fd5d96240ed35d`
+  - CI #1116 success。
+
+判定:
+- cross-market append-only record: 完了。
+- Supabase persistence contract: 完了。
+- live DB schema: 完了。
+- live write/read-back proof: 完了。
+- freshness gate: 完了。
+- stale fail-closed: 完了。
+- test data cleanup: 完了。
+- live commerce: blocked。
+- **PG-015開発エンドポイント: 到達。**
+
+## 15. PG-015 開発エンドポイント
+
+PG-015到達時点で、
+`Yahoo/Rakuten comparison`
+→ `physical evidence`
+→ `Human Review proposal`
+→ `freshness evaluation`
+→ `Supabase append-only history`
+までを一周できる。
+
+古い市場データは保存履歴として残せるが、freshness gateが `stale` の場合は
+Human Review用の現行候補として再利用しない。
+
+次の自然な開発対象は、
+1. Human Review用API/UI、
+2. 最新recordと過去recordの価格差分・トレンド評価、
+3. review approve/rejectの監査記録、
 のいずれかである。
