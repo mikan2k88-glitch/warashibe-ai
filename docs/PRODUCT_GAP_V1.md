@@ -75,6 +75,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-023 | Commerce Adapter Sandbox | Post-v1拡張 | PG-022 | DONE（開発エンドポイント到達） |
 | PG-024 | Live-readiness Audit | Post-v1拡張 | PG-023 | DONE（開発エンドポイント到達） |
 | PG-025 | Human Go/No-Go Decision | Post-v1拡張 | PG-024 | DONE（開発エンドポイント到達） |
+| PG-026 | Live Pilot Guard | Post-v1拡張 | PG-025 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1944,3 +1945,82 @@ CI:
 PG-025到達時点で、PG-024 readiness auditからHuman GO/NO_GOを記録し、
 GOの場合でも「限定pilot scopeを承認した」だけの状態を保持する。
 次の開発対象はPG-026 Live Pilot Guard。
+
+
+### PG-026 — Live Pilot Guard 開発エンドポイント到達
+
+目的:
+- PG-025 GO scopeとPG-022 Purchase Intentを、将来のlive adapter直前に再検証する。
+- 予算・取引数・1品制約・provider allowlist・期限・価格上限・総額上限・重複防止・open position・在庫・Pre-flight・emergency kill switchを強制する。
+- Guard通過を実行許可へ変換しない。
+
+実装:
+- `research_lab/live_pilot_guard.py`
+- `research_lab/supabase_live_pilot_guard_repository.py`
+- `research_lab/test_live_pilot_guard.py`
+- `docs/migrations/2026-10-03_pg026_live_pilot_guard_results.sql`
+
+Guard checks:
+- Human GO decision。
+- GO decision expiry。
+- Purchase Intent validity/expiry。
+- provider allowlist。
+- current purchase price <= intent max purchase price。
+- current total cost <= intent max total cost and approved budget。
+- max transactions=1 / completed transactions < 1。
+- quantity=1。
+- parallel positions disabled / open positions=0。
+- duplicate order=false。
+- emergency kill switch not engaged。
+- inventory available。
+- current Pre-flight passed。
+- Human final buy required。
+- authorization boundary remains closed。
+
+出力:
+- `status=live_pilot_guard_passed / live_pilot_guard_blocked`
+- `guard_passed=True/False`
+- `eligible_for_live_adapter_validation=True/False`
+- `live_execution_authorized=False`
+- `execution_triggered=False`
+- commerce/external/purchase/payment/sale authorization=False。
+
+Supabase:
+- table: `public.warashibe_live_pilot_guard_results`
+- guard_key unique / append-only。
+- RLS enabled、public/anon policyなし。
+
+実DB:
+- `pg026-live-proof-20261003`
+- approved budget=3,000円 / current total=2,950円。
+- guard_passed=true / eligible_for_live_adapter_validation=true。
+- live_execution_authorized=false / commerce_authorized=false。
+- cleanup済み。
+
+CI:
+- contract `84fe10dbb00b0fc0dc312f5bfefa7aa00eace1c0` — #1181 success。
+- RED `bbb0acb8622414dfa8beec93395fa6cba55afa19` — #1182 failure。
+- implementation `3f95b732da7a97198f500b7f7487552f744a8f63` — #1183 success。
+- repository `90cd7f0cdd60fa21ba45fce4a8371ea6c1de586a` — #1184 success。
+- migration source `590afe8d33aa79469b68b0ad785bef872caaa737` — #1185 success。
+
+判定:
+- bounded live-pilot guard: 完了。
+- budget/provider/expiry/duplicate/kill-switch guards: 完了。
+- append-only audit persistence: 完了。
+- live execution authorization: blocked。
+- **PG-026開発エンドポイント: 到達。**
+
+## 26. PG-026 開発エンドポイント
+
+PG-026到達時点で、
+`Human GO`
+→ `bounded pilot scope`
+→ `Purchase Intent`
+→ `Live Pilot Guard`
+→ `eligible_for_live_adapter_validation`
+まで進める。
+
+Guard通過は実購入許可ではない。
+次の自然な開発対象はPG-027 Live Commerce Adapter Interfaceであり、
+実金銭を動かすPG-028より前にHuman Gateを維持する。
