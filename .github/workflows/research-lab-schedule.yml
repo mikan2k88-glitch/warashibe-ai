@@ -1,8 +1,10 @@
 name: Warashibe AI Research Lab Schedule
 # Supabase queue bridge uses GitHub OIDC; no Supabase secret is stored in GitHub.
+# Queue executor polls frequently; the heavier research cycle remains hourly.
 
 on:
   schedule:
+    - cron: "*/5 * * * *"
     - cron: "17 * * * *"
   workflow_dispatch:
   push:
@@ -17,8 +19,9 @@ concurrency:
 
 jobs:
   queue-executor:
+    if: github.event_name != 'schedule' || github.event.schedule == '*/5 * * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     permissions:
       contents: write
       id-token: write
@@ -37,11 +40,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Process one Supabase development queue item
-        run: python -m research_lab.dev_queue_executor
+      - name: Poll Supabase development queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            echo "Queue poll attempt ${attempt}/5"
+            python -m research_lab.dev_queue_executor
+            if [ "${attempt}" -lt 5 ]; then
+              sleep 60
+            fi
+          done
 
   research-cycle:
-    needs: queue-executor
+    if: github.event_name != 'schedule' || github.event.schedule == '17 * * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
