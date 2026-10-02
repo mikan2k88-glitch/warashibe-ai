@@ -506,6 +506,79 @@ def main():
     else:
         raise AssertionError("missing Yahoo app ID must fail closed")
 
+    # PG-013 targeted RED: a Yahoo JAN must resolve against Rakuten
+    # Product Search JAN and produce a conservative domestic price comparison.
+    from research_lab.rakuten_product_ingestion_bridge import (
+        fetch_and_ingest_rakuten_product_from_environment,
+    )
+    from research_lab.domestic_market_comparison import (
+        compare_domestic_observations,
+    )
+
+    yahoo_jan_payload = {
+        "hits": [{
+            "code": "seller:jan-item",
+            "name": "PG-013 Compact Camera",
+            "price": 3000,
+            "condition": "used",
+            "url": "https://shopping.yahoo.co.jp/products/pg013",
+            "janCode": "4901234567894",
+            "genreCategory": {"name": "camera"},
+            "seller": {"name": "fixture-store"},
+        }]
+    }
+    yahoo_jan_result = yahoo_bridge.ingest_yahoo_shopping_payload(
+        yahoo_jan_payload,
+        observed_at="2026-10-02T00:00:00+00:00",
+    )
+    yahoo_jan_observation = yahoo_jan_result.accepted[0]
+    assert yahoo_jan_observation.metadata["gtin"] == "4901234567894"
+
+    rakuten_calls = []
+    def _fake_rakuten_fetch(product_code, application_id, access_key, *, hits, timeout):
+        rakuten_calls.append((product_code, application_id, access_key, hits, timeout))
+        return {
+            "items": [{
+                "productId": "rakuten-product-001",
+                "productCode": "4901234567894",
+                "productName": "PG-013 Compact Camera",
+                "genreName": "camera",
+                "salesMinPrice": 2800,
+                "averagePrice": 3200,
+                "productUrlPC": "https://product.rakuten.co.jp/product/pg013/",
+            }]
+        }
+
+    rakuten_result = fetch_and_ingest_rakuten_product_from_environment(
+        "4901234567894",
+        environ={
+            "RAKUTEN_APPLICATION_ID": "test-appid",
+            "RAKUTEN_ACCESS_KEY": "test-access-key",
+        },
+        hits=5,
+        timeout=3,
+        fetch_payload=_fake_rakuten_fetch,
+        observed_at="2026-10-02T00:00:00+00:00",
+    )
+    assert rakuten_calls == [
+        ("4901234567894", "test-appid", "test-access-key", 5, 3)
+    ]
+    assert rakuten_result.accepted_count == 1
+    rakuten_observation = rakuten_result.accepted[0]
+    assert rakuten_observation.metadata["gtin"] == "4901234567894"
+    assert rakuten_observation.purchase_price == 2800
+
+    comparison = compare_domestic_observations(
+        yahoo_jan_observation,
+        rakuten_observation,
+    )
+    assert comparison["same_identity"] is True
+    assert comparison["identity_type"] == "gtin"
+    assert comparison["lowest_asking_price_jpy"] == 2800
+    assert comparison["lowest_asking_source"] == "rakuten_product"
+    assert comparison["price_spread_jpy"] == 200
+    assert comparison["commerce_authorized"] is False
+
     exact = evaluate_capital_fit(
         10_000,
         {"purchase_price": 10_000},
