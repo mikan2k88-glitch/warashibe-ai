@@ -69,6 +69,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-017 | Approved Proposal → Dry-run Commerce Plan | Post-v1拡張 | PG-016 | DONE（開発エンドポイント到達） |
 | PG-018 | Realistic Cost / Profit / Stop-loss Model | Post-v1拡張 | PG-017 | DONE（開発エンドポイント到達） |
 | PG-019 | Human Review / Price History Dashboard | Post-v1拡張 | PG-018 | DONE（開発エンドポイント到達） |
+| PG-020 | Pre-flight Safety Gate | Post-v1拡張 | PG-019 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -1426,3 +1427,126 @@ PG-019到達時点で、
 をidentity単位で人間が一画面確認できる。
 
 次の開発対象はPG-020のPre-flight Safety Gateである。
+
+
+### PG-020 — Pre-flight Safety Gate 開発エンドポイント到達
+
+目的:
+- Human Review approve後、実購入直前を想定した全条件の再検証を行う。
+- freshness / identity chain / Human Review / physical policy / inventory / price / budget / economics / duplicate transaction / dry-run boundaryを一括判定する。
+- 通過結果を `ready_for_human_purchase_confirmation` までに留め、実購入・決済・販売を起動しない。
+
+実装:
+- `research_lab/preflight_safety_gate.py`
+- `research_lab/supabase_preflight_assessment_repository.py`
+- `research_lab/test_preflight_safety_gate.py`
+- `docs/migrations/2026-10-03_pg020_preflight_assessments.sql`
+- build profileへPG-020 contract testを追加。
+
+Pre-flight checks:
+- PG-015 freshness = fresh。
+- record / review / plan / economics のidentity chain一致。
+- Human Review decision = approve。
+- physical policy = allowed。
+- inventory available。
+- current purchase priceの上昇率が上限以内。
+- required cash <= available capital。
+- PG-018 economics profit gate = viable。
+- duplicate transaction = false。
+- dry-run authorization境界維持。
+
+資本・ポジション:
+- `quantity=1`
+- `capital_commitment_mode=single_item`
+- `parallel_positions_allowed=False`
+- current purchase price + inbound shipping + packaging costをrequired cashとして予算判定。
+- 3,000円資本の実証ケースではrequired cash 3,000円で通過。
+
+出力:
+- `status=preflight_ready / preflight_blocked`
+- `ready_for_human_purchase_confirmation=True/False`
+- `human_final_confirmation_required=True`
+- `execution_mode=dry_run`
+- `execution_triggered=False`
+- `commerce_authorized=False`
+- `external_action_authorized=False`
+- purchase/payment/sale authorization=False。
+
+Supabase:
+- table: `public.warashibe_preflight_assessments`
+- `preflight_key` uniqueのappend-only監査保存。
+- columns:
+  - `id bigint identity primary key`
+  - `preflight_key text unique not null`
+  - `record_key text not null`
+  - `plan_key text not null`
+  - `identity_key text not null`
+  - `preflight jsonb not null`
+  - `evaluated_at timestamptz not null`
+  - `created_at timestamptz default now()`
+- RLS enabled。
+- public/anon policyなし。
+- server-side専用closed-by-default。
+- advisorの `rls_enabled_no_policy` は、この設計では意図したINFO。
+
+実DB往復:
+- test key: `pg020-live-proof-20261003`
+- insert成功。
+- read-back:
+  - status = preflight_ready
+  - ready_for_human_purchase_confirmation = true
+  - commerce_authorized = false
+  - quantity = 1
+  - parallel_positions_allowed = false
+- cleanup delete成功。
+- テストrowは残していない。
+
+CI:
+- contract commit: `b2102f9f8bbda65dccb3d0b15f6e920696f6fae2`
+  - CI #1145 success。
+- RED activation: `ffa05db97847c680013db4b76b7a8ea1330dc237`
+  - CI #1146 failure。
+- gate implementation: `1e980ec813a49f04fb4d3f7da9b688e2e38b6bad`
+  - CI #1147 success。
+- repository: `13d9938c2f5474e48fc18806c67bbdefc7edec80`
+  - CI #1148 success。
+- migration source: `9430868d4c5ccfeaf902310cee5469f4480e86b0`
+  - CI #1149 success。
+
+Render:
+- repository SHA `13d9938...` live。
+- gate implementation SHAは正常deploy済み。
+- migration source SHAはstatus API上 update_in_progress表示だが、コード起因failureなし。
+
+判定:
+- freshness re-check: 完了。
+- identity chain: 完了。
+- Human Review gate: 完了。
+- physical policy gate: 完了。
+- inventory gate: 完了。
+- price drift gate: 完了。
+- budget gate: 完了。
+- economics gate: 完了。
+- duplicate transaction gate: 完了。
+- single-item / no-parallel-position: 完了。
+- append-only preflight audit: 完了。
+- live DB roundtrip: 完了。
+- live commerce: blocked。
+- **PG-020開発エンドポイント: 到達。**
+
+## 20. PG-020 開発エンドポイント
+
+PG-020到達時点で、
+`fresh proposal`
+→ `Human Review approve`
+→ `dry-run commerce plan`
+→ `realistic economics`
+→ `Pre-flight Safety Gate`
+→ `ready_for_human_purchase_confirmation`
+までを一周できる。
+
+ただし `ready_for_human_purchase_confirmation=True` は「人間が最終購入判断を行える状態」であり、
+購入・決済・販売の実行権限ではない。
+PG-010 live-commerce blockを維持する。
+
+次の自然な開発対象はPG-021 Human Pilot Sessionである。
