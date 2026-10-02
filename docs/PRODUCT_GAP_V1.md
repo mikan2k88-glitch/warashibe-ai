@@ -63,6 +63,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-011 | 国内市場アクセス調査＋初期物理運用Policy | Post-v1拡張 | PG-009, PG-010 | DONE（開発エンドポイント到達） |
 | PG-012 | Yahoo!ショッピング公式read-only connector | Post-v1拡張 | PG-011 | DONE（開発エンドポイント到達） |
 | PG-013 | 楽天Product Search＋国内JAN同一商品比較 | Post-v1拡張 | PG-012 | DONE（開発エンドポイント到達） |
+| PG-014 | 物理証拠補完＋安全なcross-market proposal | Post-v1拡張 | PG-013 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -812,3 +813,94 @@ PG-013到達時点で、わらしべAIはYahoo!ショッピングと楽天Produc
 1. JAN一致候補の物理情報補完、
 2. 国内価格差から仕入れ/売却候補を推測せず安全に提案へ繋ぐcomparison policy、
 3. Supabaseへcross-market comparison recordを保存して履歴比較すること。
+
+
+### PG-014 — 物理証拠補完＋安全なcross-market proposal 開発エンドポイント到達
+
+目的:
+- PG-013でJAN一致した国内候補について、物理情報を推測せず、出所付きの証拠でのみ補完する。
+- 補完後にPG-011の東京・小型物流Policyを再評価する。
+- 価格差を「購入命令」へ変換せず、Human Review前提のproposalとして提示できるようにする。
+- 実購入・決済・出品・販売は引き続きblockedとする。
+
+実装:
+- `research_lab/physical_evidence_enrichment.py`
+- `research_lab/cross_market_proposal.py`
+- `research_lab/real_market_adapter.py` v0.2
+  - MarketObservation.metadataをCandidate metadataへ保持。
+  - GTIN/JANなどのcanonical identityを落とさない。
+  - 物理項目が存在する場合はCandidate physical evaluationへ渡す。
+  - `confidence` と `success_probability` の意味を分離したまま接続。
+
+物理証拠契約:
+- validated GTINがCandidateと一致すること。
+- 許可source kind:
+  - `manufacturer_spec`
+  - `official_product_page`
+  - `marketplace_shipping_spec`
+- `source_ref` と `observed_at` を必須化。
+- 必須物理項目:
+  - `package_size_class`
+  - `weight_grams`
+  - `shipping_cost_jpy`
+  - `fragility_score`
+  - `storage_score`
+  - `domestic_shipping`
+- 不足、identity mismatch、不正provenanceはfail-closed。
+- 補完後もPG-011 physical policyが不合格ならproposalへ進めない。
+
+cross-market proposal:
+- PG-013 `comparison_ready` が必須。
+- Candidate sourceが比較対象市場に含まれること。
+- PG-011 physical policyが `allowed=True` であること。
+- 出力は `proposal_type=review_candidate`。
+- `human_review_required=True`。
+- `commerce_authorized=False`
+- `external_action_authorized=False`
+- purchase/payment/sale authorizationは全てFalse。
+
+PG-014 RED / repair:
+- RED:
+  - commit `29426e6f4e6781f68a1aed968322c8724e38283b`
+  - CI #1107 failure。
+  - physical evidence enrichment / cross-market proposal未実装を再現。
+- module implementation:
+  - `58660c916656d318c13545f20fd403ff074557a2`
+  - `5fc2df5f1c43ac2710c31a95a5949b0ca8889e06`
+  - CI #1109 failureで、MarketObservation→Candidate間でGTINが失われる契約不足を検出。
+- adapter repair:
+  - commit `366392f22bc0b76b7288b7dcf7f303ac93162d94`
+  - canonical metadata保持、physical field bridge、confidence/success_probability接続を修正。
+  - CI #1110 success。
+- safety regression:
+  - commit `2c302672c1436d7fd19bf7a851a60ba80100ac4c`
+  - invalid provenance / incomplete evidence / identity mismatch / oversized physical policy rejectionを回帰固定。
+  - CI #1111 success。
+
+判定:
+- canonical GTIN preservation: 完了。
+- provenance-bearing physical evidence contract: 完了。
+- PG-011 physical re-evaluation: 完了。
+- cross-market review proposal: 完了。
+- invalid/oversized/unknown evidence fail-closed: 完了。
+- live commerce: blocked。
+- **PG-014開発エンドポイント: 到達。**
+
+## 14. PG-014 開発エンドポイント
+
+PG-014到達時点で、わらしべAIは
+`Yahoo/Rakuten JAN comparison`
+→ `出所付き物理証拠`
+→ `Candidate physical enrichment`
+→ `PG-011 small-first policy`
+→ `Human Review用proposal`
+までを一周できる。
+
+ただしproposalは「検討候補」であり、購入命令ではない。
+実commerceはPG-010のlive-block境界を維持する。
+
+次の自然な開発対象は、
+1. proposal/comparison recordのSupabase永続化、
+2. 過去価格との差分・鮮度評価、
+3. Human Review用のAPI/UI表示、
+のいずれかである。
