@@ -20,6 +20,9 @@ def main():
     assert payload["ceo_attention"]["level"] == "watching"
     assert payload["system_status"]["hq_runner"] == "connected"
     assert payload["system_status"]["commerce_execution"] == "locked_by_human_gate"
+    assert payload["strategy_learning"]["status"] == "active"
+    assert payload["strategy_learning"]["minimum_distinct_sources"] == 2
+    assert payload["strategy_learning"]["production_rule_auto_change"] is False
 
     client = app.test_client()
 
@@ -45,6 +48,9 @@ def main():
     assert "売却実績を見る" in html
     assert "P1–P7 開発完了 7/7" in html
     assert "システム状態" in html
+    assert "Strategy Learning Loop" in html
+    assert "P2シャドー検証" in html
+    assert "本番ルールは自動変更しません" in html
 
     print("CEO Dashboard contract tests passed")
 
