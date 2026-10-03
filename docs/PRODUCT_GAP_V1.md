@@ -85,6 +85,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-033 | Limited Sale Execution | Warashibe Loop v2 | PG-032 | DONE（開発エンドポイント到達・実出品未実行） |
 | PG-034 | Settlement / Capital Update | Warashibe Loop v2 | PG-033 | DONE（開発エンドポイント到達） |
 | PG-035 | One-cycle Warashibe Proof | Warashibe Loop v2 | PG-034 | DONE（合成一周実証・live外部実証は未実施） |
+| PG-036 | Live Pilot Review | Warashibe Loop v2 | PG-035 | DONE（開発エンドポイント到達・Learning Loop入口完成） |
 
 ## 4. 依存関係
 
@@ -2749,3 +2750,76 @@ CI:
 まで、合成監査実証として一周した。
 
 次はPG-036 Live Pilot Review。
+
+
+### PG-036 — Live Pilot Review 開発エンドポイント到達
+
+目的:
+- PG-035 one-cycle proofをPG-031 Sale Planの予測と比較し、Learning Loopへ戻す予測誤差を生成する。
+- synthetic cycle reviewとlive verified reviewを明確に区別する。
+- review結果だけでcontrolled automationを自動許可しない。
+
+代表レビュー:
+- expected net proceeds = 3,390円 / actual = 3,390円 / error = 0円
+- expected profit = 440円 / actual = 440円 / error = 0円
+- expected days to sell = 3日 / actual = 3.0208日 / error = +0.0208日
+- expected Capital Velocity = 146.67円/日
+- actual Capital Velocity = 145.66円/日
+- velocity error = -1.01円/日
+
+出力:
+- `status=live_pilot_review_complete`
+- `review_mode=synthetic_cycle_review`（今回）
+- `warashibe_loop_v2_contract_complete=True`
+- `live_pilot_verified=False`
+- `learning_loop_feedback_ready=True`
+- `eligible_for_controlled_automation=False`
+- `controlled_automation_authorized=False`
+- `human_decision_required=True`
+
+実装:
+- `research_lab/live_pilot_review.py`
+- `research_lab/supabase_live_pilot_review_repository.py`
+- `research_lab/test_live_pilot_review.py`
+- `docs/migrations/2026-10-03_pg036_live_pilot_reviews.sql`
+
+Supabase:
+- table: `public.warashibe_live_pilot_reviews`
+- review_key unique / proof_key unique
+- review_mode保持
+- RLS enabled
+- anon/authenticated grants revoke
+- DB proof insert/read-back/cleanup成功
+
+CI:
+- contract `fe5636a557784e5f702956aac18744979f64ff3f` — #1245 success。
+- RED `a5ea20c571cc53b16c73de1e60c90da71de2921e` — #1246 failure。
+- implementation `9669f6ab1a2fa2715927fb03dbc13d0631c9911d` — #1247 success。
+- repository `070e5e55781194c136f9b00f494de167b3923a32` — #1248 success。
+- migration source `ffc0606b05b73ece5d288025758445f0b48869c8` — #1249 success。
+
+判定:
+- prediction-vs-actual review: 完了。
+- Learning Loop feedback: 完了。
+- synthetic/live evidence separation: 完了。
+- controlled automation auto-authorization: blocked。
+- **PG-036開発エンドポイント: 到達。**
+
+## 36. PG-036 開発エンドポイント / Warashibe Loop v2 milestone
+
+PG-034〜036により、
+`Settlement / Capital Update`
+→ `One-cycle Warashibe Proof`
+→ `Live Pilot Review`
+→ `Learning Loop feedback ready`
+まで到達した。
+
+現在の大きなマイルストーン:
+- Warashibe Loop v2 contract: COMPLETE
+- synthetic auditable one-cycle proof: COMPLETE
+- next-capital handoff: COMPLETE
+- Learning Loop入口: COMPLETE
+- real external live buy/sell cycle: NOT YET VERIFIED
+- controlled automation: NOT AUTHORIZED
+
+次段階は、Human Gateを維持した実外部pilot、または実績feedbackをCandidate rankingへ反映するLearning Loop強化。
