@@ -153,6 +153,18 @@ def build_hq_dashboard_payload(candidate=None):
         },
         "dashboard_mode": "read_only",
         "external_execution_authorized": False,
+        "ceo_attention": {
+            "level": "watching",
+            "headline": "P2探索を継続中 — CEO判断はまだ不要",
+            "message": "純利益300円以上の候補がP2ゲートを通過した時点で、P3 CEO Approval Gateへ上げます。",
+            "next_action": "総仕入コスト2,200円以下・純利益300円以上を満たす候補を探索",
+        },
+        "system_status": {
+            "hq_runner": "connected",
+            "dashboard": "online",
+            "commerce_execution": "locked_by_human_gate",
+            "data_surface": "/hq/api",
+        },
     }
 
 
@@ -183,6 +195,14 @@ def hq_dashboard_api():
 def hq_dashboard_page():
     data = build_hq_dashboard_payload()
     candidate = data["candidate"]
+
+    attention = data["ceo_attention"]
+    system = data["system_status"]
+    gate = candidate["next_search_gate"]
+    progress_done = sum(
+        1 for row in data["development_summary"]
+        if row["development_status"] == "complete"
+    )
 
     rows = "".join(
         f"""
@@ -217,6 +237,7 @@ def hq_dashboard_page():
           color:var(--text); font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
         .wrap {{ max-width:1180px; margin:0 auto; padding:30px 20px 60px; }}
         .top {{ display:flex; gap:16px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }}
+        .eyebrow {{ color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }}
         h1 {{ margin:0 0 6px; font-size:30px; }}
         .sub {{ color:var(--muted); }}
         .phase {{ background:#1c2b4b; border:1px solid #355587; border-radius:999px; padding:10px 16px; font-weight:800; }}
@@ -224,7 +245,22 @@ def hq_dashboard_page():
         .card {{ background:rgba(18,26,45,.92); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 18px 50px rgba(0,0,0,.18); }}
         .label {{ color:var(--muted); font-size:13px; margin-bottom:8px; }}
         .value {{ font-size:24px; font-weight:800; }}
-        .section-title {{ font-size:18px; margin:28px 0 12px; }}
+        .section-title {{ font-size:18px; margin:28px 0 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; }}
+        .section-note {{ color:var(--muted); font-size:12px; font-weight:500; }}
+        .attention {{ border-left:4px solid var(--accent); display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; }}
+        .attention strong {{ font-size:19px; }}
+        .attention .next {{ background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; min-width:260px; }}
+        .attention .next b {{ display:block; color:var(--accent); margin-bottom:4px; font-size:12px; }}
+        .gatebar {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:14px; }}
+        .gateitem {{ background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px; }}
+        .gateitem strong {{ display:block; margin-top:4px; font-size:18px; }}
+        .decision-hold {{ color:var(--danger); }}
+        .source-links {{ display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }}
+        .source-links a {{ color:#c9dcff; text-decoration:none; border:1px solid var(--line); border-radius:10px; padding:9px 12px; background:#16213a; }}
+        .source-links a:hover {{ border-color:var(--accent); }}
+        .status-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }}
+        .status-pill {{ background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px; }}
+        .status-pill b {{ display:block; margin-top:5px; overflow-wrap:anywhere; }}
         .candidate {{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; }}
         .candidate h2 {{ margin-top:0; }}
         .muted {{ color:var(--muted); }}
@@ -245,9 +281,13 @@ def hq_dashboard_page():
         @media (max-width:850px) {{
           .grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
           .candidate {{ grid-template-columns:1fr; }}
+          .attention {{ grid-template-columns:1fr; }}
+          .attention .next {{ min-width:0; }}
+          .status-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
         }}
         @media (max-width:560px) {{
           .grid {{ grid-template-columns:1fr; }}
+          .gatebar, .status-grid {{ grid-template-columns:1fr; }}
           .roadmap-row {{ grid-template-columns:46px 1fr; }}
           .state {{ grid-column:2; justify-self:start; }}
         }}
@@ -257,6 +297,7 @@ def hq_dashboard_page():
       <main class="wrap">
         <div class="top">
           <div>
+            <div class="eyebrow">Warashibe AI Command Center</div>
             <h1>Warashibe CEO Dashboard</h1>
             <div class="sub">North Star: {data['north_star']}</div>
           </div>
@@ -270,15 +311,35 @@ def hq_dashboard_page():
           <div class="card"><div class="label">取引自動実行</div><div class="value">OFF</div></div>
         </div>
 
-        <div class="section-title">実商品候補</div>
+        <div class="section-title">CEO Attention <span class="section-note">いま判断が必要か</span></div>
+        <section class="card attention">
+          <div>
+            <strong>{attention['headline']}</strong>
+            <p class="muted">{attention['message']}</p>
+          </div>
+          <div class="next">
+            <b>NEXT ACTION</b>
+            {attention['next_action']}
+          </div>
+        </section>
+
+        <div class="section-title">P2 実商品候補 <span class="section-note">採算ゲートを通過した1件だけP3へ</span></div>
         <section class="candidate">
           <div class="card">
             <h2>{candidate['headline']}</h2>
             <p class="muted">{candidate['message']}</p>
             <p><strong>候補:</strong> {candidate['item_name']}</p>
-            <p><strong>判定:</strong> {candidate['decision']}</p>
+            <p><strong>判定:</strong> <span class="decision-hold">{candidate['decision']}</span></p>
             <p><strong>理由:</strong> 通販仕入れ総額 {_money(candidate['economics']['remote_purchase_total_cost_jpy'])} に対し、売却後の手取り想定は {_money(candidate['economics']['sale_net_after_fee_and_shipping_jpy'])}。現状は採算ゲート未達です。</p>
-            <p><strong>次の探索条件:</strong> 総仕入コスト {_money(candidate['next_search_gate']['target_total_acquisition_cost_jpy_max'])} 以下、純利益 {_money(candidate['next_search_gate']['target_net_profit_jpy_min'])} 以上。</p>
+            <div class="gatebar">
+              <div class="gateitem"><span class="label">仕入ゲート</span><strong>≤ {_money(gate['target_total_acquisition_cost_jpy_max'])}</strong></div>
+              <div class="gateitem"><span class="label">純利益ゲート</span><strong>≥ {_money(gate['target_net_profit_jpy_min'])}</strong></div>
+              <div class="gateitem"><span class="label">P3移行</span><strong>{'GO' if candidate['go_to_p3'] else 'HOLD'}</strong></div>
+            </div>
+            <div class="source-links">
+              <a href="{candidate['source_url']}" target="_blank" rel="noopener">仕入候補を見る</a>
+              <a href="{candidate['sale_comp_url']}" target="_blank" rel="noopener">売却実績を見る</a>
+            </div>
             <p><strong>現在のボトルネック:</strong><br><code>{data['current_bottleneck']}</code></p>
           </div>
           <div class="card">
@@ -293,8 +354,18 @@ def hq_dashboard_page():
           </div>
         </section>
 
-        <div class="section-title">開発サマリー</div>
+        <div class="section-title">開発サマリー <span class="section-note">P1–P7 開発完了 {progress_done}/7</span></div>
         <section class="card">{rows}</section>
+
+        <div class="section-title">システム状態 <span class="section-note">この画面自身の制御状態</span></div>
+        <section class="card">
+          <div class="status-grid">
+            <div class="status-pill"><span class="label">HQ Runner</span><b>{system['hq_runner']}</b></div>
+            <div class="status-pill"><span class="label">Dashboard</span><b>{system['dashboard']}</b></div>
+            <div class="status-pill"><span class="label">Commerce</span><b>{system['commerce_execution']}</b></div>
+            <div class="status-pill"><span class="label">JSON Surface</span><b>{system['data_surface']}</b></div>
+          </div>
+        </section>
 
         <div class="section-title">CEO / Human Gate</div>
         <section class="card human">
