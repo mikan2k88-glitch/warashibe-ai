@@ -18,6 +18,7 @@ from real_world_api import real_world_bp
 from research_lab.dev_queue_trigger import dev_queue_trigger_bp
 from research_lab.human_review_api import human_review_bp
 from research_lab.history_dashboard_api import history_dashboard_bp
+from research_lab.hq_dashboard import hq_dashboard_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
@@ -26,6 +27,7 @@ app.register_blueprint(real_world_bp)
 app.register_blueprint(dev_queue_trigger_bp)
 app.register_blueprint(human_review_bp)
 app.register_blueprint(history_dashboard_bp)
+app.register_blueprint(hq_dashboard_bp)
 
 
 @app.before_request
@@ -59,8 +61,10 @@ def docs():
     <h2>対応戦略</h2>
     <ul><li>random：ランダム</li><li>safe：セーフ</li>
     <li>balanced：バランス</li><li>aggressive：アグレッシブ</li></ul>
-    <h2>API</h2>
+    <h2>API / UI</h2>
     <ul>
+    <li><a href="/hq">CEO Dashboard</a>：HQ状態・実商品候補・開発サマリー</li>
+    <li><a href="/hq/api">CEO Dashboard JSON</a>：ChatGPT/他UI向けHQ状態</li>
     <li><a href="/strategy/report">戦略レポート</a>：人間向けの結論表示</li>
     <li><a href="/journey?strategy=random">/journey</a>：1回のわらしべ挑戦</li>
     <li><a href="/simulate?strategy=random">/simulate</a>：単体シミュレーション</li>
