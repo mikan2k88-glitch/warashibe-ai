@@ -48,6 +48,7 @@ PROFILES = {
         "research_lab.test_headquarters",
         "research_lab.test_hq_development_program",
         "research_lab.test_hq_runner_integration",
+        "research_lab.test_hq_dashboard",
         "research_lab.test_supabase_strategy_decision_repository",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
@@ -63,6 +64,7 @@ PROFILES = {
     "scheduler": [
         "research_lab.test_hq_development_program",
         "research_lab.test_hq_runner_integration",
+        "research_lab.test_hq_dashboard",
         "research_lab.test_hourly_research_scheduler_contract",
         "research_lab.test_scheduler_live_connector",
         "research_lab.test_scheduler_connector_verification",
