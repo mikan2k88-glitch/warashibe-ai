@@ -38,6 +38,7 @@ PROFILES = {
         "research_lab.test_sale_plan",
         "research_lab.test_human_sale_decision",
         "research_lab.test_limited_sale_execution",
+        "research_lab.test_trade_settlement",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
