@@ -81,6 +81,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-029 | Purchase Receipt / Reconciliation | Warashibe Loop v2 | PG-028 | DONE（開発エンドポイント到達） |
 | PG-030 | Receive / Inspection | Warashibe Loop v2 | PG-029 | DONE（開発エンドポイント到達） |
 | PG-031 | Sale Plan | Warashibe Loop v2 | PG-030 | DONE（開発エンドポイント到達） |
+| PG-032 | Human Sale Decision | Warashibe Loop v2 | PG-031 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -2463,3 +2464,66 @@ CI:
 
 まで進められる。
 次はPG-032 Human Sale Decision。
+
+
+### PG-032 — Human Sale Decision 開発エンドポイント到達
+
+目的:
+- PG-031 Sale Planに対して、人間がSELL / DO_NOT_SELLを明示し、1商品・1marketplace・価格/費用上限・期限つきの販売判断artifactを記録する。
+- Human Gateをコード上の正式な販売境界として固定する。
+- Decision自体は外部出品・販売成立を起こさない。
+
+実装:
+- `research_lab/human_sale_decision.py`
+- `research_lab/supabase_human_sale_decision_repository.py`
+- `research_lab/test_human_sale_decision.py`
+- `docs/migrations/2026-10-03_pg032_human_sale_decisions.sql`
+
+SELL decision:
+- quantity=1
+- marketplaceはSale Planから固定
+- approved listing price
+- minimum sale price
+- max marketplace fee
+- max shipping
+- decided_at / valid_until
+- `execution_authorized_for_single_listing=True`
+- `listing_created=False`
+- `sale_completed=False`
+
+DO_NOT_SELL:
+- single-listing authorization=False
+- 金額上限は0へ正規化
+- 外部出品なし
+
+Supabase:
+- table: `public.warashibe_human_sale_decisions`
+- decision_key unique / plan_key unique
+- decision check sell/do_not_sell
+- RLS enabled
+- anon/authenticated grants revoke
+- closed-by-default
+- DB proof insert/read-back/cleanup成功
+
+CI:
+- contract `ec9097df64b83e7523bde5d8c2f77630f7d67d53` — #1220 success。
+- RED `3159a4cbce368fee450764fdf4a31abab09a8703` — #1221 failure。
+- implementation `4e2aae22bf285596a9a92b6cd37adbae210a9c31` — #1222 success。
+- repository `dc17dac50a199296b3444ee853cf984488b9298b` — #1223 success。
+- migration source `c0d41ee4329d4ccace12f2a4bc9515a8a71a88da` — #1224 success。
+
+判定:
+- Human Sale Decision artifact: 完了。
+- bounded single-listing authorization: 完了。
+- append-only audit: 完了。
+- real listing: 未実行。
+- **PG-032開発エンドポイント: 到達。**
+
+## 32. PG-032 開発エンドポイント
+
+`Sale Plan`
+→ `Human Sale Decision`
+→ `single listing execution boundary待ち`
+
+まで進められる。
+次はPG-033 Limited Sale Execution。
