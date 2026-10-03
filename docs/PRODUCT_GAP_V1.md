@@ -80,6 +80,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-028 | Single Purchase Execution | Post-v1拡張 | PG-027 | DONE（開発エンドポイント到達・実注文未実行） |
 | PG-029 | Purchase Receipt / Reconciliation | Warashibe Loop v2 | PG-028 | DONE（開発エンドポイント到達） |
 | PG-030 | Receive / Inspection | Warashibe Loop v2 | PG-029 | DONE（開発エンドポイント到達） |
+| PG-031 | Sale Plan | Warashibe Loop v2 | PG-030 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -2388,3 +2389,77 @@ PG-030到達時点で、
 までCommerce Loopを進められる。
 
 次はPG-031 Sale Plan。
+
+
+### PG-031 — Sale Plan 開発エンドポイント到達
+
+目的:
+- PG-030でsale_readyとなった1商品に対して、売価・手数料・送料・純手取り・期待利益・予想売却日数・損切りを一つのSale Planへまとめる。
+- Warashibe Loop v2の上位KPIであるCapital Velocityを販売計画へ正式導入する。
+- Sale Plan自体はlisting/saleを許可しない。
+
+実装:
+- `research_lab/sale_plan.py`
+- `research_lab/supabase_sale_plan_repository.py`
+- `research_lab/test_sale_plan.py`
+- `docs/migrations/2026-10-03_pg031_sale_plans.sql`
+
+主要出力:
+- current market price
+- recommended listing price
+- expected sale price
+- estimated marketplace fee
+- estimated shipping
+- expected net proceeds
+- expected profit
+- estimated days to sell
+- `expected_capital_velocity_jpy_per_day`
+- minimum acceptable net proceeds
+- minimum sale price for net floor
+- stop-loss price / days
+- `human_sale_decision_required=True`
+- `listing_authorized=False`
+- `sale_authorized=False`
+
+代表実証:
+- capital basis = 2,950円
+- recommended listing = 4,100円
+- expected sale = 4,000円
+- fee = 400円
+- shipping = 210円
+- expected net proceeds = 3,390円
+- expected profit = 440円
+- estimated days = 3
+- Capital Velocity = 146.67円/日
+
+Supabase:
+- table: `public.warashibe_sale_plans`
+- plan_key unique / inspection_key unique
+- RLS enabled
+- anon/authenticated grants revoke
+- closed-by-default
+- DB proof insert/read-back/cleanup成功
+
+CI:
+- contract `11ad3df9bcd42d3462f679001eccfe48712f909f` — #1214 success。
+- RED `80ac3ab75f56bab9ab129e54aa57fc529b06b7e1` — #1215 failure。
+- implementation `c7bac5a6bb4b15dd7932f9dcdcf50a5d580bf419` — #1216 success。
+- repository `8e9486844a33483be22a1ca473e3c28be47cc022` — #1217 success。
+- migration source `6148b9baa3ee1c5c5dc27fed99feed85caa2b5f0` — #1218 success。
+
+判定:
+- sale economics plan: 完了。
+- Capital Velocity: 完了。
+- stop-loss plan: 完了。
+- append-only persistence: 完了。
+- sale authorization: blocked。
+- **PG-031開発エンドポイント: 到達。**
+
+## 31. PG-031 開発エンドポイント
+
+`Receive / Inspection`
+→ `Sale Plan`
+→ `Human Sale Decision待ち`
+
+まで進められる。
+次はPG-032 Human Sale Decision。
