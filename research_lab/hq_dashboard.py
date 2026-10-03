@@ -159,6 +159,22 @@ def build_hq_dashboard_payload(candidate=None):
             "message": "純利益300円以上の候補がP2ゲートを通過した時点で、P3 CEO Approval Gateへ上げます。",
             "next_action": "総仕入コスト2,200円以下・純利益300円以上を満たす候補を探索",
         },
+        "strategy_learning": {
+            "status": "active",
+            "mode": "research_to_shadow_validation",
+            "pipeline": [
+                "web_research",
+                "strategy_update_proposal",
+                "evidence_validation",
+                "adopt_or_reject",
+                "p2_shadow_validation",
+                "dashboard_feedback",
+            ],
+            "minimum_findings": 2,
+            "minimum_distinct_sources": 2,
+            "production_rule_auto_change": False,
+            "next_focus": "市場価格差・送料・手数料・流動性・失敗パターンを定時研究へ寄せる",
+        },
         "system_status": {
             "hq_runner": "connected",
             "dashboard": "online",
@@ -198,6 +214,7 @@ def hq_dashboard_page():
 
     attention = data["ceo_attention"]
     system = data["system_status"]
+    learning = data["strategy_learning"]
     gate = candidate["next_search_gate"]
     progress_done = sum(
         1 for row in data["development_summary"]
@@ -259,6 +276,8 @@ def hq_dashboard_page():
         .source-links a {{ color:#c9dcff; text-decoration:none; border:1px solid var(--line); border-radius:10px; padding:9px 12px; background:#16213a; }}
         .source-links a:hover {{ border-color:var(--accent); }}
         .status-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }}
+        .learning-flow {{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }}
+        .learning-step {{ background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:8px 11px; font-size:12px; }}
         .status-pill {{ background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px; }}
         .status-pill b {{ display:block; margin-top:5px; overflow-wrap:anywhere; }}
         .candidate {{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; }}
@@ -352,6 +371,16 @@ def hq_dashboard_page():
               <div class="metric"><div class="label">Capital Velocity</div><strong>{_money(candidate['capital_velocity_jpy_per_day'])}/日</strong></div>
             </div>
           </div>
+        </section>
+
+        <div class="section-title">Strategy Learning Loop <span class="section-note">市場学習をP2へ戻す</span></div>
+        <section class="card">
+          <strong>稼働中: Web調査 → 戦略更新案 → 証拠検証 → 採用/却下 → P2シャドー検証</strong>
+          <p class="muted">最低 {learning['minimum_findings']} 件・{learning['minimum_distinct_sources']} ソースの証拠を要求し、本番ルールは自動変更しません。</p>
+          <div class="learning-flow">
+            {''.join(f'<span class="learning-step">{step}</span>' for step in learning['pipeline'])}
+          </div>
+          <p><strong>次の研究焦点:</strong> {learning['next_focus']}</p>
         </section>
 
         <div class="section-title">開発サマリー <span class="section-note">P1–P7 開発完了 {progress_done}/7</span></div>
