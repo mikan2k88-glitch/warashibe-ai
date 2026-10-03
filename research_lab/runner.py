@@ -42,6 +42,7 @@ PROFILES = {
         "research_lab.test_one_cycle_warashibe_proof",
         "research_lab.test_live_pilot_review",
         "research_lab.test_runtime_status",
+        "research_lab.test_headquarters",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
