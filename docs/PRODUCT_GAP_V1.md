@@ -78,6 +78,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-026 | Live Pilot Guard | Post-v1拡張 | PG-025 | DONE（開発エンドポイント到達） |
 | PG-027 | Live Commerce Adapter Interface | Post-v1拡張 | PG-026 | DONE（開発エンドポイント到達） |
 | PG-028 | Single Purchase Execution | Post-v1拡張 | PG-027 | DONE（開発エンドポイント到達・実注文未実行） |
+| PG-029 | Purchase Receipt / Reconciliation | Warashibe Loop v2 | PG-028 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -2230,3 +2231,76 @@ PG-028到達時点で、
 ただし今回の開発runでは実注文を送信していない。
 実際の外部注文には、具体的な商品・provider live adapter・有効な認証情報・最新Guard/validation・Human Final Buyが別途必要。
 次の自然な開発対象はPG-029 Purchase Receipt / Reconciliation。
+
+
+### PG-029 — Purchase Receipt / Reconciliation 開発エンドポイント到達
+
+目的:
+- PG-028 Single Purchase Executionの結果を、実支払額・送料・税・割引・注文状態・決済状態を含むPurchase Receiptへ確定する。
+- execution時の想定請求額とprovider側の実請求額を照合し、差異があれば次工程へ進めずHuman Reviewへ戻す。
+- 実際に資本拘束された金額を `capital_committed_jpy` としてCommerce Loopへ渡す。
+
+実装:
+- `research_lab/purchase_receipt_reconciliation.py`
+- `research_lab/supabase_purchase_receipt_repository.py`
+- `research_lab/test_purchase_receipt_reconciliation.py`
+- `docs/migrations/2026-10-03_pg029_purchase_receipts.sql`
+- build profileへPG-029 contract testを追加。
+
+reconciliation:
+- source status=`single_purchase_executed`
+- quantity=1
+- provider order reference一致
+- expected chargeとactual total charge比較
+- item price + shipping + tax - discount とactual totalのcomponent reconciliation
+- payment status / order status確認
+- pass時:
+  - `status=purchase_receipt_reconciled`
+  - `reconciliation_passed=True`
+  - `capital_state=awaiting_receipt_or_delivery`
+- mismatch時:
+  - `status=purchase_receipt_mismatch`
+  - `reconciliation_passed=False`
+  - `requires_human_review=True`
+  - `capital_state=reconciliation_hold`
+
+Supabase:
+- table: `public.warashibe_purchase_receipts`
+- receipt_key unique。
+- idempotency_key unique。
+- RLS enabled。
+- anon/authenticated grants revoke。
+- server-side closed-by-default。
+
+実DB proof:
+- `pg029-proof`
+- actual_total_charged_jpy=2,950円。
+- capital_committed_jpy=2,950円。
+- reconciliation_passed=true。
+- capital_state=awaiting_receipt_or_delivery。
+- insert/read-back/cleanup成功。
+
+CI:
+- contract `6709bf45a2aa63d0fda1783d97e3192651be3b4a` — #1202 success。
+- RED `4cf3d281bf46504c093d5da28cd80a7fef2563fa` — #1203 failure。
+- implementation `ee759e54d1b0af50dbd8a957c54864b4e3002f30` — #1204 success。
+- repository `2a5961d5a4e34a2048b9dedfa33cc0978a7440ff` — #1205 success。
+- migration source `5c4dc9e6e114da420677c4c13eda5867c2b50d83` — #1206 success。
+
+判定:
+- purchase receipt model: 完了。
+- charge reconciliation: 完了。
+- capital committed handoff: 完了。
+- mismatch hold: 完了。
+- append-only persistence: 完了。
+- **PG-029開発エンドポイント: 到達。**
+
+## 29. PG-029 開発エンドポイント
+
+PG-029到達時点で、
+`Single Purchase Execution`
+→ `Purchase Receipt / Reconciliation`
+→ `actual capital committed`
+までCommerce Loopを進められる。
+
+次はPG-030 Receive / Inspection。
