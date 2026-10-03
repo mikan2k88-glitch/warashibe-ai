@@ -82,6 +82,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-030 | Receive / Inspection | Warashibe Loop v2 | PG-029 | DONE（開発エンドポイント到達） |
 | PG-031 | Sale Plan | Warashibe Loop v2 | PG-030 | DONE（開発エンドポイント到達） |
 | PG-032 | Human Sale Decision | Warashibe Loop v2 | PG-031 | DONE（開発エンドポイント到達） |
+| PG-033 | Limited Sale Execution | Warashibe Loop v2 | PG-032 | DONE（開発エンドポイント到達・実出品未実行） |
 
 ## 4. 依存関係
 
@@ -2527,3 +2528,87 @@ CI:
 
 まで進められる。
 次はPG-033 Limited Sale Execution。
+
+
+### PG-033 — Limited Sale Execution 開発エンドポイント到達
+
+目的:
+- PG-032 Human Sale DecisionのSELL判断を、1商品・1listingだけの実行境界へ変換する。
+- idempotency / expiry / kill switch / explicit live-sale enableを強制する。
+- 開発runではfake adapterとsynthetic DB proofのみを使い、実marketplaceへの外部出品は行わない。
+
+実装:
+- `research_lab/limited_sale_execution.py`
+- `research_lab/supabase_limited_sale_execution_repository.py`
+- `research_lab/test_limited_sale_execution.py`
+- `docs/migrations/2026-10-03_pg033_limited_sale_executions.sql`
+
+execution contract:
+- source status=`human_sale_decision_recorded`
+- decision=`sell`
+- quantity=1
+- `execution_authorized_for_single_listing=True`
+- valid_until前のみ
+- explicit `live_sale_execution_enabled=True`
+- emergency kill switch OFF
+- idempotency key必須
+- 同一idempotency key再実行ではadapterを再度呼ばない
+- adapter listing priceはHuman Sale Decisionのapproved listing priceと完全一致必須
+
+成功時:
+- `status=limited_sale_listing_created`
+- `execution_count=1`
+- `listing_created=True`
+- `sale_completed=False`
+- `settlement_recorded=False`
+
+blocked:
+- live-sale disabled → `limited_sale_blocked / live_sale_execution_disabled`
+- kill switch → `limited_sale_blocked / emergency_kill_switch_engaged`
+
+Supabase:
+- table: `public.warashibe_limited_sale_executions`
+- idempotency_key unique
+- decision_key unique
+- RLS enabled
+- anon/authenticated grants revoke
+- closed-by-default
+
+実DB proof:
+- synthetic only
+- listing reference=`synthetic-listing-proof`
+- listing price=4,100円
+- listing_created=true
+- sale_completed=false
+- network_call_attempted=false
+- external_write_attempted=false
+- execution_environment=`synthetic_db_proof`
+- cleanup後 test_rows=0
+- **実marketplace出品は行っていない。**
+
+CI:
+- contract `2724c01861be1cb0317d1f8f4da969bf0808eac0` — #1226 success。
+- RED `ad52886c31737ca5880e1a79ab96bcbd850a6e19` — #1227 failure。
+- implementation `84611d6a1995f7179b52756e984a5bcf755b71e7` — #1228 success。
+- repository `3da1a537b3f2a727448b053a3cc8b8264c2782e8` — #1229 success。
+- migration source `9916ab8add7f59df814fbed96776f4d5a24d9563` — #1230 success。
+
+判定:
+- single-listing execution contract: 完了。
+- idempotency: 完了。
+- kill switch: 完了。
+- append-only audit: 完了。
+- real marketplace listing: 未実行。
+- sale completion / settlement: 未実装。
+- **PG-033開発エンドポイント: 到達。**
+
+## 33. PG-033 開発エンドポイント
+
+`Receive / Inspection`
+→ `Sale Plan`
+→ `Human Sale Decision`
+→ `Limited Sale Execution boundary`
+
+までCommerce Loopを進められる。
+
+次はPG-034 Settlement / Capital Update。
