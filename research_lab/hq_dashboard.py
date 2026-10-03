@@ -65,23 +65,50 @@ _DEVELOPMENT_SUMMARY = [
 
 def build_hq_dashboard_payload(candidate=None):
     candidate_payload = candidate or {
-        "state": "awaiting_real_pilot_candidate",
-        "headline": "実商品候補を選定中",
+        "state": "live_screened_hold",
+        "headline": "P2候補を実市場でスクリーニング済み",
         "message": (
-            "HQは約3,000円の資本条件で、P3へ渡せる実商品1件の"
-            "判断パケットを準備する段階です。"
+            "Nintendo Switch『ウルトラ怪獣モンスターファーム』を実市場で確認。"
+            "売買実績は確認できるものの、通販仕入れでは手数料・送料込みで赤字になるため、"
+            "現時点ではP3へ上げない判断です。"
         ),
-        "item_name": None,
-        "source": None,
-        "purchase_price_jpy": None,
-        "expected_sale_price_jpy": None,
-        "expected_net_profit_jpy": None,
-        "expected_margin_rate": None,
+        "item_name": "ウルトラ怪獣モンスターファーム",
+        "source": "駿河屋MEGA中筋店",
+        "source_url": (
+            "https://www.suruga-ya.jp/product/detail/"
+            "109002348?tenpo_cd=400479&branch_number=0001"
+        ),
+        "sale_comp_source": "メルカリ売却済み実績",
+        "sale_comp_url": "https://jp.mercari.com/item/m10992476959",
+        "purchase_price_jpy": 1940,
+        "source_shipping_min_jpy": 600,
+        "expected_sale_price_jpy": 2500,
+        "selling_fee_jpy": 250,
+        "outbound_shipping_jpy": 210,
+        "expected_net_profit_jpy": -500,
+        "expected_margin_rate": -0.20,
         "estimated_days_to_sell": None,
         "capital_velocity_jpy_per_day": None,
-        "max_loss_jpy": None,
+        "max_loss_jpy": 500,
         "stop_loss_price_jpy": None,
-        "risk": None,
+        "risk": "economics_blocked",
+        "go_to_p3": False,
+        "screened_at": "2026-10-03",
+        "economics": {
+            "sale_net_after_fee_and_shipping_jpy": 2040,
+            "local_pickup_profit_jpy": 100,
+            "remote_purchase_profit_jpy": -500,
+            "remote_purchase_total_cost_jpy": 2540,
+        },
+        "decision": "P3へ上げない",
+        "next_search_gate": {
+            "target_total_acquisition_cost_jpy_max": 2200,
+            "target_net_profit_jpy_min": 300,
+            "target_condition": (
+                "3,000円資本内で、販売手数料と発送費を差し引いても"
+                "最低300円以上の利益余地が残る候補"
+            ),
+        },
     }
 
     program = build_hq_development_program(
@@ -248,13 +275,17 @@ def hq_dashboard_page():
           <div class="card">
             <h2>{candidate['headline']}</h2>
             <p class="muted">{candidate['message']}</p>
+            <p><strong>候補:</strong> {candidate['item_name']}</p>
+            <p><strong>判定:</strong> {candidate['decision']}</p>
+            <p><strong>理由:</strong> 通販仕入れ総額 {_money(candidate['economics']['remote_purchase_total_cost_jpy'])} に対し、売却後の手取り想定は {_money(candidate['economics']['sale_net_after_fee_and_shipping_jpy'])}。現状は採算ゲート未達です。</p>
+            <p><strong>次の探索条件:</strong> 総仕入コスト {_money(candidate['next_search_gate']['target_total_acquisition_cost_jpy_max'])} 以下、純利益 {_money(candidate['next_search_gate']['target_net_profit_jpy_min'])} 以上。</p>
             <p><strong>現在のボトルネック:</strong><br><code>{data['current_bottleneck']}</code></p>
           </div>
           <div class="card">
             <div class="metrics">
-              <div class="metric"><div class="label">仕入価格</div><strong>{_money(candidate['purchase_price_jpy'])}</strong></div>
+              <div class="metric"><div class="label">仕入本体</div><strong>{_money(candidate['purchase_price_jpy'])}</strong></div>
               <div class="metric"><div class="label">想定売価</div><strong>{_money(candidate['expected_sale_price_jpy'])}</strong></div>
-              <div class="metric"><div class="label">想定利益</div><strong>{_money(candidate['expected_net_profit_jpy'])}</strong></div>
+              <div class="metric"><div class="label">通販時想定利益</div><strong>{_money(candidate['expected_net_profit_jpy'])}</strong></div>
               <div class="metric"><div class="label">利益率</div><strong>{_percent(candidate['expected_margin_rate'])}</strong></div>
               <div class="metric"><div class="label">売却日数</div><strong>{_metric(candidate['estimated_days_to_sell'],'日')}</strong></div>
               <div class="metric"><div class="label">Capital Velocity</div><strong>{_money(candidate['capital_velocity_jpy_per_day'])}/日</strong></div>
