@@ -83,6 +83,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-031 | Sale Plan | Warashibe Loop v2 | PG-030 | DONE（開発エンドポイント到達） |
 | PG-032 | Human Sale Decision | Warashibe Loop v2 | PG-031 | DONE（開発エンドポイント到達） |
 | PG-033 | Limited Sale Execution | Warashibe Loop v2 | PG-032 | DONE（開発エンドポイント到達・実出品未実行） |
+| PG-034 | Settlement / Capital Update | Warashibe Loop v2 | PG-033 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -2612,3 +2613,67 @@ CI:
 までCommerce Loopを進められる。
 
 次はPG-034 Settlement / Capital Update。
+
+
+### PG-034 — Settlement / Capital Update 開発エンドポイント到達
+
+目的:
+- 1件の販売成立後に、実売価・実手数料・実送料・その他販売費用を確定し、純手取りと次資本を更新する。
+- 商品購入時に使わなかった未拘束現金を消失させず、Journey全体の資本へ戻す。
+- `ready_for_next_candidate` を生成し、次の商品探索へ戻れる状態を作る。
+
+代表会計:
+- starting capital = 3,000円
+- actual capital basis = 2,950円
+- uncommitted cash = 50円
+- actual sale price = 4,000円
+- marketplace fee = 400円
+- shipping = 210円
+- actual net proceeds = 3,390円
+- trade profit = 440円
+- next capital = 3,440円
+- capital growth = +440円 / +14.67%
+
+重要:
+`next_capital_jpy = uncommitted_cash_jpy + actual_net_proceeds_jpy`
+とし、未使用現金を保持する。
+
+実装:
+- `research_lab/trade_settlement.py`
+- `research_lab/supabase_trade_settlement_repository.py`
+- `research_lab/test_trade_settlement.py`
+- `docs/migrations/2026-10-03_pg034_trade_settlements.sql`
+
+Supabase:
+- table: `public.warashibe_trade_settlements`
+- settlement_key unique
+- listing_idempotency_key unique
+- RLS enabled
+- anon/authenticated grants revoke
+- closed-by-default
+- DB proof insert/read-back/cleanup成功
+
+CI:
+- contract `062973cbc8ca8a808eeb8b1754e61a4268fe7767` — #1232 success。
+- RED `0bf4ac2e5594e4908c9f79559931da1a5a6b09c4` — #1233 failure。
+- implementation `9ff4d46e0684a332abf250aa138708787563bd2e` — #1234 success。
+- repository `5f2ad1a480d6de9d3e44df6d8bd44001bda3ae82` — #1235 success。
+- migration source `4e734ca3d6af5c050276bad7e519c77f948e9983` — #1236 success。
+
+判定:
+- settlement accounting: 完了。
+- uncommitted cash preservation: 完了。
+- next capital update: 完了。
+- append-only persistence: 完了。
+- **PG-034開発エンドポイント: 到達。**
+
+## 34. PG-034 開発エンドポイント
+
+`Limited Sale Execution boundary`
+→ `Sale completion evidence`
+→ `Settlement`
+→ `next capital`
+→ `ready_for_next_candidate`
+
+まで進められる。
+次はPG-035 One-cycle Warashibe Proof。
