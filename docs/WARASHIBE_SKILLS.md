@@ -7,8 +7,7 @@ This file is the project-level index for reusable Warashibe AI development techn
 ### using-warashibe-headquarters
 Path: `docs/skills/using-warashibe-headquarters/SKILL.md`
 
-Use at the start of Warashibe development/scheduled development and whenever the next strategic objective is selected. Read `docs/WARASHIBE_HQ.md`, identify the single highest-value bottleneck, preserve Human Gate, and record only material strategy changes.
-
+Use at the start of Warashibe development/scheduled development and whenever CEO direction or the next strategic objective must be applied. Read `docs/WARASHIBE_HQ.md`, apply only material CEO Directives, identify the single highest-value bottleneck, rank work through the Priority Queue, escalate Human Gate items to the CEO, and run Strategy Review at endpoints.
 
 ### using-warashibe-runtime-status
 Path: `docs/skills/using-warashibe-runtime-status/SKILL.md`
