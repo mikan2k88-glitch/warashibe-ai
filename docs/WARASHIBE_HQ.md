@@ -1,7 +1,7 @@
 # Warashibe Headquarters
 
 Last updated: 2026-10-03
-Status: HQ v1.1 CEO-to-COO operating model
+Status: HQ v1.1 P1-P7 development endpoint reached
 
 ## Governance
 
@@ -28,13 +28,35 @@ PG count, code volume, research volume, and guardrail count are not top-level KP
 
 - Warashibe Loop v2 synthetic one-cycle proof: complete.
 - Settlement and next-capital handoff: complete.
-- Capital Velocity: implemented.
+- Capital Velocity base implementation: complete.
 - Learning Loop entry: complete.
 - HQ v1 strategy memory: complete.
-- HQ v1.1 CEO Directive / Priority Queue / Escalation / Strategy Review: implemented.
-- HQ v1.1 first formal Priority Queue: approved by CEO and active.
-- Real external buy/sell cycle: not verified.
-- Controlled automation: not authorized.
+- HQ v1.1 CEO Directive / Priority Queue / Escalation / Strategy Review: complete.
+- P1 HQ Runner Integration development: complete.
+- P2 Real Pilot Decision Packet development: complete.
+- P3 CEO Approval Gate development: complete.
+- P4 bounded one-item live-pilot control development: complete.
+- P5 Learning Feedback adapter development: complete.
+- P6 Capital Velocity ranking development: complete.
+- P7 Controlled Automation Scope evaluator development: complete.
+- Real external buy/sell cycle operational proof: not yet verified.
+- Controlled automation operational authorization: not granted.
+
+## Development capability vs operational evidence
+
+The P1-P7 software/control path is implemented through the development endpoint.
+
+Operational progress remains evidence-driven:
+
+- P1: operationally complete — scheduled development can be routed through HQ.
+- P2: current operational priority — prepare a real-pilot decision packet from current evidence.
+- P3: available once one P2 packet is ready.
+- P4: requires explicit Human Gate approval before any real purchase/payment/listing/sale.
+- P5: requires a completed pilot review.
+- P6: available for candidate ranking and improves when live feedback exists.
+- P7: evaluator is implemented, but safe-scope expansion requires repeated verified live cycles and never authorizes Human Gate actions.
+
+Therefore "development endpoint P7 reached" does not mean "live commerce completed" or "controlled automation authorized."
 
 ## Current bottleneck
 
@@ -42,7 +64,7 @@ PG count, code volume, research volume, and guardrail count are not top-level KP
 
 ## Active strategy
 
-`hq_runner_integration -> real_pilot_readiness -> one_item_live_proof -> learning_feedback -> capital_velocity_improvement -> controlled_automation_expansion`
+`real_pilot_readiness -> ceo_approval_gate -> one_item_live_proof -> learning_feedback -> capital_velocity_improvement -> controlled_automation_expansion`
 
 ## First Formal Priority Queue
 
@@ -51,11 +73,7 @@ Connect scheduled development to HQ so each cycle runs:
 
 `HQ load -> verified state -> bottleneck -> Priority Queue -> select one objective -> execute -> evidence -> Strategy Review`
 
-Endpoint:
-- scheduled development reads HQ before selecting work;
-- HQ Priority Queue is generated from current evidence;
-- Human Gate items are excluded from autonomous execution;
-- Strategy Review runs after the development endpoint.
+Development endpoint: complete.
 
 ### P2 — Real Pilot Readiness
 Produce one decision packet for a real external item containing:
@@ -67,7 +85,8 @@ Produce one decision packet for a real external item containing:
 - maximum acceptable loss;
 - exit / stop-loss condition.
 
-Endpoint: one candidate is ready for CEO review without executing a purchase.
+Development endpoint: complete.
+Operational endpoint: one current candidate ready for CEO review without executing a purchase.
 
 ### P3 — CEO Approval Gate
 Present one-item pilot evidence to the CEO with:
@@ -77,28 +96,33 @@ Present one-item pilot evidence to the CEO with:
 - expected capital lock time;
 - invalidation / abort conditions.
 
-Endpoint: execution stops at Human Gate pending explicit CEO approval.
+Development endpoint: complete.
+Operational endpoint: execution stops at Human Gate pending explicit CEO approval.
 
 ### P4 — One Item Live Proof
 After explicit Human Gate approval only, verify one real external cycle:
 `purchase -> receive/inspect -> sale/listing -> settlement`.
 
-Endpoint: one complete real-world proof with auditable evidence.
+Development endpoint: bounded execution-chain preparation complete.
+Operational endpoint: one complete real-world proof with auditable evidence.
 
 ### P5 — Learning Feedback
 Feed realized spread, fees, sell-through time, failure causes, and settlement evidence back into candidate evaluation.
 
-Endpoint: next candidate ranking demonstrably uses realized evidence.
+Development endpoint: feedback adapter complete.
+Operational endpoint: next candidate ranking uses realized live evidence.
 
 ### P6 — Capital Velocity Improvement
 Optimize for capital turnover, not gross margin alone.
 
-Endpoint: strategy can compare expected return together with expected time-to-next-capital.
+Development endpoint: confidence-weighted capital-velocity ranking complete.
+Operational endpoint: compare expected return together with expected time-to-next-capital using live feedback.
 
 ### P7 — Controlled Automation Expansion
-Expand automation only across repeatedly verified steps while preserving Human Gate boundaries.
+Expand automation only across repeatedly verified safe steps while preserving Human Gate boundaries.
 
-Endpoint: automation scope increases only where evidence supports it and CEO-controlled actions remain gated.
+Development endpoint: safe-scope evaluator complete.
+Operational endpoint: safe automation scope may expand only after sufficient verified live cycles; real purchase/payment/listing/sale remain Human Gate actions.
 
 ## CEO Directive contract
 
