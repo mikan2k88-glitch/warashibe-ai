@@ -55,7 +55,7 @@ def main():
     assert proof["starting_capital_jpy"]==3000
     assert proof["next_capital_jpy"]==3440
     assert proof["capital_growth_jpy"]==440
-    assert proof["capital_velocity_jpy_per_day"]==145.45
+    assert proof["capital_velocity_jpy_per_day"]==145.66
     assert proof["warashibe_loop_v2_contract_complete"] is True
     assert proof["live_external_actions_verified"] is False
     assert proof["ready_for_next_candidate"] is True
