@@ -32,6 +32,7 @@ PG count, code volume, research volume, and guardrail count are not top-level KP
 - Learning Loop entry: complete.
 - HQ v1 strategy memory: complete.
 - HQ v1.1 CEO Directive / Priority Queue / Escalation / Strategy Review: implemented.
+- HQ v1.1 first formal Priority Queue: approved by CEO and active.
 - Real external buy/sell cycle: not verified.
 - Controlled automation: not authorized.
 
@@ -41,7 +42,63 @@ PG count, code volume, research volume, and guardrail count are not top-level KP
 
 ## Active strategy
 
-`real_pilot_readiness -> one_item_live_proof -> learning_feedback -> capital_velocity_improvement`
+`hq_runner_integration -> real_pilot_readiness -> one_item_live_proof -> learning_feedback -> capital_velocity_improvement -> controlled_automation_expansion`
+
+## First Formal Priority Queue
+
+### P1 — HQ Runner Integration
+Connect scheduled development to HQ so each cycle runs:
+
+`HQ load -> verified state -> bottleneck -> Priority Queue -> select one objective -> execute -> evidence -> Strategy Review`
+
+Endpoint:
+- scheduled development reads HQ before selecting work;
+- HQ Priority Queue is generated from current evidence;
+- Human Gate items are excluded from autonomous execution;
+- Strategy Review runs after the development endpoint.
+
+### P2 — Real Pilot Readiness
+Produce one decision packet for a real external item containing:
+- acquisition price;
+- expected sale price;
+- fees;
+- liquidity / expected sell-through time;
+- condition / authenticity risk;
+- maximum acceptable loss;
+- exit / stop-loss condition.
+
+Endpoint: one candidate is ready for CEO review without executing a purchase.
+
+### P3 — CEO Approval Gate
+Present one-item pilot evidence to the CEO with:
+- why this item;
+- expected profit;
+- maximum loss;
+- expected capital lock time;
+- invalidation / abort conditions.
+
+Endpoint: execution stops at Human Gate pending explicit CEO approval.
+
+### P4 — One Item Live Proof
+After explicit Human Gate approval only, verify one real external cycle:
+`purchase -> receive/inspect -> sale/listing -> settlement`.
+
+Endpoint: one complete real-world proof with auditable evidence.
+
+### P5 — Learning Feedback
+Feed realized spread, fees, sell-through time, failure causes, and settlement evidence back into candidate evaluation.
+
+Endpoint: next candidate ranking demonstrably uses realized evidence.
+
+### P6 — Capital Velocity Improvement
+Optimize for capital turnover, not gross margin alone.
+
+Endpoint: strategy can compare expected return together with expected time-to-next-capital.
+
+### P7 — Controlled Automation Expansion
+Expand automation only across repeatedly verified steps while preserving Human Gate boundaries.
+
+Endpoint: automation scope increases only where evidence supports it and CEO-controlled actions remain gated.
 
 ## CEO Directive contract
 
