@@ -4,6 +4,12 @@ This file is the project-level index for reusable Warashibe AI development techn
 
 ## Project-specific skills
 
+### using-warashibe-headquarters
+Path: `docs/skills/using-warashibe-headquarters/SKILL.md`
+
+Use at the start of Warashibe development/scheduled development and whenever the next strategic objective is selected. Read `docs/WARASHIBE_HQ.md`, identify the single highest-value bottleneck, preserve Human Gate, and record only material strategy changes.
+
+
 ### using-warashibe-runtime-status
 Path: `docs/skills/using-warashibe-runtime-status/SKILL.md`
 
