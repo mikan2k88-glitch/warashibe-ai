@@ -33,6 +33,7 @@ PROFILES = {
         "research_lab.test_live_pilot_guard",
         "research_lab.test_live_commerce_adapter",
         "research_lab.test_single_purchase_execution",
+        "research_lab.test_purchase_receipt_reconciliation",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
