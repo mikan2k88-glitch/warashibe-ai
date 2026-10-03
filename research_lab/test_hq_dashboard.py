@@ -17,6 +17,9 @@ def main():
     assert payload["candidate"]["economics"]["local_pickup_profit_jpy"] > 0
     assert len(payload["development_summary"]) == 7
     assert payload["human_gate"]["required_for_real_commerce"] is True
+    assert payload["ceo_attention"]["level"] == "watching"
+    assert payload["system_status"]["hq_runner"] == "connected"
+    assert payload["system_status"]["commerce_execution"] == "locked_by_human_gate"
 
     client = app.test_client()
 
@@ -36,6 +39,12 @@ def main():
     assert "ウルトラ怪獣モンスターファーム" in html
     assert "P3へ上げない" in html
     assert "Human Gate" in html
+    assert "CEO Attention" in html
+    assert "P2 実商品候補" in html
+    assert "仕入候補を見る" in html
+    assert "売却実績を見る" in html
+    assert "P1–P7 開発完了 7/7" in html
+    assert "システム状態" in html
 
     print("CEO Dashboard contract tests passed")
 
