@@ -36,6 +36,7 @@ PROFILES = {
         "research_lab.test_purchase_receipt_reconciliation",
         "research_lab.test_receive_inspection",
         "research_lab.test_sale_plan",
+        "research_lab.test_human_sale_decision",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
         "research_lab.test_problem_repair_ai_decision",
