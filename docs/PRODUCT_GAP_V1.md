@@ -79,6 +79,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-027 | Live Commerce Adapter Interface | Post-v1拡張 | PG-026 | DONE（開発エンドポイント到達） |
 | PG-028 | Single Purchase Execution | Post-v1拡張 | PG-027 | DONE（開発エンドポイント到達・実注文未実行） |
 | PG-029 | Purchase Receipt / Reconciliation | Warashibe Loop v2 | PG-028 | DONE（開発エンドポイント到達） |
+| PG-030 | Receive / Inspection | Warashibe Loop v2 | PG-029 | DONE（開発エンドポイント到達） |
 
 ## 4. 依存関係
 
@@ -2304,3 +2305,86 @@ PG-029到達時点で、
 までCommerce Loopを進められる。
 
 次はPG-030 Receive / Inspection。
+
+
+### PG-030 — Receive / Inspection 開発エンドポイント到達
+
+目的:
+- PG-029で照合済みの購入品について、受領・数量・商品同一性・状態・破損・欠品・真贋疑義・機能確認・返品可能性を記録する。
+- 検品結果を `sale_ready / return_required / inspection_hold` の3状態へ分岐し、Sale Planへ進める商品を明確にする。
+- Purchase Receiptで確定した `capital_committed_jpy` を `capital_basis_jpy` として在庫へ引き継ぐ。
+
+実装:
+- `research_lab/receive_inspection.py`
+- `research_lab/supabase_receive_inspection_repository.py`
+- `research_lab/test_receive_inspection.py`
+- `docs/migrations/2026-10-03_pg030_receive_inspections.sql`
+- build profileへPG-030 contract testを追加。
+
+検品:
+- source status=`purchase_receipt_reconciled`
+- reconciliation_passed=True
+- quantity received=1
+- identity verified
+- condition grade
+- listingとの状態一致
+- damage / missing parts
+- counterfeit suspicion
+- functional check
+- return window
+- 正常時:
+  - `disposition=sale_ready`
+  - `sale_ready=True`
+  - `capital_state=inventory_ready_for_sale`
+- 問題あり＋return window open:
+  - `disposition=return_required`
+  - `return_required=True`
+  - `capital_state=return_or_refund_pending`
+- 問題あり＋return不可:
+  - `disposition=inspection_hold`
+  - `requires_human_review=True`
+  - `capital_state=inspection_hold`
+
+Supabase:
+- table: `public.warashibe_receive_inspections`
+- inspection_key unique。
+- receipt_key unique。
+- disposition check constraint。
+- RLS enabled。
+- anon/authenticated SELECT/INSERT=false。
+- server-side closed-by-default。
+
+実DB proof:
+- `pg030-proof`
+- disposition=sale_ready。
+- sale_ready=true。
+- capital_basis_jpy=2,950円。
+- capital_state=inventory_ready_for_sale。
+- insert/read-back成功。
+- cleanup後 test_rows=0。
+
+CI:
+- contract `314d64ba763f0413f2250c1ae85196cf1d348b9a` — #1208 success。
+- RED `de7d5f3cd35acd702dcf099b421df0afb8824e1c` — #1209 failure。
+- implementation `9d3829cab01279f94f20ba8913502d8cec5a2240` — #1210 success。
+- repository `01313fcf3ca6c9dbc3768958cdda6297a2626104` — #1211 success。
+- migration source `7fa8da04cd646153debaa8887860047b8224b904` — #1212 success。
+
+判定:
+- receive model: 完了。
+- inspection/disposition: 完了。
+- return/hold branching: 完了。
+- capital basis handoff: 完了。
+- append-only persistence: 完了。
+- **PG-030開発エンドポイント: 到達。**
+
+## 30. PG-030 開発エンドポイント
+
+PG-030到達時点で、
+`Single Purchase Execution`
+→ `Purchase Receipt / Reconciliation`
+→ `Receive / Inspection`
+→ `inventory_ready_for_sale`
+までCommerce Loopを進められる。
+
+次はPG-031 Sale Plan。
