@@ -84,6 +84,7 @@ v1.0は「実売買の完全自動化」ではない。
 | PG-032 | Human Sale Decision | Warashibe Loop v2 | PG-031 | DONE（開発エンドポイント到達） |
 | PG-033 | Limited Sale Execution | Warashibe Loop v2 | PG-032 | DONE（開発エンドポイント到達・実出品未実行） |
 | PG-034 | Settlement / Capital Update | Warashibe Loop v2 | PG-033 | DONE（開発エンドポイント到達） |
+| PG-035 | One-cycle Warashibe Proof | Warashibe Loop v2 | PG-034 | DONE（合成一周実証・live外部実証は未実施） |
 
 ## 4. 依存関係
 
@@ -2677,3 +2678,74 @@ CI:
 
 まで進められる。
 次はPG-035 One-cycle Warashibe Proof。
+
+
+### PG-035 — One-cycle Warashibe Proof 開発エンドポイント到達
+
+目的:
+- Purchase Receipt → Receive/Inspection → Sale Plan → Human Sale Decision → Limited Sale Execution → Settlement の監査artifactを1本のJourneyとして照合する。
+- 3,000円から次資本3,440円までの一周を、chain consistencyとCapital Velocityを含めて証明する。
+- synthetic proofとreal live external proofを厳密に区別する。
+
+代表実証:
+- starting capital = 3,000円
+- capital basis = 2,950円
+- net proceeds = 3,390円
+- next capital = 3,440円
+- capital growth = +440円 / +14.67%
+- elapsed = 3.0208日
+- actual Capital Velocity = 145.66円/日
+- ready_for_next_candidate=True
+
+安全・真実性:
+- proof_mode=`synthetic_auditable_cycle`
+- `live_external_actions_verified=False`
+- `controlled_automation_authorized=False`
+- synthetic一周をlive取引実績として扱わない。
+
+実装:
+- `research_lab/one_cycle_warashibe_proof.py`
+- `research_lab/supabase_one_cycle_proof_repository.py`
+- `research_lab/test_one_cycle_warashibe_proof.py`
+- `docs/migrations/2026-10-03_pg035_one_cycle_proofs.sql`
+
+Supabase:
+- table: `public.warashibe_one_cycle_proofs`
+- proof_key unique
+- proof_mode保持
+- RLS enabled
+- anon/authenticated grants revoke
+- DB proof insert/read-back/cleanup成功
+
+CI:
+- contract `0dccd7189f002e3c455fdae7b5098a1e027131c6` — #1238 success。
+- RED `b216776c34be465a3348c574dce2423e8f20ee91` — #1239 failure。
+- velocity fixture correction `2761f70fb58341b620cccd0e25b0eba449d47366` — #1240 failure（module未実装のRED維持）。
+- implementation `44aa9111250e689c887fb20d01a1ab7063049f97` — #1241 success。
+- repository `9bf568c767fd9c1d49d04909794cd465dd713872` — #1242 success。
+- migration source `7cce071e4d17889663a6e56955fe384f1abf3861` — #1243 success。
+
+判定:
+- one-cycle artifact chain: 完了。
+- Warashibe Loop v2 contract: 一周完了。
+- actual capital handoff: 完了。
+- synthetic auditable proof: 完了。
+- live external commerce proof: 未実施。
+- **PG-035開発エンドポイント: 到達。**
+
+## 35. PG-035 開発エンドポイント
+
+`Candidate/Buy side`
+→ `Purchase`
+→ `Receipt`
+→ `Inspection`
+→ `Sale Plan`
+→ `Human Sale Decision`
+→ `Listing boundary`
+→ `Settlement`
+→ `next capital`
+→ `ready_for_next_candidate`
+
+まで、合成監査実証として一周した。
+
+次はPG-036 Live Pilot Review。
