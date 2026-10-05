@@ -1,8 +1,8 @@
-name: PG-037-039 offline safety contracts
+name: PG-037-050 offline safety contracts
 
 on:
   push:
-    branches: ["codex/pg-037-039"]
+    branches: ["codex/pg-037-039", "gpt/pg-040-050"]
   pull_request:
     branches: [research-lab]
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt pytest
       - run: python -m research_lab.runner
       - name: P2 and learning regression
         if: matrix.profile == 'build'
@@ -43,8 +43,9 @@ jobs:
           python -m research_lab.test_repository_learning_loop_injection
           python -m research_lab.test_strategy_learning_loop
           python -m research_lab.test_shadow_integration
+          pytest -q research_lab/test_pg_040_050.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pg-037-039-${{ matrix.profile }}-${{ github.sha }}
+          name: pg-037-050-${{ matrix.profile }}-${{ github.sha }}
           path: research_output/
