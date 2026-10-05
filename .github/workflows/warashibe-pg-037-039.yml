@@ -18,6 +18,7 @@ jobs:
       matrix:
         profile: [build, core]
     env:
+      GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       WARASHIBE_LAB_PROFILE: ${{ matrix.profile }}
       SUPABASE_URL: ""
       SUPABASE_KEY: ""

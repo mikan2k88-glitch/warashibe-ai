@@ -17,6 +17,51 @@ from research_lab.test_shadow_promotion import fixture, shadow_fixture, NOW, LAT
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_durable_single_item_scenarios(self):
+        """Replay one identity independently through all five hypothetical outcomes."""
+        import json
+        from research_lab.test_shadow_promotion import observation_fixture
+        from research_lab.promotion_gate import evaluate_promotion
+        traces = []
+        for scenario in ('success', 'loss', 'unsold', 'invalidated', 'insufficient_evidence'):
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'shadow.json'
+                repo, shadow = shadow_fixture(JsonShadowRepository(path))
+                key = shadow['shadow_candidate_id']
+                at = '2026-10-16T00:00:00Z' if scenario == 'unsold' else LATER
+                observed = observation_fixture(shadow, at=at)
+                if scenario == 'loss':
+                    observed['estimated_sale_price'] = 1000
+                elif scenario == 'invalidated':
+                    observed['product_identity']['edition'] = 'different'
+                elif scenario in ('unsold', 'insufficient_evidence'):
+                    observed['evidence'] = [e for e in observed['evidence'] if e['kind'] != 'sold_price']
+                    observed['sold_evidence_count'] = 0
+                if scenario == 'unsold':
+                    observed['sellability_result'] = 'unsold'
+                    for evidence in observed['evidence']:
+                        evidence['observed_at'] = at
+                add_shadow_observation(JsonShadowRepository(path), key, observed, as_of=at)
+                outcome = complete_shadow(JsonShadowRepository(path), key, as_of=at)
+                saved = JsonShadowRepository(path)
+                row = saved.get(key)
+                decision = evaluate_promotion(row, as_of=at)
+                dashboard = build_hq_dashboard_payload(shadow_repository=saved, maturity_stage='shadow', as_of=at)
+                self.assertEqual(outcome['outcome_status'], scenario)
+                self.assertEqual(decision['promotion_ready'], scenario == 'success')
+                self.assertEqual(dashboard['candidate']['shadow_candidate_id'], key)
+                self.assertEqual(dashboard['promotion_ready_count'], int(scenario == 'success'))
+                self.assertFalse(decision['purchase_authorized'])
+                self.assertEqual(len(saved.load()), 1)
+                self.assertEqual(len(saved.observations(key)), 1)
+                traces.append({'scenario': scenario, 'candidate_id': row['candidate_id'],
+                    'shadow_candidate_id': key, 'observation_at': at, 'outcome': outcome,
+                    'promotion': decision, 'dashboard_candidate_id': dashboard['candidate']['shadow_candidate_id']})
+        output = Path('research_output/shadow_replay.json')
+        output.parent.mkdir(exist_ok=True)
+        output.write_text(json.dumps({'synthetic_fixture': True, 'real_market_verified': False,
+            'real_commerce_executed': False, 'traces': traces}, ensure_ascii=False, indent=2), encoding='utf-8')
+
     def test_repository_reload_and_dashboard_agree(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "shadow.json"

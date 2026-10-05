@@ -28,6 +28,14 @@ def source_url(value):
         return False
 
 
+def canonical_source(value):
+    """Conservative page identity; tracking/query/fragment cannot create evidence."""
+    if not source_url(value):
+        return None
+    parsed = urlsplit(value)
+    return (parsed.hostname.lower(), parsed.path.rstrip("/"))
+
+
 def identity_valid(identity):
     return (isinstance(identity, dict)
             and all(isinstance(identity.get(k), str) and identity[k].strip()
@@ -87,8 +95,7 @@ def evaluate_integrity(candidate, *, as_of, max_age_days=7, min_sold_evidence=2)
         url_value = row.get("source_url")
         source_key = (kind, url_value)
         if source_url(url_value):
-            parsed = urlsplit(url_value)
-            source_key = (kind, parsed.hostname.lower(), parsed.path.rstrip("/"))
+            source_key = (kind, *canonical_source(url_value))
         if isinstance(key, str) and isinstance(kind, str) and isinstance(row.get("source_url"), str):
             if key in ids or source_key in sources:
                 errors.append("duplicate_evidence")

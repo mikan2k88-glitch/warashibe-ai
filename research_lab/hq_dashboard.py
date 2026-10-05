@@ -64,65 +64,24 @@ _DEVELOPMENT_SUMMARY = [
 
 
 def build_hq_dashboard_payload(candidate=None, *, shadow_repository=None, maturity_stage=None, as_of=None):
-    candidate_payload = candidate or {
-        "state": "live_screened_hold",
-        "headline": "P2候補を実市場でスクリーニング済み",
-        "message": (
-            "Nintendo Switch『ウルトラ怪獣モンスターファーム』を実市場で確認。"
-            "売買実績は確認できるものの、通販仕入れでは手数料・送料込みで赤字になるため、"
-            "現時点ではP3へ上げない判断です。"
-        ),
-        "item_name": "ウルトラ怪獣モンスターファーム",
-        "source": "駿河屋MEGA中筋店",
-        "source_url": (
-            "https://www.suruga-ya.jp/product/detail/"
-            "109002348?tenpo_cd=400479&branch_number=0001"
-        ),
-        "sale_comp_source": "メルカリ売却済み実績",
-        "sale_comp_url": "https://jp.mercari.com/item/m10992476959",
-        "purchase_price_jpy": 1940,
-        "source_shipping_min_jpy": 600,
-        "expected_sale_price_jpy": 2500,
-        "selling_fee_jpy": 250,
-        "outbound_shipping_jpy": 210,
-        "expected_net_profit_jpy": -500,
-        "expected_margin_rate": -0.20,
-        "estimated_days_to_sell": None,
-        "capital_velocity_jpy_per_day": None,
-        "max_loss_jpy": 500,
-        "stop_loss_price_jpy": None,
-        "risk": "economics_blocked",
-        "go_to_p3": False,
-        "screened_at": "2026-10-03",
-        "economics": {
-            "sale_net_after_fee_and_shipping_jpy": 2040,
-            "local_pickup_profit_jpy": 100,
-            "remote_purchase_profit_jpy": -500,
-            "remote_purchase_total_cost_jpy": 2540,
-        },
-        "decision": "P3へ上げない",
-        "next_search_gate": {
-            "target_total_acquisition_cost_jpy_max": 2200,
-            "target_net_profit_jpy_min": 300,
-            "target_condition": (
-                "3,000円資本内で、販売手数料と発送費を差し引いても"
-                "最低300円以上の利益余地が残る候補"
-            ),
-        },
-    }
-
+    import os
+    from research_lab.dashboard_state import candidate_summary, runner_evidence
+    from research_lab.shadow_state import configured_repository
+    repository = shadow_repository if shadow_repository is not None else configured_repository()
     program = build_hq_development_program(
-        shadow_repository=shadow_repository, maturity_stage=maturity_stage, as_of=as_of,
-        operational_evidence={
-            "hq_runner_integrated": True,
-            "real_pilot_decision_packet_ready": False,
-            "ceo_approval_gate_ready": False,
-            "live_pilot_verified": False,
-            "learning_feedback_ingested": False,
-            "capital_velocity_optimized": False,
-            "controlled_automation_scope_ready": False,
-        }
+        shadow_repository=repository, maturity_stage=maturity_stage or os.environ.get("WARASHIBE_MATURITY_STAGE", "research"), as_of=as_of,
+        operational_evidence={},
     )
+    clock = program["validation_state"]["validation_observed_at"]
+    runtime = runner_evidence(as_of=clock)
+    if runtime["status"] == "observed_success":
+        program = build_hq_development_program(
+            shadow_repository=repository, maturity_stage=program["validation_state"]["maturity_stage"],
+            as_of=clock, operational_evidence={"hq_runner_integrated": True})
+    candidate_payload = candidate_summary(repository, as_of=clock)
+    # Caller-provided legacy presentation has no provenance and cannot replace saved state.
+    summary = [{**row, "operational_status": "not_verified"} for row in _DEVELOPMENT_SUMMARY]
+    summary[0]["operational_status"] = runtime["status"]
     review_count = program["validation_state"]["human_review_ready_count"]
 
     return {
@@ -130,9 +89,9 @@ def build_hq_dashboard_payload(candidate=None, *, shadow_repository=None, maturi
         "status": "hq_dashboard_ready",
         "title": "Warashibe CEO Dashboard",
         "north_star": "約3,000円 → 常に1商品 → 100万円",
-        "current_phase": "P2",
+        "current_phase": program["selected_operational_priority"],
         "development_endpoint": "P7",
-        "current_bottleneck": "real_external_single_item_pilot_not_verified",
+        "current_bottleneck": "operational_evidence_not_verified",
         "active_strategy": [
             "real_pilot_readiness",
             "ceo_approval_gate",
@@ -142,7 +101,10 @@ def build_hq_dashboard_payload(candidate=None, *, shadow_repository=None, maturi
             "controlled_automation_expansion",
         ],
         "candidate": candidate_payload,
-        "development_summary": list(_DEVELOPMENT_SUMMARY),
+        "development_summary": summary,
+        "state_observed_at": clock,
+        "operational_evidence_status": "not_verified",
+        "runner_evidence": runtime,
         "hq_program": program,
         "human_gate": {
             "required_for_real_commerce": True,
@@ -158,12 +120,12 @@ def build_hq_dashboard_payload(candidate=None, *, shadow_repository=None, maturi
         "external_execution_authorized": False,
         "ceo_attention": {
             "level": "review_required" if review_count else "watching",
-            "headline": f"Human Review待ち: {review_count}件" if review_count else "P2探索を継続中 — CEO判断はまだ不要",
+            "headline": f"Human Review待ち: {review_count}件" if review_count else "稼働証拠を確認してください",
             "message": "P2候補はShadow観測とEvidence Integrityを検証し、Promotion Gate通過後にCEO判断へ進めます。",
             "next_action": "総仕入コスト2,200円以下・純利益300円以上を満たす候補を探索",
         },
         "strategy_learning": {
-            "status": "active",
+            "status": "not_verified",
             "mode": "research_to_shadow_validation",
             "pipeline": [
                 "web_research",
@@ -179,7 +141,7 @@ def build_hq_dashboard_payload(candidate=None, *, shadow_repository=None, maturi
             "next_focus": "市場価格差・送料・手数料・流動性・失敗パターンを定時研究へ寄せる",
         },
         "system_status": {
-            "hq_runner": "connected",
+            "hq_runner": runtime["status"],
             "dashboard": "online",
             "commerce_execution": "locked_by_human_gate",
             "data_surface": "/hq/api",
@@ -212,13 +174,16 @@ def hq_dashboard_api():
 
 @hq_dashboard_bp.get("/hq")
 def hq_dashboard_page():
-    data = build_hq_dashboard_payload()
+    from research_lab.dashboard_state import escape_html
+    data = escape_html(build_hq_dashboard_payload())
     candidate = data["candidate"]
 
     attention = data["ceo_attention"]
     system = data["system_status"]
     learning = data["strategy_learning"]
     gate = candidate["next_search_gate"]
+    source_link = f'<a href="{candidate["source_url"]}" target="_blank" rel="noopener">仕入候補を見る</a>' if candidate['source_url'] else '仕入証拠: 未確認'
+    sale_link = f'<a href="{candidate["sale_comp_url"]}" target="_blank" rel="noopener">売却実績を見る</a>' if candidate['sale_comp_url'] else '売却証拠: 未確認'
     progress_done = sum(
         1 for row in data["development_summary"]
         if row["development_status"] == "complete"
@@ -367,15 +332,15 @@ def hq_dashboard_page():
             <p class="muted">{candidate['message']}</p>
             <p><strong>候補:</strong> {candidate['item_name']}</p>
             <p><strong>判定:</strong> <span class="decision-hold">{candidate['decision']}</span></p>
-            <p><strong>理由:</strong> 通販仕入れ総額 {_money(candidate['economics']['remote_purchase_total_cost_jpy'])} に対し、売却後の手取り想定は {_money(candidate['economics']['sale_net_after_fee_and_shipping_jpy'])}。現状は採算ゲート未達です。</p>
+            <p><strong>理由:</strong> 通販仕入れ総額 {_money(candidate['economics']['remote_purchase_total_cost_jpy'])} に対し、売却後の手取り想定は {_money(candidate['economics']['sale_net_after_fee_and_shipping_jpy'])}。最新の昇格判定は上記の判定理由を参照してください。</p>
             <div class="gatebar">
               <div class="gateitem"><span class="label">仕入ゲート</span><strong>≤ {_money(gate['target_total_acquisition_cost_jpy_max'])}</strong></div>
               <div class="gateitem"><span class="label">純利益ゲート</span><strong>≥ {_money(gate['target_net_profit_jpy_min'])}</strong></div>
               <div class="gateitem"><span class="label">P3移行</span><strong>{'GO' if candidate['go_to_p3'] else 'HOLD'}</strong></div>
             </div>
             <div class="source-links">
-              <a href="{candidate['source_url']}" target="_blank" rel="noopener">仕入候補を見る</a>
-              <a href="{candidate['sale_comp_url']}" target="_blank" rel="noopener">売却実績を見る</a>
+              {source_link}
+              {sale_link}
             </div>
             <p><strong>現在のボトルネック:</strong><br><code>{data['current_bottleneck']}</code></p>
           </div>
@@ -393,7 +358,7 @@ def hq_dashboard_page():
 
         <div class="section-title">Strategy Learning Loop <span class="section-note">市場学習をP2へ戻す</span></div>
         <section class="card">
-          <strong>稼働中: Web調査 → 戦略更新案 → 証拠検証 → 採用/却下 → P2シャドー検証</strong>
+          <strong>実装済み・稼働証拠: {learning['status']}</strong>
           <p class="muted">最低 {learning['minimum_findings']} 件・{learning['minimum_distinct_sources']} ソースの証拠を要求し、本番ルールは自動変更しません。</p>
           <div class="learning-flow">
             {''.join(f'<span class="learning-step">{step}</span>' for step in learning['pipeline'])}
@@ -401,7 +366,7 @@ def hq_dashboard_page():
           <p><strong>次の研究焦点:</strong> {learning['next_focus']}</p>
         </section>
 
-        <div class="section-title">開発サマリー <span class="section-note">P1–P7 開発完了 {progress_done}/7</span></div>
+        <div class="section-title">開発サマリー <span class="section-note">P1–P7 機能実装 {progress_done}/7</span></div>
         <section class="card">{rows}</section>
 
         <div class="section-title">システム状態 <span class="section-note">この画面自身の制御状態</span></div>
@@ -421,7 +386,7 @@ def hq_dashboard_page():
         </section>
 
         <div class="footer">
-          JSON: <code>/hq/api</code> — ChatGPTや他の表示UIから同じHQ状態を取得できます。
+          状態評価時刻: {data['state_observed_at']} / 候補観測時刻: {candidate['observed_at']}<br>JSON: <code>/hq/api</code> — ChatGPTや他の表示UIから同じHQ状態を取得できます。
         </div>
       </main>
     </body>
