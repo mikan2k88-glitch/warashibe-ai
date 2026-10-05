@@ -1,0 +1,33 @@
+name: PG-051-060 operational readiness contracts
+
+on:
+  push:
+    branches: ["gpt/pg-051-060", "gpt/pg-040-060-integration"]
+  pull_request:
+    paths:
+      - "research_lab/strategy_validation.py"
+      - "research_lab/runtime_transition.py"
+      - "research_lab/live_pilot.py"
+      - "research_lab/learning_velocity.py"
+      - "research_lab/automation_readiness.py"
+      - "research_lab/test_pg_051_060.py"
+      - "docs/pg-051-060-operational-readiness.md"
+      - ".github/workflows/warashibe-pg-051-060.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q research_lab/test_pg_051_060.py
+      - run: pytest -q research_lab/test_pg_040_050.py
+      - run: pytest -q research_lab/test_maturity_stage.py research_lab/test_shadow_promotion.py research_lab/test_shadow_integration.py
