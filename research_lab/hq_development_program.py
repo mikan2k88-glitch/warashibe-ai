@@ -63,7 +63,13 @@ def _positive(value, name):
     return float(value)
 
 
-def build_hq_development_program(*, operational_evidence=None):
+def build_hq_development_program(*, operational_evidence=None, shadow_repository=None,
+                                 maturity_stage=None, as_of=None):
+    from research_lab.shadow_state import build_validation_snapshot, configured_validation_snapshot
+    validation = (configured_validation_snapshot(as_of=as_of)
+                  if shadow_repository is None and maturity_stage is None else
+                  build_validation_snapshot(repository=shadow_repository,
+                                            maturity_stage=maturity_stage or "research", as_of=as_of))
     evidence = dict(operational_evidence or {})
     progress = []
     selected = None
@@ -88,6 +94,7 @@ def build_hq_development_program(*, operational_evidence=None):
         "selected_operational_priority": selected,
         "human_gate_preserved": True,
         "external_execution_authorized": False,
+        "validation_state": validation,
     }
 
 

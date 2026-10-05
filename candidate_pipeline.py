@@ -42,7 +42,8 @@ def _build_selection_record(best_candidate, ranked_candidates):
 
 def evaluate_candidates(
     candidates,
-    current_capital
+    current_capital,
+    *, shadow_repository=None, shadow_assessment=None, as_of=None,
 ):
     """
     候補商品を一連のフィルターと
@@ -76,7 +77,7 @@ def evaluate_candidates(
         ranked_candidates,
     )
 
-    return {
+    result = {
         "version": PIPELINE_VERSION,
 
         "current_capital": current_capital,
@@ -113,3 +114,9 @@ def evaluate_candidates(
         "selection_record":
             selection_record,
     }
+    if shadow_repository is not None:
+        from research_lab.shadow_routing import route_selected_to_shadow
+        result["shadow_routing"] = route_selected_to_shadow(
+            result, repository=shadow_repository, assessment=shadow_assessment, as_of=as_of,
+        )
+    return result

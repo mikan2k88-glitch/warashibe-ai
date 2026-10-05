@@ -63,7 +63,7 @@ _DEVELOPMENT_SUMMARY = [
 ]
 
 
-def build_hq_dashboard_payload(candidate=None):
+def build_hq_dashboard_payload(candidate=None, *, shadow_repository=None, maturity_stage=None, as_of=None):
     candidate_payload = candidate or {
         "state": "live_screened_hold",
         "headline": "P2候補を実市場でスクリーニング済み",
@@ -112,6 +112,7 @@ def build_hq_dashboard_payload(candidate=None):
     }
 
     program = build_hq_development_program(
+        shadow_repository=shadow_repository, maturity_stage=maturity_stage, as_of=as_of,
         operational_evidence={
             "hq_runner_integrated": True,
             "real_pilot_decision_packet_ready": False,
@@ -122,8 +123,10 @@ def build_hq_dashboard_payload(candidate=None):
             "controlled_automation_scope_ready": False,
         }
     )
+    review_count = program["validation_state"]["human_review_ready_count"]
 
     return {
+        **program["validation_state"],
         "status": "hq_dashboard_ready",
         "title": "Warashibe CEO Dashboard",
         "north_star": "約3,000円 → 常に1商品 → 100万円",
@@ -154,9 +157,9 @@ def build_hq_dashboard_payload(candidate=None):
         "dashboard_mode": "read_only",
         "external_execution_authorized": False,
         "ceo_attention": {
-            "level": "watching",
-            "headline": "P2探索を継続中 — CEO判断はまだ不要",
-            "message": "純利益300円以上の候補がP2ゲートを通過した時点で、P3 CEO Approval Gateへ上げます。",
+            "level": "review_required" if review_count else "watching",
+            "headline": f"Human Review待ち: {review_count}件" if review_count else "P2探索を継続中 — CEO判断はまだ不要",
+            "message": "P2候補はShadow観測とEvidence Integrityを検証し、Promotion Gate通過後にCEO判断へ進めます。",
             "next_action": "総仕入コスト2,200円以下・純利益300円以上を満たす候補を探索",
         },
         "strategy_learning": {
@@ -326,9 +329,24 @@ def hq_dashboard_page():
         <div class="grid">
           <div class="card"><div class="label">開発エンドポイント</div><div class="value">{data['development_endpoint']}</div></div>
           <div class="card"><div class="label">実運用の現在地</div><div class="value">{data['current_phase']}</div></div>
-          <div class="card"><div class="label">Human Gate</div><div class="value">有効</div></div>
+          <div class="card"><div class="label">Human Gate</div><div class="value">{'有効・CEO承認待ち' if data['human_gate_required'] else '保留'}</div></div>
           <div class="card"><div class="label">取引自動実行</div><div class="value">OFF</div></div>
         </div>
+
+        <div class="section-title">Maturity / Shadow / Promotion</div>
+        <section class="card">
+          <div class="status-grid">
+            <div class="status-pill"><span class="label">Maturity Stage</span><b>{data['maturity_stage']}</b></div>
+            <div class="status-pill"><span class="label">Shadow候補数</span><b>{data['shadow_candidate_count']}</b></div>
+            <div class="status-pill"><span class="label">Shadow観測中</span><b>{data['shadow_active_count']}</b></div>
+            <div class="status-pill"><span class="label">Shadow完了数</span><b>{data['shadow_completed_count']}</b></div>
+            <div class="status-pill"><span class="label">Promotion Ready</span><b>{data['promotion_ready_count']}</b></div>
+            <div class="status-pill"><span class="label">Human Review Ready</span><b>{data['human_review_ready_count']}</b></div>
+            <div class="status-pill"><span class="label">Live Ready</span><b>{data['live_ready_count']}</b></div>
+            <div class="status-pill"><span class="label">Evidence Integrity</span><b>{data['evidence_integrity_status']}</b></div>
+          </div>
+          <p class="muted">Promotion Readyでも実購入は許可されません。Human Gateを維持しています。</p>
+        </section>
 
         <div class="section-title">CEO Attention <span class="section-note">いま判断が必要か</span></div>
         <section class="card attention">
@@ -342,7 +360,7 @@ def hq_dashboard_page():
           </div>
         </section>
 
-        <div class="section-title">P2 実商品候補 <span class="section-note">採算ゲートを通過した1件だけP3へ</span></div>
+        <div class="section-title">P2 実商品候補 <span class="section-note">Shadow / Evidence / Promotionを検証してCEO判断へ</span></div>
         <section class="candidate">
           <div class="card">
             <h2>{candidate['headline']}</h2>
