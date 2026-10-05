@@ -29,7 +29,7 @@ def evaluate_live_readiness(
         reasons.append("evidence_not_ready")
     if not isinstance(shadow_outcomes, list) or len(shadow_outcomes) < 3:
         reasons.append("insufficient_shadow_outcomes")
-    elif any(row.get("status") != "success" for row in shadow_outcomes):
+    elif any(not isinstance(row, dict) or row.get("status") != "success" for row in shadow_outcomes):
         reasons.append("shadow_outcome_failure")
     if promotion_pack.get("human_review_ready") is not True:
         reasons.append("promotion_pack_not_ready")
@@ -89,6 +89,16 @@ def evaluate_idempotency(*, operation_key, seen_operation_keys, payload_fingerpr
     }
 
 
+def _nonnegative_finite(value):
+    return number(value)
+
+
+def _finite_signed(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return number(abs(value))
+
+
 def evaluate_burn_in(
     outcomes,
     *,
@@ -99,7 +109,18 @@ def evaluate_burn_in(
 ):
     """PG-050 controlled burn-in evaluation from observed limited-live outcomes."""
     reasons = []
-    if not isinstance(outcomes, list) or len(outcomes) < min_cases:
+    if (
+        isinstance(min_cases, bool) or not isinstance(min_cases, int) or min_cases < 1
+        or not isinstance(min_success_rate, (int, float)) or isinstance(min_success_rate, bool)
+        or not 0 <= min_success_rate <= 1
+        or not _nonnegative_finite(max_mean_abs_variance_jpy)
+        or isinstance(max_loss_events, bool) or not isinstance(max_loss_events, int) or max_loss_events < 0
+    ):
+        raise ValueError("invalid burn-in thresholds")
+    if not isinstance(outcomes, list):
+        outcomes = []
+        reasons.append("invalid_outcomes")
+    if len(outcomes) < min_cases:
         reasons.append("insufficient_burn_in_cases")
     valid = [row for row in outcomes if isinstance(row, dict)]
     if len(valid) != len(outcomes):
@@ -107,8 +128,13 @@ def evaluate_burn_in(
     if valid:
         successes = [row for row in valid if row.get("status") == "success"]
         success_rate = len(successes) / len(valid)
-        variances = [abs(row["forecast_variance"]) for row in valid if number(abs(row.get("forecast_variance", -1)))]
-        loss_events = sum(1 for row in valid if number(row.get("realized_net_profit_jpy")) and row["realized_net_profit_jpy"] < 0)
+        variances = [abs(row["forecast_variance"]) for row in valid if _finite_signed(row.get("forecast_variance"))]
+        if len(variances) != len(valid):
+            reasons.append("invalid_forecast_variance")
+        realized = [row.get("realized_net_profit_jpy") for row in valid]
+        if any(not _finite_signed(value) for value in realized):
+            reasons.append("invalid_realized_net_profit")
+        loss_events = sum(1 for value in realized if _finite_signed(value) and value < 0)
         mean_abs_variance = mean(variances) if variances else None
     else:
         success_rate, loss_events, mean_abs_variance = 0.0, 0, None
@@ -118,6 +144,7 @@ def evaluate_burn_in(
         reasons.append("burn_in_forecast_variance_high")
     if loss_events > max_loss_events:
         reasons.append("burn_in_loss_events_exceeded")
+    reasons = list(dict.fromkeys(reasons))
     passed = not reasons
     return {
         "pg": "PG-050",
