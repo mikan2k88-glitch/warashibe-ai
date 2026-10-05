@@ -47,6 +47,8 @@ class InMemoryShadowRepository:
 
     def get(self, key):
         row = deepcopy(self._candidates[key])
+        if self._observations[key]:
+            row["latest_observation"] = deepcopy(self._observations[key][-1])
         if key in self._outcomes:
             row["outcome"] = deepcopy(self._outcomes[key])
             row["status"] = "invalidated" if row["outcome"]["outcome_status"] == "invalidated" else "completed"

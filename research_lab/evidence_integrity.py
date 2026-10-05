@@ -74,7 +74,8 @@ def evaluate_integrity(candidate, *, as_of, max_age_days=7, min_sold_evidence=2)
         errors = []
         key, kind = row.get("evidence_id"), row.get("kind")
         if not isinstance(key, str) or not key.strip() or not isinstance(kind, str) or not kind.strip():
-            errors.append("invalid_evidence_id_or_kind")
+            reasons.append("invalid_evidence_id_or_kind")
+            continue
         if not same_identity(identity, row.get("product_identity")):
             errors.append("product_identity_mismatch")
         if not source_url(row.get("source_url")) or not isinstance(row.get("source"), str) or not row["source"].strip():
@@ -83,7 +84,11 @@ def evaluate_integrity(candidate, *, as_of, max_age_days=7, min_sold_evidence=2)
         if timestamp is None or timestamp > now or now - timestamp > timedelta(days=max_age_days):
             errors.append("stale_or_future_evidence")
         # A repeated sold URL cannot be made independent by changing timestamp/id.
-        source_key = (kind, row.get("source_url"))
+        url_value = row.get("source_url")
+        source_key = (kind, url_value)
+        if source_url(url_value):
+            parsed = urlsplit(url_value)
+            source_key = (kind, parsed.hostname.lower(), parsed.path.rstrip("/"))
         if isinstance(key, str) and isinstance(kind, str) and isinstance(row.get("source_url"), str):
             if key in ids or source_key in sources:
                 errors.append("duplicate_evidence")
@@ -96,6 +101,8 @@ def evaluate_integrity(candidate, *, as_of, max_age_days=7, min_sold_evidence=2)
             expected = candidate.get(COST_KINDS[kind])
             if not number(expected) or row.get("amount") != expected:
                 errors.append("cost_evidence_mismatch")
+        if kind == "acquisition_price" and row.get("source_url") != candidate.get("source_url"):
+            errors.append("acquisition_source_mismatch")
         reasons.extend(errors)
         if not errors:
             accepted.append(row)
@@ -110,6 +117,47 @@ def evaluate_integrity(candidate, *, as_of, max_age_days=7, min_sold_evidence=2)
     if not number(expected_sale) or sold and expected_sale > median(sold):
         reasons.append("sale_price_not_supported")
     return _result(reasons, accepted)
+
+
+def observation_evaluation(candidate, observation):
+    """Keep acquisition costs frozen; later fee estimates need fresh cost evidence."""
+    evaluation = {**candidate, "observed_at": observation.get("observed_at"),
+                  "evidence": observation.get("evidence"),
+                  "expected_sale_price": observation.get("estimated_sale_price")}
+    for field in ("expected_selling_fee", "expected_outbound_shipping"):
+        if field in observation:
+            evaluation[field] = observation[field]
+    return evaluation
+
+
+def evaluate_observation(candidate, observation, *, as_of, max_age_days=7):
+    result = evaluate_integrity(observation_evaluation(candidate, observation), as_of=as_of, max_age_days=max_age_days)
+    reasons = list(result["reasons"])
+    if not same_identity(candidate.get("product_identity"), observation.get("product_identity")):
+        reasons.append("observed_identity_mismatch")
+    if observation.get("condition_changes") is not False:
+        reasons.append("condition_not_observed_or_changed")
+    if observation.get("stock_status") not in ("available", "unavailable", "sold_out"):
+        reasons.append("stock_not_observed")
+    liquidity = observation.get("liquidity_score")
+    if not number(liquidity) or liquidity > 1:
+        reasons.append("liquidity_not_observed")
+    for key in ("source_price", "market_price"):
+        if not number(observation.get(key)):
+            reasons.append("invalid_observed_" + key)
+    for key in ("active_listing_count", "sold_evidence_count"):
+        value = observation.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            reasons.append("invalid_" + key)
+    declared_sold = observation.get("sold_evidence_count")
+    evidence = observation.get("evidence")
+    actual_sold = sum(isinstance(row, dict) and row.get("kind") == "sold_price"
+                      and row.get("evidence_id") in result["evidence_refs"] for row in evidence) if isinstance(evidence, list) else 0
+    if isinstance(declared_sold, int) and declared_sold != actual_sold:
+        reasons.append("sold_evidence_count_mismatch")
+    return _result(list(dict.fromkeys(reasons)),
+                   [row for row in evidence or [] if isinstance(row, dict)
+                    and row.get("evidence_id") in result["evidence_refs"]] if isinstance(evidence, list) else [])
 
 
 def _result(reasons, accepted):

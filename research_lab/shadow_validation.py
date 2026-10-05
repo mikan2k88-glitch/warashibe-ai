@@ -2,7 +2,7 @@
 from copy import deepcopy
 from uuid import uuid4
 
-from research_lab.evidence_integrity import evaluate_integrity, number, same_identity
+from research_lab.evidence_integrity import evaluate_integrity, evaluate_observation, observation_evaluation, number, same_identity
 from research_lab.maturity_stage import require_operation
 from research_lab.product_dd_input_gate import _utc_time
 
@@ -27,14 +27,26 @@ def _no_authority(record):
         raise ValueError("shadow cannot carry execution authority")
 
 
-def create_shadow_candidate(candidate, assessment, *, repository, as_of):
-    require_operation("shadow", "shadow_candidate_save")
+def create_shadow_candidate(candidate, assessment, *, repository, as_of, maturity_stage="shadow"):
+    require_operation(maturity_stage, "shadow_candidate_save")
     now = _clock(as_of)
     if not isinstance(candidate, dict) or not isinstance(assessment, dict):
         raise ValueError("candidate and assessment must be mappings")
     _no_authority(candidate)
     _no_authority(assessment)
+    metadata = candidate.get("metadata") or {}
+    for existing in (candidate, metadata):
+        if not isinstance(existing, dict):
+            raise ValueError("candidate metadata must be a mapping")
+        if existing.get("candidate_id") and existing["candidate_id"] != assessment.get("candidate_id"):
+            raise ValueError("candidate identifier mismatch")
+        if existing.get("product_identity") and not same_identity(existing["product_identity"], assessment.get("product_identity")):
+            raise ValueError("candidate product identity mismatch")
+        if existing.get("product_id") and existing["product_id"] != (assessment.get("product_identity") or {}).get("product_id"):
+            raise ValueError("candidate product ID mismatch")
     evaluation = candidate.get("evaluation") or {}
+    if not isinstance(evaluation, dict):
+        raise ValueError("candidate evaluation must be a mapping")
     row = {key: deepcopy(assessment.get(key)) for key in _ASSESSMENT_FIELDS}
     row.update({"shadow_candidate_id": str(uuid4()), "product_name": candidate.get("name"),
                 "category": candidate.get("category"), "source": candidate.get("source"),
@@ -57,6 +69,8 @@ def create_shadow_candidate(candidate, assessment, *, repository, as_of):
     row["total_acquisition_cost"] = sum(row[k] for k in costs[:3])
     row["expected_net_profit"] = (row["expected_sale_price"] - row["expected_selling_fee"]
                                   - row["expected_outbound_shipping"] - row["total_acquisition_cost"])
+    if not number(row["total_acquisition_cost"], minimum=0.000001) or not number(abs(row["expected_net_profit"])):
+        raise ValueError("derived economics must be finite")
     row["expected_roi"] = row["expected_net_profit"] / row["total_acquisition_cost"]
     identity = row["product_identity"] if isinstance(row["product_identity"], dict) else {}
     for key in ("condition", "edition", "included_items"):
@@ -69,11 +83,11 @@ def create_shadow_candidate(candidate, assessment, *, repository, as_of):
 
 
 def add_shadow_observation(repository, key, observation, *, as_of):
-    require_operation("shadow", "shadow_observation")
     if not isinstance(observation, dict):
         raise ValueError("observation must be a mapping")
     _no_authority(observation)
     candidate = repository.get(key)
+    require_operation(candidate.get("maturity_stage"), "shadow_observation")
     observed, now = _clock(observation.get("observed_at")), _clock(as_of)
     previous = repository.observations(key)
     baseline = _clock(previous[-1]["observed_at"] if previous else candidate["observed_at"])
@@ -81,12 +95,7 @@ def add_shadow_observation(repository, key, observation, *, as_of):
         raise ValueError("observation must be later and not future")
     row = deepcopy(observation)
     row.update({"shadow_candidate_id": key, **SAFETY})
-    evaluation = {**candidate, "observed_at": row["observed_at"], "evidence": row.get("evidence"),
-                  "expected_sale_price": row.get("estimated_sale_price")}
-    for field in ("expected_selling_fee", "expected_outbound_shipping"):
-        if field in row:
-            evaluation[field] = row[field]
-    integrity = evaluate_integrity(evaluation, as_of=as_of)
+    integrity = evaluate_observation(candidate, row, as_of=as_of)
     row["freshness_status"] = integrity["status"]
     row["integrity_reasons"] = integrity["reasons"]
     repository.observe(key, row)
@@ -94,8 +103,8 @@ def add_shadow_observation(repository, key, observation, *, as_of):
 
 
 def complete_shadow(repository, key, *, as_of):
-    require_operation("shadow", "shadow_outcome")
     candidate = repository.get(key)
+    require_operation(candidate.get("maturity_stage"), "shadow_outcome")
     now = _clock(as_of)
     rows = repository.observations(key)
     hold_days = (now - _clock(candidate["observed_at"])).total_seconds() / 86400
@@ -110,20 +119,9 @@ def complete_shadow(repository, key, *, as_of):
                 or latest.get("condition_changes") is True):
             status, reasons = "invalidated", ["observed_identity_or_condition_changed"]
         else:
-            evaluation = {**candidate, "observed_at": latest["observed_at"],
-                          "evidence": latest.get("evidence"), "expected_sale_price": latest.get("estimated_sale_price")}
-            for field in ("expected_selling_fee", "expected_outbound_shipping"):
-                if field in latest:
-                    evaluation[field] = latest[field]
-            integrity = evaluate_integrity(evaluation, as_of=as_of)
+            evaluation = observation_evaluation(candidate, latest)
+            integrity = evaluate_observation(candidate, latest, as_of=as_of)
             reasons, refs = integrity["reasons"], integrity["evidence_refs"]
-            if latest.get("condition_changes") is not False:
-                reasons = reasons + ["condition_not_observed"]
-            if latest.get("stock_status") not in ("available", "unavailable", "sold_out"):
-                reasons = reasons + ["stock_not_observed"]
-            liquidity = latest.get("liquidity_score")
-            if not number(liquidity) or liquidity > 1:
-                reasons = reasons + ["liquidity_not_observed"]
             if not reasons:
                 profit = (evaluation["expected_sale_price"] - evaluation["expected_selling_fee"]
                           - evaluation["expected_outbound_shipping"] - candidate["total_acquisition_cost"])

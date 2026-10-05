@@ -45,6 +45,14 @@ def shadow_fixture(repo=None):
     return repo, shadow
 
 
+def observation_fixture(shadow, *, at=LATER):
+    return {"observed_at": at, "source_price": 1000, "market_price": 2000,
+            "estimated_sale_price": 2000, "active_listing_count": 3,
+            "sold_evidence_count": 2, "liquidity_score": 0.8, "condition_changes": False,
+            "stock_status": "available", "product_identity": deepcopy(IDENTITY),
+            "evidence": deepcopy(shadow["evidence"])}
+
+
 class ShadowPromotionTests(unittest.TestCase):
     def test_generate_observe_complete_and_promote(self):
         repo, shadow = shadow_fixture()
@@ -117,6 +125,87 @@ class ShadowPromotionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             add_shadow_observation(repo, saved["shadow_candidate_id"], {"observed_at": LATER,
                                    "external_execution_authorized": True}, as_of=LATER)
+
+    def test_later_market_changes_block_promotion(self):
+        for change in ("liquidity", "source_price", "source_unavailable", "sale_price"):
+            repo, shadow = shadow_fixture()
+            observation = observation_fixture(shadow)
+            if change == "liquidity":
+                observation["liquidity_score"] = 0.1
+            elif change == "source_price":
+                observation["source_price"] = 1200
+            elif change == "source_unavailable":
+                observation["stock_status"] = "unavailable"
+            else:
+                observation["estimated_sale_price"] = 1700
+            key = shadow["shadow_candidate_id"]
+            add_shadow_observation(repo, key, observation, as_of=LATER)
+            complete_shadow(repo, key, as_of=LATER)
+            # 1700 still yields minimum 300 profit; use higher minimum in that case.
+            decision = evaluate_promotion(repo.get(key), as_of=LATER, min_net_profit=400)
+            self.assertFalse(decision["promotion_ready"], change)
+
+    def test_loss_and_identity_invalidation(self):
+        for changed_identity in (False, True):
+            repo, shadow = shadow_fixture()
+            observation = observation_fixture(shadow)
+            observation["estimated_sale_price"] = 1000
+            if changed_identity:
+                observation["product_identity"]["edition"] = "other"
+            key = shadow["shadow_candidate_id"]
+            add_shadow_observation(repo, key, observation, as_of=LATER)
+            outcome = complete_shadow(repo, key, as_of=LATER)
+            self.assertEqual(outcome["outcome_status"], "invalidated" if changed_identity else "loss")
+            if not changed_identity:
+                self.assertEqual(outcome["hypothetical_loss"], 400)
+            self.assertFalse(evaluate_promotion(repo.get(key), as_of=LATER)["promotion_ready"])
+
+    def test_bad_observations_and_malformed_evidence_are_closed(self):
+        repo, shadow = shadow_fixture()
+        for at in (NOW, "2026-10-07T00:00:00Z", "no-timezone"):
+            with self.assertRaises(ValueError):
+                add_shadow_observation(repo, shadow["shadow_candidate_id"], observation_fixture(shadow, at=at), as_of=LATER)
+        shadow["evidence"][0]["kind"] = []
+        self.assertFalse(evaluate_promotion(shadow, as_of=NOW)["promotion_ready"])
+        candidate, assessment = fixture()
+        with self.assertRaises(ValueError):
+            create_shadow_candidate(candidate, assessment, repository=repo, as_of=NOW, maturity_stage="live_readiness")
+        candidate["purchase_price"] = float("nan")
+        with self.assertRaises(ValueError):
+            create_shadow_candidate(candidate, assessment, repository=repo, as_of=NOW)
+
+    def test_unsold_and_insufficient_observation(self):
+        for unsold in (False, True):
+            repo, shadow = shadow_fixture()
+            at = "2026-10-16T00:00:00Z" if unsold else LATER
+            observation = observation_fixture(shadow, at=at)
+            observation["evidence"] = [row for row in observation["evidence"] if row["kind"] != "sold_price"]
+            for row in observation["evidence"]:
+                row["observed_at"] = at
+            observation["sold_evidence_count"] = 0
+            if unsold:
+                observation["sellability_result"] = "unsold"
+            key = shadow["shadow_candidate_id"]
+            add_shadow_observation(repo, key, observation, as_of=at)
+            outcome = complete_shadow(repo, key, as_of=at)
+            self.assertEqual(outcome["outcome_status"], "unsold" if unsold else "insufficient_evidence")
+            self.assertIsNone(outcome["hypothetical_profit"])
+
+    def test_identity_fields_duplicate_tracking_urls_and_freshness_boundary(self):
+        from research_lab.evidence_integrity import evaluate_integrity
+        for field, value in (("model", "other"), ("jan", "other"), ("included_items", []), ("condition", "damaged")):
+            _, shadow = shadow_fixture()
+            shadow["evidence"][3]["product_identity"][field] = value
+            self.assertFalse(evaluate_integrity(shadow, as_of=NOW)["passed"])
+        _, shadow = shadow_fixture()
+        self.assertTrue(evaluate_integrity(shadow, as_of="2026-10-12T00:00:00Z")["passed"])
+        self.assertFalse(evaluate_integrity(shadow, as_of="2026-10-12T00:00:01Z")["passed"])
+        shadow["evidence"][-1]["source_url"] = shadow["evidence"][3]["source_url"] + "?tracking=other#fragment"
+        self.assertIn("duplicate_evidence", evaluate_integrity(shadow, as_of=NOW)["reasons"])
+        candidate, assessment = fixture()
+        candidate["metadata"]["product_id"] = "other"
+        with self.assertRaises(ValueError):
+            create_shadow_candidate(candidate, assessment, repository=InMemoryShadowRepository(), as_of=NOW)
 
 
 def main():

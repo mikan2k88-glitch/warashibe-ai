@@ -1,5 +1,5 @@
 """PG-039 fail-closed promotion to human review, never permission to purchase."""
-from research_lab.evidence_integrity import evaluate_integrity, number
+from research_lab.evidence_integrity import evaluate_integrity, evaluate_observation, observation_evaluation, number
 from research_lab.product_dd_input_gate import _utc_time
 
 
@@ -47,6 +47,25 @@ def evaluate_promotion(candidate, *, as_of, max_age_days=7, min_liquidity=0.5, m
         if kind not in verified_kinds:
             reasons.append("missing_" + kind + "_evidence")
     outcome = candidate.get("outcome") or {}
+    latest = candidate.get("latest_observation")
+    if not isinstance(latest, dict):
+        reasons.append("shadow_observation_required")
+    else:
+        observed_integrity = evaluate_observation(candidate, latest, as_of=as_of, max_age_days=max_age_days)
+        reasons.extend(observed_integrity["reasons"])
+        if not observed_integrity["passed"]:
+            integrity = observed_integrity
+        current = observation_evaluation(candidate, latest)
+        liquidity = latest.get("liquidity_score")
+        if number(min_liquidity) and (not number(liquidity) or liquidity < min_liquidity):
+            reasons.append("insufficient_liquidity")
+        if latest.get("stock_status") != "available" or latest.get("source_price") != candidate.get("acquisition_price"):
+            reasons.append("current_acquisition_not_available_at_frozen_price")
+        if number(min_net_profit) and all(number(current.get(k)) for k in ("expected_sale_price", "expected_selling_fee", "expected_outbound_shipping", "total_acquisition_cost")):
+            current_profit = (current["expected_sale_price"] - current["expected_selling_fee"]
+                              - current["expected_outbound_shipping"] - current["total_acquisition_cost"])
+            if current_profit < min_net_profit:
+                reasons.append("current_net_profit_below_minimum")
     now = _utc_time(as_of)
     at = _utc_time(outcome.get("outcome_at")) if isinstance(outcome, dict) else None
     if (candidate.get("status") != "completed" or not isinstance(outcome, dict)
