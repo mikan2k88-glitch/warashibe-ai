@@ -26,3 +26,12 @@ This milestone defines the hourly decision contract; it does not by itself add a
 
 ## Next
 Evaluate the actual hourly trigger path and connect it to the scheduler contract only after proving that duplicate execution cannot occur between the ChatGPT schedule and any GitHub-side trigger.
+
+## 2026-10-06 Operations update
+- The primary ChatGPT hourly commerce-research schedule is now titled `P2 Shadow候補探索`.
+- Its purpose changed from direct P2→P3 screening to PG-060 operations/evidence collection: Candidate Discovery → Evidence Integrity → Shadow Candidate → later observation → Shadow Outcome → Promotion Gate → Human Review Packet.
+- A qualifying economic candidate is not sufficient for CEO promotion by itself; Shadow and Promotion evidence are required.
+- If Supabase history is unavailable, exploration may continue in degraded read mode, but formal Promotion/P3 classification is withheld until history is revalidated.
+- Weekly reporting now evaluates exact-SHA runtime consistency, Shadow/Outcome/Promotion progress, unresolved risks, and learning/capital-velocity evidence rather than raw feature count.
+- Human Gate remains unchanged; no scheduled task may purchase, pay, list, sell, or move real money.
+- No second GitHub cron is introduced here. Duplicate-slot protection and the ChatGPT hourly trigger remain the scheduling boundary.
