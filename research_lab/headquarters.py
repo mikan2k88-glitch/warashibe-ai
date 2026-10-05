@@ -34,6 +34,8 @@ def build_headquarters_snapshot(
     human_gate_required,
     evidence,
     observed_at,
+    shadow_repository=None,
+    maturity_stage="research",
 ):
     required = {
         "north_star": north_star,
@@ -52,14 +54,18 @@ def build_headquarters_snapshot(
     if not isinstance(evidence, dict):
         raise ValueError("evidence must be a mapping")
 
+    from research_lab.shadow_state import build_validation_snapshot
+    validation = build_validation_snapshot(repository=shadow_repository,
+                                           maturity_stage=maturity_stage, as_of=observed_at)
     return {
+        **validation,
         "status": "headquarters_ready",
         "north_star": north_star,
         "priority_order": list(priority_order),
         "current_state": dict(current_state),
         "current_bottleneck": current_bottleneck,
         "active_strategy": list(active_strategy),
-        "human_gate_required": bool(human_gate_required),
+        "human_gate_required": bool(human_gate_required) or validation["human_gate_required"],
         "execution_authorized": False,
         "evidence": dict(evidence),
         "observed_at": observed_at,

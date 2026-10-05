@@ -1,0 +1,50 @@
+name: PG-037-039 offline safety contracts
+
+on:
+  push:
+    branches: ["codex/pg-037-039"]
+  pull_request:
+    branches: [research-lab]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        profile: [build, core]
+    env:
+      GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      WARASHIBE_LAB_PROFILE: ${{ matrix.profile }}
+      SUPABASE_URL: ""
+      SUPABASE_KEY: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      SUPABASE_SECRET_KEY: ""
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - run: python -m research_lab.runner
+      - name: P2 and learning regression
+        if: matrix.profile == 'build'
+        run: |
+          python -m research_lab.test_evidence_candidate_pipeline
+          python -m research_lab.test_quality_gated_candidate_pipeline
+          python -m research_lab.test_product_candidate_contract
+          python -m research_lab.test_repository_learning_loop_injection
+          python -m research_lab.test_strategy_learning_loop
+          python -m research_lab.test_shadow_integration
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pg-037-039-${{ matrix.profile }}-${{ github.sha }}
+          path: research_output/

@@ -20,6 +20,9 @@ HISTORY_LIMIT = 120
 
 PROFILES = {
     "build": [
+        "research_lab.test_maturity_stage",
+        "research_lab.test_shadow_promotion",
+        "research_lab.test_shadow_integration",
         "research_lab.test_product_policy_bridge",
         "research_lab.test_product_start_capital",
         "research_lab.test_product_capital_policy",
@@ -255,6 +258,8 @@ def run_cycle():
         **handoff,
         "checks": checks,
     }
+    from research_lab.shadow_state import configured_validation_snapshot
+    snapshot.update(configured_validation_snapshot())
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     history_path = OUTPUT / "history.json"

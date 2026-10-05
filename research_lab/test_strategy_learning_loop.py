@@ -1,10 +1,13 @@
 """Strategy Learning Loop contract tests."""
 
 from research_lab.strategy_learning_loop import run_strategy_learning_loop
+from copy import deepcopy
+from research_lab.strategy_learning_loop import build_strategy_learning_proposal, validate_strategy_learning_proposal, decide_strategy_learning_update
 
 
 def main():
     result = run_strategy_learning_loop(
+        as_of="2026-10-04T00:00:00Z",
         findings=[
             {
                 "topic": "shipping_cost",
@@ -33,6 +36,7 @@ def main():
     assert result["external_execution_authorized"] is False
 
     rejected = run_strategy_learning_loop(
+        as_of="2026-10-04T00:00:00Z",
         findings=[
             {
                 "topic": "selling_fee",
@@ -47,6 +51,41 @@ def main():
     assert rejected["validation"]["valid"] is False
     assert rejected["decision"]["decision"] == "reject"
     assert rejected["next_action"] == "collect_more_evidence"
+
+    findings = deepcopy(result['proposal']['findings'])
+    for bad in (float('nan'), float('inf'), -float('inf'), True, -1):
+        bad_result = run_strategy_learning_loop(findings=findings,
+            proposed_rule_updates={'target_net_profit_jpy_min': bad}, rationale='fixture',
+            as_of='2026-10-04T00:00:00Z')
+        assert bad_result['decision']['decision'] == 'reject'
+    for timestamp in ('not-a-date', '2020-01-01', '2026-10-05', '2026-10-03T00:00:00'):
+        changed = deepcopy(findings)
+        changed[0]['observed_at'] = timestamp
+        bad_result = run_strategy_learning_loop(findings=changed,
+            proposed_rule_updates={'target_net_profit_jpy_min': 300}, rationale='fixture',
+            as_of='2026-10-04T00:00:00Z')
+        assert bad_result['decision']['decision'] == 'reject', timestamp
+    changed = deepcopy(findings)
+    changed[0]['source_url'] = 'https://EXAMPLE.com/item/?utm_source=a'
+    changed[1]['source_url'] = 'https://example.com/item?utm_source=b#fragment'
+    duplicate = run_strategy_learning_loop(findings=changed,
+        proposed_rule_updates={'target_net_profit_jpy_min': 300}, rationale='fixture',
+        as_of='2026-10-04T00:00:00Z')
+    assert duplicate['validation']['distinct_source_count'] == 1
+    assert duplicate['decision']['decision'] == 'reject'
+    proposal = deepcopy(result['proposal'])
+    proposal['proposed_rule_updates']['target_net_profit_jpy_min'] = 999
+    assert decide_strategy_learning_update(proposal, result['validation'])['decision'] == 'reject'
+    forged = deepcopy(result['validation'])
+    forged.pop('validated_proposal')
+    assert decide_strategy_learning_update(result['proposal'], forged)['decision'] == 'reject'
+    altered = deepcopy(result['proposal'])
+    altered['proposed_rule_updates']['unknown'] = 10
+    try:
+        validate_strategy_learning_proposal(altered)
+        raise AssertionError('unknown rule accepted')
+    except ValueError:
+        pass
 
     print("Strategy Learning Loop tests passed")
 
