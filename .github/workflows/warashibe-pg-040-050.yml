@@ -1,0 +1,34 @@
+name: PG-040-050 runtime shadow safety contracts
+
+on:
+  push:
+    branches:
+      - gpt/pg-040-050
+  pull_request:
+    paths:
+      - "research_lab/integration_runtime.py"
+      - "research_lab/evidence_gate_v2.py"
+      - "research_lab/shadow_operations.py"
+      - "research_lab/live_safety.py"
+      - "research_lab/test_pg_040_050.py"
+      - "docs/pg-040-050-runtime-shadow-safety.md"
+      - ".github/workflows/warashibe-pg-040-050.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: PG-040-050 targeted tests
+        run: pytest -q research_lab/test_pg_040_050.py
+      - name: Existing PG-037-039 regression contracts
+        run: pytest -q research_lab/test_maturity_stage.py research_lab/test_shadow_promotion.py research_lab/test_shadow_integration.py
