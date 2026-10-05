@@ -1,7 +1,7 @@
 # Warashibe Headquarters
 
-Last updated: 2026-10-03
-Status: HQ v1.1 P1-P7 development endpoint reached
+Last updated: 2026-10-06
+Status: PG-060 integrated; operations/evidence collection mode
 
 ## Governance
 
@@ -60,11 +60,13 @@ Therefore "development endpoint P7 reached" does not mean "live commerce complet
 
 ## Current bottleneck
 
-`real_external_single_item_pilot_not_verified`
+`real_market_shadow_evidence_not_yet_promoted`
 
 ## Active strategy
 
-`real_pilot_readiness -> ceo_approval_gate -> one_item_live_proof -> learning_feedback -> capital_velocity_improvement -> controlled_automation_expansion`
+`candidate_discovery -> evidence_integrity -> shadow_observation -> shadow_outcome -> promotion_gate -> human_review_packet -> human_gate`
+
+PG-060 is the feature-development endpoint for the current architecture. The default posture is operations/evidence collection, monitoring, and targeted repair rather than continuing to add PG numbers.
 
 ## First Formal Priority Queue
 
@@ -123,6 +125,24 @@ Expand automation only across repeatedly verified safe steps while preserving Hu
 
 Development endpoint: safe-scope evaluator complete.
 Operational endpoint: safe automation scope may expand only after sufficient verified live cycles; real purchase/payment/listing/sale remain Human Gate actions.
+
+
+## PG-060 operational posture
+
+Verified integration state:
+
+- research-lab HEAD: `7ef2374a7fdf25bd14b4580b65c4ae65e45af1ae`
+- exact-SHA Research Lab CI: success
+- Render research service: same SHA live
+- Supabase runtime status: same SHA, deployment_consistent=true
+
+Operational rules after PG-060:
+
+1. Candidate discovery remains active.
+2. A candidate does not move directly to CEO/P3; it must pass Evidence Integrity and Shadow observation/outcome first.
+3. Promotion Gate may prepare Human Review, but never grants purchase authority.
+4. Scheduled work should collect evidence, monitor runtime, and repair verified defects; it should not create feature churn.
+5. Controlled automation remains limited to proven safe read/research/shadow scopes. Real commerce remains behind Human Gate.
 
 ## CEO Directive contract
 
