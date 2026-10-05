@@ -1,6 +1,17 @@
 # Warashibe AI 開発引き継ぎ
 
-更新: 2026-09-27 JST。次回の開発開始時は、この文書と [研究マイルストーン Issue #1](https://github.com/mikan2k88-glitch/warashibe-ai/issues/1) の最新記録を読み、ブランチ・CI・実行ログを再確認する。ここに書く「未確認」は、その後に進展した可能性がある。
+## 2026-10-06: PG-060統合・運用モード移行
+- research-lab HEAD: `7ef2374a7fdf25bd14b4580b65c4ae65e45af1ae`。
+- 同一SHAの Warashibe AI Research Lab CI #1296 は completed/success。
+- Render `warashibe-ai-research-lab` は同一SHAで live。
+- Supabase `public.warashibe_runtime_status` に exact-SHA / CI success / Render live / deployment_consistent=true を記録済み。
+- PG-037〜060のMaturity / Shadow / Evidence Integrity / Promotion / Runtime / Recovery / Idempotency / Burn-in / Walk-Forward / Human Gate / Live Outcome Learning / Capital Velocity / Controlled Automation Readinessをresearch-labへ統合済み。
+- 現在の標準モードは「運用・証拠収集」。新規PGを機械的に増やさず、実市場候補を Candidate Discovery → Evidence Integrity → Shadow保存 → 再観測 → Outcome → Promotion Gate → Human Review Packet の順で扱う。
+- Human Gate維持。実購入・決済・出品・販売・資金移動は自動実行しない。
+- ChatGPTの毎時タスク「P2 Shadow候補探索」が実市場候補探索とShadow証拠収集の主要スケジュール。週次レポートはPG数ではなくShadow/Promotion/Runtime証拠を評価する。
+- 次の一件: Shadow候補を実市場から継続収集し、正式Promotion可能な候補が出るまで観測・不合格学習を継続する。重大な安全欠陥やRuntime不整合が出た場合のみ対象箇所を修復する。
+
+更新: 2026-10-06 JST。PG-060到達後は新規機能追加より運用・証拠収集を優先する。
 
 ## 目標と現在地
 - 当面は仮想市場の研究を進める。仕入れ・決済など実世界の実行は別途明示的な承認を要する。
