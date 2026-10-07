@@ -62,7 +62,7 @@ def send_assignment_once(assignment, source_run_id, api_key, gate_consumer,
             + prompt
         )}]}],
         "generationConfig": {
-            "maxOutputTokens": 512, "temperature": 0,
+            "maxOutputTokens": 512,
             "responseMimeType": "application/json",
         },
     }
@@ -121,7 +121,7 @@ def _call_model(api_key: str, model: str, timeout: int = 20) -> tuple[bool, int 
     )
     payload = {
         "contents": [{"parts": [{"text": "Reply with exactly: WARASHIBE_GEMINI_OK"}]}],
-        "generationConfig": {"maxOutputTokens": 24, "temperature": 0},
+        "generationConfig": {"maxOutputTokens": 24},
     }
     req = request.Request(
         url,
