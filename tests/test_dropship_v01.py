@@ -102,6 +102,16 @@ from dropship.v4_proof import build_v4_proof, build_v4_acceptance
 from dropship.v4_release import build_v4_release_status
 from dropship.provider_onboarding import build_provider_onboarding_status
 from dropship.provider_handshake import run_provider_handshake
+from dropship.provider_diagnostics import classify_provider_error, summarize_handshake
+from dropship.discovery_plan import build_discovery_plan
+from dropship.market_confidence import assess_market_confidence
+from dropship.real_product_ranking import rank_real_products
+from dropship.evidence_maturity import assess_evidence_maturity
+from dropship.shadow_statistics import build_product_shadow_statistics
+from dropship.promotion_review_v52 import build_v52_promotion_review
+from dropship.promotion_queue import build_promotion_queue
+from dropship.v52_proof import build_v52_proof, build_v52_acceptance
+from dropship.v52_release import build_v52_release_status
 
 
 def sample_payload():
@@ -1690,3 +1700,110 @@ def test_provider_handshake_is_safe_when_unconfigured():
     assert result["secret_values_exposed"] is False
     assert result["commerce_write_performed"] is False
     assert result["live_execution_allowed"] is False
+
+
+def test_v42_provider_diagnostics_classifies_auth_and_rate_limit():
+    auth = classify_provider_error("401 unauthorized expired token")
+    rate = classify_provider_error("429 too many requests")
+    assert auth["kind"] == "auth"
+    assert auth["retry_allowed"] is False
+    assert rate["kind"] == "rate_limit"
+    assert rate["retry_allowed"] is True
+
+
+def test_v44_discovery_plan_is_bounded_and_deduplicated():
+    result = build_discovery_plan([
+        {"product_key": "a", "name": "Home Organizer", "category": "Home"},
+        {"product_key": "b", "name": "Home Organizer", "category": "Storage"},
+    ], max_queries=4)
+    assert result["query_count"] <= 4
+    assert result["bounded"] is True
+    assert result["live_execution_allowed"] is False
+
+
+def test_v45_market_confidence_filters_extreme_outlier():
+    quotes = [
+        {"price": 20, "currency": "USD"},
+        {"price": 21, "currency": "USD"},
+        {"price": 22, "currency": "USD"},
+        {"price": 250, "currency": "USD"},
+    ]
+    result = assess_market_confidence(quotes)
+    assert result["status"] == "ok"
+    assert result["filtered"]["outlier_count"] == 1
+    assert result["confidence"] > 0
+
+
+def test_v50_real_product_ranking_obeys_one_item_and_capital():
+    candidate = _opportunity_candidate("real-rank", 8) | {
+        "name": "Real Rank Product",
+        "supplier_reliable": True,
+    }
+    quotes = {
+        "real-rank": [
+            {"price": 20, "currency": "USD", "seller_username": "a"},
+            {"price": 21, "currency": "USD", "seller_username": "b"},
+            {"price": 22, "currency": "USD", "seller_username": "c"},
+            {"price": 21.5, "currency": "USD", "seller_username": "d"},
+            {"price": 20.5, "currency": "USD", "seller_username": "e"},
+            {"price": 22.5, "currency": "USD", "seller_username": "f"},
+        ]
+    }
+    result = rank_real_products(
+        [candidate],
+        quotes,
+        available_capital=3000,
+        supplier_currency="USD",
+        target_currency="USD",
+    )
+    assert result["eligible_count"] == 1
+    assert result["best"]["product_key"] == "real-rank"
+    assert result["one_item_only"] is True
+    assert result["live_execution_allowed"] is False
+
+
+def test_v51_evidence_maturity_requires_long_shadow_evidence():
+    metrics = {
+        "observations": 21,
+        "observation_days": 7,
+        "inventory_confirmation_rate": 1.0,
+        "price_stability": {"stable": True},
+    }
+    result = assess_evidence_maturity(
+        shadow_metrics=metrics,
+        market_confidence={"confidence": 0.8},
+        opportunity_score=0.7,
+        positive_profit_observation_rate=1.0,
+        supplier_cost_drift=0.02,
+    )
+    assert result["passed"] is True
+    assert result["status"] == "mature_for_promotion_review"
+    assert result["live_execution_allowed"] is False
+
+
+def test_v52_proof_acceptance_and_release():
+    proof = build_v52_proof()
+    acceptance = build_v52_acceptance()
+    status = build_v52_release_status()
+    assert proof["passed"] is True
+    assert proof["review"]["eligible_for_human_review"] is True
+    assert proof["review"]["automatic_promotion"] is False
+    assert proof["review"]["commerce_write_performed"] is False
+    assert acceptance["passed"] is True
+    assert status["status"] == "promotion_review_endpoint_reached"
+    assert status["automatic_promotion_enabled"] is False
+    assert status["live_execution_allowed"] is False
+
+
+def test_flask_v52_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v5.2/proof")
+    acceptance = client.get("/dropship/v5.2/acceptance")
+    status = client.get("/dropship/v5.2/status")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert status.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
+    assert status.get_json()["status"] == "promotion_review_endpoint_reached"
