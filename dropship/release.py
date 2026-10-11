@@ -83,6 +83,9 @@ CAPABILITIES = {
     "read_only_circuit_breaker": True,
     "run_quality_gate": True,
     "real_read_readiness": True,
+    "supabase_rest_persistence": True,
+    "persistent_shadow_operations": True,
+    "shadow_history_restore": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -92,7 +95,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v2.9-real-read-readiness",
+        "release": "dropshipping-warashibe-v3.1-persistent-shadow-operations",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
