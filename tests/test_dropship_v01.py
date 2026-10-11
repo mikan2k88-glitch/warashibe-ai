@@ -98,6 +98,8 @@ from dropship.runtime_probe import run_runtime_probe
 from dropship.ebay_token import EbayApplicationTokenProvider
 from dropship.cj_token import CJAccessTokenProvider
 from dropship.token_readiness import assess_token_readiness
+from dropship.v4_proof import build_v4_proof, build_v4_acceptance
+from dropship.v4_release import build_v4_release_status
 
 
 def sample_payload():
@@ -1623,3 +1625,35 @@ def test_token_readiness_supports_dynamic_credentials(monkeypatch):
     assert result["secret_values_exposed"] is False
     assert "cj-key" not in str(result)
     assert "ebay-secret-value" not in str(result)
+
+
+def test_v4_proof_hides_tokens_and_preserves_live_boundary():
+    proof = build_v4_proof()
+    assert proof["passed"] is True
+    assert proof["token_values_exposed"] is False
+    assert proof["commerce_external_writes_enabled"] is False
+    assert proof["live_execution_allowed"] is False
+
+
+def test_v4_acceptance_and_release_status():
+    acceptance = build_v4_acceptance()
+    status = build_v4_release_status()
+    assert acceptance["passed"] is True
+    assert status["status"] == "token_automation_endpoint_reached"
+    assert status["token_values_exposed"] is False
+    assert status["commerce_external_writes_enabled"] is False
+    assert status["live_execution_allowed"] is False
+
+
+def test_flask_v40_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v4.0/proof")
+    acceptance = client.get("/dropship/v4.0/acceptance")
+    status = client.get("/dropship/v4.0/status")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert status.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
+    assert status.get_json()["status"] == "token_automation_endpoint_reached"
