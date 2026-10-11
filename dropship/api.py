@@ -37,6 +37,8 @@ from .human_gate import prepare_human_gate_package, verify_human_approval
 from .freshness import assess_freshness
 from .provider_registry import ProviderRegistry, ProviderDescriptor
 from .runtime_controller import run_runtime_controller
+from .dll_resilience import fetch_registry_resilient
+from .dependency_health import build_dependency_health
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -347,3 +349,17 @@ def providers():
         "providers": registry.list(),
         "live_order_provider_registered": False,
     })
+
+
+@dropship_bp.get("/dll/resilient")
+def dll_resilient():
+    return jsonify(fetch_registry_resilient())
+
+
+@dropship_bp.post("/dependencies/health")
+def dependencies_health():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_dependency_health(
+        dll_status=str(payload.get("dll_status") or "unknown"),
+        provider_count=int(payload.get("provider_count") or 0),
+    ))
