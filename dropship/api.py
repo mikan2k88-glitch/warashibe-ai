@@ -51,6 +51,11 @@ from .research_plan import build_next_research_plan
 from .orchestrator import run_orchestrator
 from .v2_proof import build_v2_proof, build_v2_acceptance
 from .manifest import build_manifest
+from .provider_config import ProviderConfig
+from .provider_normalizer import normalize_provider_row
+from .dedupe import deduplicate_observations
+from .shadow_collector import collect_shadow_observations
+from .provider import FixtureSupplierProvider
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -496,3 +501,42 @@ def health():
 @dropship_bp.get("/v2.0/manifest")
 def v20_manifest():
     return jsonify(build_manifest())
+
+
+@dropship_bp.post("/provider/config/validate")
+def provider_config_validate():
+    payload = request.get_json(silent=True) or {}
+    config = ProviderConfig(
+        name=str(payload.get("name") or "provider"),
+        url=str(payload.get("url") or ""),
+        mode=str(payload.get("mode") or "read_only"),
+        timeout_seconds=int(payload.get("timeout_seconds") or 30),
+        min_interval_seconds=float(payload.get("min_interval_seconds") or 1.0),
+        max_items=int(payload.get("max_items") or 200),
+    )
+    return jsonify(config.validate())
+
+
+@dropship_bp.post("/provider/normalize")
+def provider_normalize():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(normalize_provider_row(
+        payload.get("row") or {},
+        provider_name=str(payload.get("provider_name") or "unknown"),
+    ))
+
+
+@dropship_bp.post("/provider/dedupe")
+def provider_dedupe():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(deduplicate_observations(payload.get("rows") or []))
+
+
+@dropship_bp.post("/shadow/collect-fixture")
+def shadow_collect_fixture():
+    payload = request.get_json(silent=True) or {}
+    provider = FixtureSupplierProvider(payload.get("offers") or [])
+    return jsonify(collect_shadow_observations(
+        provider,
+        max_items=int(payload.get("max_items") or 200),
+    ))
