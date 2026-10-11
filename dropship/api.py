@@ -78,6 +78,8 @@ from .shadow_metrics import build_shadow_metrics
 from .shadow_gate import assess_shadow_gate
 from .evidence_pack import build_real_read_evidence_pack
 from .real_shadow_controller import run_real_shadow_controller
+from .run_quality import assess_run_quality
+from .real_read_readiness import assess_real_read_readiness
 from .provider import FixtureSupplierProvider
 
 
@@ -774,4 +776,21 @@ def shadow_controller_fixture():
         budget=payload.get("budget") or {},
         shadow_thresholds=payload.get("shadow_thresholds") or {},
         mode="fixture_proof",
+    ))
+
+
+@dropship_bp.post("/research/run-quality")
+def research_run_quality():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_run_quality(payload.get("run_result") or {}))
+
+
+@dropship_bp.post("/research/real-read-readiness")
+def research_real_read_readiness():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_real_read_readiness(
+        payload.get("run_result") or {},
+        credential_health=payload.get("credential_health") or {},
+        shadow_days=int(payload.get("shadow_days") or 0),
+        shadow_observations=int(payload.get("shadow_observations") or 0),
     ))
