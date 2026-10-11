@@ -27,13 +27,27 @@ V2_ENDPOINTS = [
     {"method": "POST", "path": "/dropship/research/plan", "purpose": "next research plan"},
     {"method": "GET", "path": "/dropship/v2.0/proof", "purpose": "deterministic v2 proof"},
     {"method": "GET", "path": "/dropship/v2.0/acceptance", "purpose": "v2 acceptance"},
+    {"method": "GET", "path": "/dropship/provider/catalog", "purpose": "read-only supplier provider catalog"},
+    {"method": "POST", "path": "/dropship/market/quotes/summarize", "purpose": "market quote evidence summary"},
+    {"method": "POST", "path": "/dropship/pricing/enrich", "purpose": "supplier and market pricing enrichment"},
+    {"method": "POST", "path": "/dropship/opportunity/evaluate", "purpose": "opportunity evaluation"},
+    {"method": "POST", "path": "/dropship/opportunity/rank", "purpose": "opportunity ranking"},
+    {"method": "POST", "path": "/dropship/research/real-read-fixture", "purpose": "bounded real-read pipeline proof"},
+    {"method": "POST", "path": "/dropship/shadow/metrics", "purpose": "shadow evidence metrics"},
+    {"method": "POST", "path": "/dropship/shadow/gate", "purpose": "shadow evidence gate"},
+    {"method": "POST", "path": "/dropship/shadow/controller-fixture", "purpose": "real-read shadow controller proof"},
+    {"method": "POST", "path": "/dropship/research/run-quality", "purpose": "real-read run quality gate"},
+    {"method": "POST", "path": "/dropship/research/real-read-readiness", "purpose": "external read readiness"},
+    {"method": "GET", "path": "/dropship/v3.0/proof", "purpose": "v3 real-read shadow proof"},
+    {"method": "GET", "path": "/dropship/v3.0/acceptance", "purpose": "v3 acceptance"},
+    {"method": "GET", "path": "/dropship/v3.0/status", "purpose": "v3 release status"},
 ]
 
 
 def build_manifest() -> dict:
     return {
         "service": "warashibe-dropshipping",
-        "version": "2.1",
+        "version": "3.0",
         "mode": "research",
         "endpoint_count": len(V2_ENDPOINTS),
         "endpoints": V2_ENDPOINTS,
