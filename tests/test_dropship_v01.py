@@ -28,6 +28,9 @@ from dropship.controller import run_controller
 from dropship.proof import build_proof, build_acceptance
 from dropship.snapshot import build_research_snapshot
 from dropship.release import build_release_status
+from dropship.hq import build_hq_status
+from dropship.human_gate import prepare_human_gate_package, verify_human_approval
+from dropship.repository import MemoryAppendOnlyRepository
 
 
 def sample_payload():
@@ -410,3 +413,34 @@ def test_flask_v10_proof_and_status_smoke():
     assert proof.get_json()["passed"] is True
     assert status.status_code == 200
     assert status.get_json()["status"] == "research_endpoint_reached"
+
+
+def test_hq_reports_next_research_bottleneck():
+    result = build_hq_status({
+        "eligible_count": 2,
+        "shadow_days": 5,
+        "sandbox_cycles": 0,
+        "evidence_integrity_passed": True,
+    })
+    assert result["current_bottleneck"] == "insufficient_shadow_days"
+    assert result["execution_authorized"] is False
+
+
+def test_human_gate_approval_does_not_enable_live():
+    package = prepare_human_gate_package({
+        "selected_product_key": "sku-1",
+        "expected_net_profit": 200,
+        "required_working_capital": 1200,
+    })
+    verified = verify_human_approval("8888")
+    assert package["approval_required"] is True
+    assert package["live_execution_allowed"] is False
+    assert verified["approved"] is True
+    assert verified["live_execution_allowed"] is False
+
+
+def test_memory_repository_is_append_only_contract():
+    repo = MemoryAppendOnlyRepository()
+    repo.append_observation({"product_key": "sku-1"})
+    repo.append_observation({"product_key": "sku-1"})
+    assert len(repo.observations) == 2
