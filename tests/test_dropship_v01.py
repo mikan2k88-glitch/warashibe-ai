@@ -766,7 +766,7 @@ def test_flask_v20_endpoints_smoke():
 
 def test_manifest_and_health_are_non_live():
     manifest = build_manifest()
-    assert manifest["version"] == "4.1"
+    assert manifest["version"] == "5.2"
     assert manifest["endpoint_count"] >= 20
     assert manifest["live_execution_allowed"] is False
 
