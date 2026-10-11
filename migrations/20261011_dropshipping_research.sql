@@ -64,3 +64,32 @@ create index if not exists dropship_research_runs_observed_at_idx
 
 comment on table dropship_research_runs is
     'Append-only real-read research run ledger. No commerce authorization.';
+
+
+-- Security boundary: research tables are server-side append-only.
+alter table public.dropship_observations enable row level security;
+alter table public.dropship_audit_log enable row level security;
+alter table public.dropship_research_snapshots enable row level security;
+alter table public.dropship_research_runs enable row level security;
+
+revoke all on table public.dropship_observations from anon, authenticated;
+revoke all on table public.dropship_audit_log from anon, authenticated;
+revoke all on table public.dropship_research_snapshots from anon, authenticated;
+revoke all on table public.dropship_research_runs from anon, authenticated;
+
+revoke update, delete, truncate, references, trigger
+    on table public.dropship_observations,
+             public.dropship_audit_log,
+             public.dropship_research_snapshots,
+             public.dropship_research_runs
+    from service_role;
+
+grant select, insert on table public.dropship_observations to service_role;
+grant select, insert on table public.dropship_audit_log to service_role;
+grant select, insert on table public.dropship_research_snapshots to service_role;
+grant select, insert on table public.dropship_research_runs to service_role;
+
+grant usage, select on sequence public.dropship_observations_id_seq to service_role;
+grant usage, select on sequence public.dropship_audit_log_id_seq to service_role;
+grant usage, select on sequence public.dropship_research_snapshots_id_seq to service_role;
+grant usage, select on sequence public.dropship_research_runs_id_seq to service_role;
