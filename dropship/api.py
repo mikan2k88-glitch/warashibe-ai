@@ -91,6 +91,8 @@ from .deployment_readiness import assess_deployment_readiness
 from .startup_preflight import build_startup_preflight
 from .runtime_probe import run_runtime_probe
 from .token_readiness import assess_token_readiness
+from .v4_proof import build_v4_proof, build_v4_acceptance
+from .v4_release import build_v4_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -878,3 +880,18 @@ def runtime_probe():
 @dropship_bp.get("/tokens/readiness")
 def tokens_readiness():
     return jsonify(assess_token_readiness())
+
+
+@dropship_bp.get("/v4.0/proof")
+def v40_proof():
+    return jsonify(build_v4_proof())
+
+
+@dropship_bp.get("/v4.0/acceptance")
+def v40_acceptance():
+    return jsonify(build_v4_acceptance())
+
+
+@dropship_bp.get("/v4.0/status")
+def v40_status():
+    return jsonify(build_v4_release_status())
