@@ -9,6 +9,8 @@ from dropship.ranking import rank_supplier_offers
 from dropship.commerce import build_sandbox_commerce_plan
 from dropship.stop_loss import assess_listing_stop_loss
 from dropship.state_machine import transition
+from dropship.pipeline import run_dropship_decision_pipeline
+from dropship.readiness import assess_live_readiness
 
 
 def sample_payload():
@@ -150,3 +152,38 @@ def test_stop_loss_pauses_bad_listing_without_live_action():
 def test_state_machine_rejects_invalid_transition():
     assert transition("DISCOVERED", "SUPPLIER_VERIFIED")["allowed"] is True
     assert transition("DISCOVERED", "SETTLED_SANDBOX")["allowed"] is False
+
+
+def test_decision_pipeline_reaches_sandbox_settlement():
+    base = sample_payload() | {
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    result = run_dropship_decision_pipeline([
+        base | {"product_key": "sku-a", "supplier_cost": 1600},
+        base | {"product_key": "sku-b", "supplier_cost": 1200, "supplier": "supplier-b"},
+    ])
+    assert result["status"] == "completed"
+    assert result["stage"] == "sandbox_settlement"
+    assert result["selected_product_key"] == "sku-b"
+    assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_live_readiness_only_reaches_human_gate():
+    result = assess_live_readiness({
+        "shadow_observations": 20,
+        "shadow_days": 30,
+        "sandbox_cycles": 10,
+        "evidence_integrity_passed": True,
+        "promotion_gate_passed": True,
+        "duplicate_order_guard": True,
+        "kill_switch_ready": True,
+        "audit_log_ready": True,
+        "external_writes_enabled": False,
+    })
+    assert result["status"] == "ready_for_human_gate"
+    assert result["research_ready_for_human_gate"] is True
+    assert result["live_execution_allowed"] is False
+    assert result["human_gate_required"] is True
