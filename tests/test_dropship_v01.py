@@ -4,6 +4,8 @@ from dropship.sandbox import run_sandbox_cycle
 from dropship.shadow import evaluate_shadow_candidate
 from dropship.promotion import assess_promotion
 from dropship.runtime import build_runtime_status
+from dropship.supplier import evaluate_supplier_offer
+from dropship.ranking import rank_supplier_offers
 
 
 def sample_payload():
@@ -79,3 +81,33 @@ def test_runtime_status_remains_non_live():
     assert result["maturity_stage"] == "shadow_sandbox"
     assert result["live_execution_allowed"] is False
     assert result["external_writes_enabled"] is False
+
+
+def test_supplier_offer_evaluation_is_eligible():
+    result = evaluate_supplier_offer(sample_payload() | {
+        "product_key": "sku-1",
+        "name": "sample",
+        "supplier": "supplier-a",
+        "source": "fixture",
+    })
+    assert result["eligible"] is True
+    assert result["evidence"]["passed"] is True
+    assert result["supplier_score"] > 0
+
+
+def test_supplier_ranking_selects_best_eligible_offer():
+    base = sample_payload() | {
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    offers = [
+        base | {"product_key": "sku-a", "supplier_cost": 1700},
+        base | {"product_key": "sku-b", "supplier_cost": 1200, "supplier": "supplier-b"},
+        base | {"product_key": "sku-c", "supplier_allows_dropshipping": False},
+    ]
+    result = rank_supplier_offers(offers)
+    assert result["eligible_count"] == 2
+    assert result["blocked_count"] == 1
+    assert result["best"]["offer"]["product_key"] == "sku-b"
+    assert result["live_execution_allowed"] is False
