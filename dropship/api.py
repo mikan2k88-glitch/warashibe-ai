@@ -74,6 +74,9 @@ from .source_budget import normalize_source_budget
 from .research_write_policy import authorize_research_write
 from .real_read_runner import run_real_read_research
 from .market_provider import FixtureMarketProvider
+from .shadow_metrics import build_shadow_metrics
+from .shadow_gate import assess_shadow_gate
+from .evidence_pack import build_real_read_evidence_pack
 from .provider import FixtureSupplierProvider
 
 
@@ -726,4 +729,30 @@ def research_real_read_fixture():
         target_currency=payload.get("target_currency") or "USD",
         fx_rates=payload.get("fx_rates") or {},
         budget=payload.get("budget") or {},
+    ))
+
+
+@dropship_bp.post("/shadow/metrics")
+def shadow_metrics():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_shadow_metrics(payload.get("observations") or []))
+
+
+@dropship_bp.post("/shadow/gate")
+def shadow_gate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_shadow_gate(
+        payload.get("product_metrics") or {},
+        payload.get("thresholds") or {},
+    ))
+
+
+@dropship_bp.post("/evidence/real-read-pack")
+def evidence_real_read_pack():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_real_read_evidence_pack(
+        payload.get("run_result") or {},
+        payload.get("observations") or [],
+        mode=str(payload.get("mode") or "fixture_proof"),
+        thresholds=payload.get("thresholds") or {},
     ))
