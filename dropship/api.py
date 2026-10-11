@@ -63,6 +63,9 @@ from .field_mapping import apply_field_mapping, validate_field_mapping
 from .data_quality import assess_data_quality, filter_quality
 from .candidate_builder import build_latest_candidates
 from .collection_pipeline import run_collection_pipeline
+from .market_price import summarize_market_quotes
+from .pricing_enrichment import enrich_candidate_with_market_price
+from .provider_catalog import list_provider_catalog
 from .provider import FixtureSupplierProvider
 
 
@@ -620,4 +623,28 @@ def collection_pipeline():
         historical_observations=payload.get("historical_observations") or [],
         max_age_hours=float(payload.get("max_age_hours") or 24),
         min_quality_score=float(payload.get("min_quality_score") or 0.8),
+    ))
+
+
+@dropship_bp.get("/provider/catalog")
+def provider_catalog():
+    return jsonify(list_provider_catalog())
+
+
+@dropship_bp.post("/market/quotes/summarize")
+def market_quotes_summarize():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(summarize_market_quotes(payload.get("quotes") or []))
+
+
+@dropship_bp.post("/pricing/enrich")
+def pricing_enrich():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(enrich_candidate_with_market_price(
+        payload.get("candidate") or {},
+        payload.get("quotes") or [],
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency"),
+        fx_rates=payload.get("fx_rates") or {},
+        target_discount=float(payload.get("target_discount") or 0.95),
     ))
