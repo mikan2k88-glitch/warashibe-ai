@@ -6,6 +6,7 @@ create table if not exists dropship_observations (
     product_key text not null,
     supplier text,
     source text,
+    observation_fingerprint text unique,
     observed_at timestamptz not null default now(),
     observation jsonb not null,
     created_at timestamptz not null default now()
@@ -39,3 +40,7 @@ comment on table dropship_audit_log is
 
 comment on table dropship_research_snapshots is
     'Append-only research maturity snapshots. No live commerce authorization.';
+
+
+create index if not exists dropship_observations_fingerprint_idx
+    on dropship_observations (observation_fingerprint);
