@@ -55,6 +55,10 @@ from .provider_config import ProviderConfig
 from .provider_normalizer import normalize_provider_row
 from .dedupe import deduplicate_observations
 from .shadow_collector import collect_shadow_observations
+from .auth import describe_auth_config
+from .pagination import extract_items, next_page_url
+from .daily_summary import build_daily_shadow_summary
+from .observation_record import build_observation_record
 from .provider import FixtureSupplierProvider
 
 
@@ -540,3 +544,34 @@ def shadow_collect_fixture():
         provider,
         max_items=int(payload.get("max_items") or 200),
     ))
+
+
+@dropship_bp.post("/provider/auth/describe")
+def provider_auth_describe():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(describe_auth_config(
+        token_env=payload.get("token_env"),
+        api_key_env=payload.get("api_key_env"),
+    ))
+
+
+@dropship_bp.post("/provider/extract")
+def provider_extract():
+    payload = request.get_json(silent=True) or {}
+    source = payload.get("payload")
+    return jsonify({
+        "items": extract_items(source),
+        "next": next_page_url(source),
+    })
+
+
+@dropship_bp.post("/observations/record")
+def observations_record():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_observation_record(payload.get("row") or {}))
+
+
+@dropship_bp.post("/observations/daily-summary")
+def observations_daily_summary():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_daily_shadow_summary(payload.get("observations") or []))
