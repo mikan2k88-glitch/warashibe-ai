@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **3.0**
+Current research version: **4.0**
 
 ### Research flow
 
@@ -50,7 +50,7 @@ Supplier offers
 
 ### Safety boundary
 
-Research v3.0 does **not** create real listings, submit supplier orders,
+Research v4.0 does **not** create real listings, submit supplier orders,
 capture payments, cancel supplier orders, or issue refunds.
 
 Even a valid Human Gate approval does not enable live commerce.
@@ -82,3 +82,29 @@ Proof endpoints:
 - `GET /dropship/v3.0/status`
 
 External provider tokens are only required for actual external reads. Without tokens the deterministic fixture proof remains available.
+
+
+### v4.0 token automation
+
+v4.0 removes the need to manually maintain short-lived read access tokens.
+
+Supported server-side credential modes:
+
+- CJ: `CJ_ACCESS_TOKEN`, or `CJ_API_KEY`, or `CJ_REFRESH_TOKEN`
+- eBay: `EBAY_ACCESS_TOKEN`, or `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET`
+- Supabase persistence: `SUPABASE_URL` + server secret/service-role key
+
+Readiness endpoints never return credential or token values.
+
+New endpoints include:
+
+- `GET /dropship/tokens/readiness`
+- `GET /dropship/persistence/health`
+- `GET /dropship/deployment/readiness`
+- `GET /dropship/startup/preflight`
+- `GET /dropship/runtime/probe`
+- `GET /dropship/v4.0/proof`
+- `GET /dropship/v4.0/acceptance`
+- `GET /dropship/v4.0/status`
+
+The maturity ceiling remains **Promotion Review / Human Gate**.
