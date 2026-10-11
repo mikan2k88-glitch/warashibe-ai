@@ -53,6 +53,10 @@ CAPABILITIES = {
     "read_auth_contract": True,
     "observation_fingerprint": True,
     "daily_shadow_summary": True,
+    "field_mapping": True,
+    "data_quality_gate": True,
+    "latest_candidate_builder": True,
+    "collection_pipeline": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -62,7 +66,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v2.2-provider-runtime",
+        "release": "dropshipping-warashibe-v2.3-collection-pipeline",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
