@@ -59,6 +59,10 @@ from .auth import describe_auth_config
 from .pagination import extract_items, next_page_url
 from .daily_summary import build_daily_shadow_summary
 from .observation_record import build_observation_record
+from .field_mapping import apply_field_mapping, validate_field_mapping
+from .data_quality import assess_data_quality, filter_quality
+from .candidate_builder import build_latest_candidates
+from .collection_pipeline import run_collection_pipeline
 from .provider import FixtureSupplierProvider
 
 
@@ -575,3 +579,45 @@ def observations_record():
 def observations_daily_summary():
     payload = request.get_json(silent=True) or {}
     return jsonify(build_daily_shadow_summary(payload.get("observations") or []))
+
+
+@dropship_bp.post("/provider/mapping/validate")
+def provider_mapping_validate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(validate_field_mapping(payload.get("mapping") or {}))
+
+
+@dropship_bp.post("/provider/mapping/apply")
+def provider_mapping_apply():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(apply_field_mapping(
+        payload.get("row") or {},
+        payload.get("mapping") or {},
+    ))
+
+
+@dropship_bp.post("/quality/assess")
+def quality_assess():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_data_quality(payload.get("row") or {}))
+
+
+@dropship_bp.post("/candidates/build")
+def candidates_build():
+    payload = request.get_json(silent=True) or {}
+    return jsonify({
+        "status": "ok",
+        "candidates": build_latest_candidates(payload.get("observations") or []),
+    })
+
+
+@dropship_bp.post("/collection/pipeline")
+def collection_pipeline():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_collection_pipeline(
+        payload.get("rows") or [],
+        provider_name=str(payload.get("provider_name") or "unknown"),
+        historical_observations=payload.get("historical_observations") or [],
+        max_age_hours=float(payload.get("max_age_hours") or 24),
+        min_quality_score=float(payload.get("min_quality_score") or 0.8),
+    ))
