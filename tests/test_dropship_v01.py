@@ -74,6 +74,11 @@ from dropship.source_budget import normalize_source_budget
 from dropship.research_write_policy import authorize_research_write
 from dropship.real_read_runner import run_real_read_research
 from dropship.market_provider import FixtureMarketProvider
+from dropship.shadow_metrics import build_shadow_metrics
+from dropship.shadow_gate import assess_shadow_gate
+from dropship.evidence_pack import build_real_read_evidence_pack
+from dropship.run_repository import MemoryResearchRunRepository
+from dropship.evidence_service import record_evidence_pack
 
 
 def sample_payload():
@@ -1106,3 +1111,73 @@ def test_real_read_runner_fixture_reaches_opportunity_ranking():
     assert result["ranking"]["best"]["product_key"] == "runner-1"
     assert result["commerce_external_writes"] is False
     assert result["live_execution_allowed"] is False
+
+
+def test_shadow_metrics_and_gate_require_evidence_depth():
+    observations = []
+    for day in range(1, 8):
+        for index in range(3):
+            observations.append({
+                "product_key": "sku-shadow",
+                "sale_price": 20 + index,
+                "inventory_confirmed": True,
+                "observed_at": f"2026-10-{day:02d}T00:00:00+00:00",
+            })
+    metrics = build_shadow_metrics(observations)
+    product = metrics["products"][0]
+    gate = assess_shadow_gate(product)
+    assert product["observations"] == 21
+    assert product["observation_days"] == 7
+    assert gate["passed"] is True
+    assert gate["live_execution_allowed"] is False
+
+
+def test_real_read_evidence_pack_is_append_only_and_non_live():
+    run_result = {
+        "supplier_provider": "fixture",
+        "market_provider": "fixture-market",
+        "supplier_candidate_count": 1,
+        "market_query_count": 1,
+        "market_cache_hits": 0,
+        "errors": [],
+        "ranking": {
+            "best": {
+                "product_key": "sku-shadow",
+                "opportunity_score": 0.8,
+            }
+        },
+    }
+    observations = [
+        {
+            "product_key": "sku-shadow",
+            "sale_price": 20,
+            "inventory_confirmed": True,
+            "observed_at": "2026-10-01T00:00:00+00:00",
+        }
+    ]
+    pack = build_real_read_evidence_pack(
+        run_result,
+        observations,
+        mode="fixture_proof",
+    )
+    assert pack["run_record"]["append_only_intent"] is True
+    assert len(pack["run_record"]["sha256"]) == 64
+    assert pack["live_execution_allowed"] is False
+
+
+def test_evidence_service_can_append_run_record():
+    repo = MemoryResearchRunRepository()
+    result = record_evidence_pack(
+        {
+            "supplier_provider": "fixture",
+            "market_provider": "fixture-market",
+            "ranking": {"best": {"product_key": "x", "opportunity_score": 0.5}},
+        },
+        [],
+        mode="fixture_proof",
+        run_repository=repo,
+    )
+    assert result["run_record_persisted"] is True
+    assert result["research_repository_write"] is True
+    assert result["commerce_external_writes"] is False
+    assert len(repo.rows) == 1
