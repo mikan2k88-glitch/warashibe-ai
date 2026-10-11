@@ -48,6 +48,10 @@ from dropship.research_plan import build_next_research_plan
 from dropship.orchestrator import run_orchestrator
 from dropship.v2_proof import build_v2_proof, build_v2_acceptance
 from dropship.manifest import build_manifest
+from dropship.provider_config import ProviderConfig
+from dropship.provider_normalizer import normalize_provider_row
+from dropship.dedupe import deduplicate_observations
+from dropship.shadow_collector import collect_shadow_observations
 
 
 def sample_payload():
@@ -715,3 +719,46 @@ def test_manifest_and_health_are_non_live():
     assert health.get_json()["live_execution_allowed"] is False
     assert manifest_response.status_code == 200
     assert manifest_response.get_json()["live_execution_allowed"] is False
+
+
+def test_provider_config_forbids_write_mode():
+    result = ProviderConfig(name="x", url="https://example.com", mode="write").validate()
+    assert result["valid"] is False
+    assert "provider_must_be_read_only" in result["reasons"]
+
+
+def test_provider_normalizer_maps_common_aliases():
+    row = normalize_provider_row(
+        {"sku": "s1", "title": "T", "price": 2000, "cost": 1000, "in_stock": True},
+        provider_name="demo",
+    )
+    assert row["product_key"] == "s1"
+    assert row["name"] == "T"
+    assert row["sale_price"] == 2000
+    assert row["supplier_cost"] == 1000
+    assert row["source"] == "demo"
+
+
+def test_dedupe_removes_duplicate_observations():
+    rows = [
+        {"product_key": "a", "supplier": "s", "source": "x", "sale_price": 1000, "supplier_cost": 500},
+        {"product_key": "a", "supplier": "s", "source": "x", "sale_price": 1000, "supplier_cost": 500},
+    ]
+    result = deduplicate_observations(rows)
+    assert result["unique_count"] == 1
+    assert result["duplicate_count"] == 1
+
+
+def test_shadow_collector_is_read_only_and_persistable():
+    provider = FixtureSupplierProvider([
+        {"product_key": "a", "name": "A", "sale_price": 2000, "supplier_cost": 1000},
+        {"product_key": "a", "name": "A", "sale_price": 2000, "supplier_cost": 1000},
+    ])
+    repo = MemoryAppendOnlyRepository()
+    result = collect_shadow_observations(provider, repository=repo)
+    assert result["status"] == "completed"
+    assert result["duplicate_count"] == 1
+    assert result["persisted"] == 1
+    assert len(repo.observations) == 1
+    assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
