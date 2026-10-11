@@ -65,6 +65,10 @@ from dropship.pricing_enrichment import enrich_candidate_with_market_price
 from dropship.cj_provider import normalize_cj_product
 from dropship.printful_provider import normalize_printful_product
 from dropship.provider_catalog import list_provider_catalog
+from dropship.market_match import build_market_query
+from dropship.opportunity import evaluate_opportunity
+from dropship.opportunity_pipeline import rank_opportunities
+from dropship.ebay_market_provider import normalize_ebay_item
 
 
 def sample_payload():
@@ -950,3 +954,90 @@ def test_provider_catalog_has_no_live_order_provider():
     result = list_provider_catalog()
     assert result["live_order_provider_enabled"] is False
     assert any(row["name"] == "cjdropshipping-list-v2" for row in result["providers"])
+
+
+def _opportunity_candidate(key, cost):
+    return {
+        "product_key": key,
+        "name": f"Product {key}",
+        "supplier": "supplier-a",
+        "category": "general",
+        "supplier_cost": cost,
+        "supplier_shipping": 0,
+        "platform_fee_rate": 0.10,
+        "payment_fee_rate": 0.035,
+        "ad_cost": 0,
+        "expected_return_cost": 0,
+        "refund_reserve": 0,
+        "delivery_days": 5,
+        "inventory_confirmed": True,
+        "supplier_allows_dropshipping": True,
+        "platform_terms_confirmed": True,
+        "supplier_reliable": True,
+    }
+
+
+def test_ebay_quote_normalization():
+    result = normalize_ebay_item({
+        "itemId": "v1|1|0",
+        "title": "Comparable",
+        "price": {"value": "29.99", "currency": "USD"},
+        "condition": "New",
+    })
+    assert result["price"] == 29.99
+    assert result["currency"] == "USD"
+    assert result["market"] == "ebay"
+
+
+def test_market_query_prefers_product_name():
+    query = build_market_query({
+        "name": "  Sample   Product  ",
+        "metadata": {"sku": "ABC"},
+    })
+    assert query == "Sample Product"
+
+
+def test_opportunity_requires_market_depth_and_policy():
+    candidate = _opportunity_candidate("x", 10)
+    quotes = [
+        {"price": 20, "currency": "USD"},
+        {"price": 21, "currency": "USD"},
+        {"price": 22, "currency": "USD"},
+    ]
+    result = evaluate_opportunity(
+        candidate,
+        quotes,
+        supplier_currency="USD",
+        target_currency="USD",
+    )
+    assert result["status"] == "promotion_candidate"
+    assert result["promotion_ready"] is True
+    assert result["live_execution_allowed"] is False
+
+
+def test_opportunity_ranking_selects_better_capital_efficiency():
+    candidates = [
+        _opportunity_candidate("a", 15),
+        _opportunity_candidate("b", 8),
+    ]
+    quotes = {
+        "a": [
+            {"price": 25, "currency": "USD"},
+            {"price": 26, "currency": "USD"},
+            {"price": 27, "currency": "USD"},
+        ],
+        "b": [
+            {"price": 25, "currency": "USD"},
+            {"price": 26, "currency": "USD"},
+            {"price": 27, "currency": "USD"},
+        ],
+    }
+    result = rank_opportunities(
+        candidates,
+        quotes,
+        supplier_currency="USD",
+        target_currency="USD",
+    )
+    assert result["best"]["product_key"] == "b"
+    assert result["evaluated_count"] == 2
+    assert result["live_execution_allowed"] is False
