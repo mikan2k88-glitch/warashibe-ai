@@ -52,13 +52,23 @@ V2_ENDPOINTS = [
     {"method": "GET", "path": "/dropship/v4.0/status", "purpose": "v4 release status"},
     {"method": "GET", "path": "/dropship/providers/onboarding", "purpose": "real provider onboarding status"},
     {"method": "GET", "path": "/dropship/providers/handshake", "purpose": "minimal read-only provider handshake"},
+    {"method": "POST", "path": "/dropship/provider/diagnostics", "purpose": "provider auth/rate/transient diagnostics"},
+    {"method": "POST", "path": "/dropship/discovery/plan", "purpose": "bounded product discovery plan"},
+    {"method": "POST", "path": "/dropship/market/confidence", "purpose": "outlier-filtered market confidence"},
+    {"method": "POST", "path": "/dropship/v5.0/rank", "purpose": "capital-aware real product ranking"},
+    {"method": "POST", "path": "/dropship/v5.1/evidence/maturity", "purpose": "long Shadow evidence maturity"},
+    {"method": "POST", "path": "/dropship/v5.2/review", "purpose": "Promotion Review package"},
+    {"method": "POST", "path": "/dropship/v5.2/queue", "purpose": "Promotion Review queue"},
+    {"method": "GET", "path": "/dropship/v5.2/proof", "purpose": "v5.2 deterministic proof"},
+    {"method": "GET", "path": "/dropship/v5.2/acceptance", "purpose": "v5.2 acceptance"},
+    {"method": "GET", "path": "/dropship/v5.2/status", "purpose": "v5.2 release status"},
 ]
 
 
 def build_manifest() -> dict:
     return {
         "service": "warashibe-dropshipping",
-        "version": "4.1",
+        "version": "5.2",
         "mode": "research",
         "endpoint_count": len(V2_ENDPOINTS),
         "endpoints": V2_ENDPOINTS,
