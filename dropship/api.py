@@ -84,6 +84,9 @@ from .v3_proof import build_v3_proof, build_v3_acceptance
 from .v3_release import build_v3_release_status
 from .persistence_health import assess_persistence_environment
 from .operations_runner import run_persistent_real_shadow
+from .ops_status import build_ops_status
+from .persistent_ops_status import build_persistent_ops_status
+from .dll_wake import wake_dll_concierge
 from .provider import FixtureSupplierProvider
 
 
@@ -836,3 +839,18 @@ def operations_persistent_fixture():
         shadow_thresholds=payload.get("shadow_thresholds") or {},
         mode="fixture_proof",
     ))
+
+
+@dropship_bp.post("/ops/status")
+def ops_status():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_ops_status(
+        payload.get("observations") or [],
+        payload.get("runs") or [],
+        promotion_reviews=payload.get("promotion_reviews") or [],
+    ))
+
+
+@dropship_bp.get("/dll/wake")
+def dll_wake():
+    return jsonify(wake_dll_concierge())
