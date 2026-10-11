@@ -47,6 +47,7 @@ from dropship.campaign import run_sandbox_campaign
 from dropship.research_plan import build_next_research_plan
 from dropship.orchestrator import run_orchestrator
 from dropship.v2_proof import build_v2_proof, build_v2_acceptance
+from dropship.manifest import build_manifest
 
 
 def sample_payload():
@@ -697,3 +698,20 @@ def test_flask_v20_endpoints_smoke():
     assert acceptance.status_code == 200
     assert proof.get_json()["passed"] is True
     assert acceptance.get_json()["passed"] is True
+
+
+def test_manifest_and_health_are_non_live():
+    manifest = build_manifest()
+    assert manifest["version"] == "2.0"
+    assert manifest["endpoint_count"] >= 20
+    assert manifest["live_execution_allowed"] is False
+
+    from app import app
+    client = app.test_client()
+    health = client.get("/dropship/health")
+    manifest_response = client.get("/dropship/v2.0/manifest")
+    assert health.status_code == 200
+    assert health.get_json()["status"] == "ok"
+    assert health.get_json()["live_execution_allowed"] is False
+    assert manifest_response.status_code == 200
+    assert manifest_response.get_json()["live_execution_allowed"] is False
