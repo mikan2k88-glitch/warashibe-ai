@@ -86,6 +86,9 @@ CAPABILITIES = {
     "supabase_rest_persistence": True,
     "persistent_shadow_operations": True,
     "shadow_history_restore": True,
+    "ops_status": True,
+    "persistent_ops_status": True,
+    "dll_prewake": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -95,7 +98,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v3.1-persistent-shadow-operations",
+        "release": "dropshipping-warashibe-v3.2-ops-status",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
