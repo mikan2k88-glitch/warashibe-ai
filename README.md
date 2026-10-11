@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **5.2**
+Current research version: **5.3**
 
 ### Research flow
 
@@ -150,3 +150,20 @@ stop conditions, and Human Gate decision options.
 
 Passing v5.2 does not enable live listing, supplier ordering, payment, cancellation,
 refund, or automatic promotion.
+
+
+### v5.3 Sandbox Commerce Validation
+
+v5.3 accepts only a v5.2 Promotion Review-ready candidate and runs it through:
+
+- listing preview
+- sandbox customer order
+- sandbox supplier order
+- sandbox fulfillment
+- sandbox settlement
+- outcome record
+
+It also proves cancellation, supplier-failure, delayed-shipment, and refund scenarios.
+
+All v5.3 flows remain non-live: no listing is created, no supplier order is submitted,
+no payment is captured, and no external commerce write is performed.
