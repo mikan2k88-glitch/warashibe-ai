@@ -89,6 +89,7 @@ from .persistent_ops_status import build_persistent_ops_status
 from .dll_wake import wake_dll_concierge
 from .deployment_readiness import assess_deployment_readiness
 from .startup_preflight import build_startup_preflight
+from .runtime_probe import run_runtime_probe
 from .provider import FixtureSupplierProvider
 
 
@@ -866,3 +867,8 @@ def deployment_readiness():
 @dropship_bp.get("/startup/preflight")
 def startup_preflight():
     return jsonify(build_startup_preflight())
+
+
+@dropship_bp.get("/runtime/probe")
+def runtime_probe():
+    return jsonify(run_runtime_probe())
