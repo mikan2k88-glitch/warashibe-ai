@@ -26,6 +26,9 @@ jobs:
         env:
           CJ_ACCESS_TOKEN: ${{ secrets.CJ_ACCESS_TOKEN }}
           EBAY_ACCESS_TOKEN: ${{ secrets.EBAY_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           EBAY_MARKETPLACE_ID: ${{ vars.EBAY_MARKETPLACE_ID }}
           DROPSHIP_SEARCH_KEYWORD: ${{ vars.DROPSHIP_SEARCH_KEYWORD }}
           DROPSHIP_SUPPLIER_COUNTRY: ${{ vars.DROPSHIP_SUPPLIER_COUNTRY }}
