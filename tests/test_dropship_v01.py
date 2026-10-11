@@ -16,6 +16,11 @@ from dropship.observations import summarize_observations
 from dropship.live_guard import authorize_action
 from dropship.dll_registry import find_components
 from dropship.provider import FixtureSupplierProvider
+from dropship.duplicate_guard import assess_duplicate_order
+from dropship.recovery import classify_recovery
+from dropship.audit import create_audit_record
+from dropship.burn_in import assess_burn_in
+from dropship.evidence_bundle import build_readiness_evidence
 
 
 def sample_payload():
@@ -241,3 +246,51 @@ def test_dll_registry_keyword_matcher():
     matches = find_components(registry, ["retry", "http"])
     assert matches
     assert matches[0]["component"]["id"] == "retry"
+
+
+def test_duplicate_order_guard_is_deterministic():
+    order = {"customer_order_id": "c1", "product_key": "sku-1", "supplier": "s1", "quantity": 1}
+    first = assess_duplicate_order(order, [])
+    second = assess_duplicate_order(order, [first["fingerprint"]])
+    assert first["allowed"] is True
+    assert second["duplicate"] is True
+    assert second["allowed"] is False
+
+
+def test_recovery_allows_only_transient_reads():
+    retry = classify_recovery("fetch_inventory", "timeout", attempts=0)
+    assert retry["retry_allowed"] is True
+    blocked = classify_recovery("submit_supplier_order", "timeout", attempts=0)
+    assert blocked["retry_allowed"] is False
+    assert blocked["classification"] == "hard_block"
+
+
+def test_audit_record_has_digest():
+    record = create_audit_record("candidate_evaluated", {"product_key": "sku-1"})
+    assert record["append_only_intent"] is True
+    assert len(record["sha256"]) == 64
+
+
+def test_burn_in_does_not_enable_controlled_automation():
+    result = assess_burn_in({
+        "cycles": 20,
+        "failure_rate": 0.01,
+        "duplicate_orders": 0,
+        "policy_violations": 0,
+        "unhandled_errors": 0,
+        "median_net_profit": 100,
+    })
+    assert result["passed"] is True
+    assert result["controlled_automation_allowed"] is False
+
+
+def test_readiness_evidence_stops_at_human_gate():
+    result = build_readiness_evidence(
+        shadow_observations=20,
+        shadow_days=30,
+        sandbox_cycles=10,
+        evidence_integrity_passed=True,
+        promotion_gate_passed=True,
+    )
+    assert result["readiness"]["status"] == "ready_for_human_gate"
+    assert result["live_execution_allowed"] is False
