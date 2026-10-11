@@ -86,6 +86,10 @@ from dropship.circuit_breaker import ReadOnlyCircuitBreaker
 from dropship.real_read_readiness import assess_real_read_readiness
 from dropship.v3_proof import build_v3_proof, build_v3_acceptance
 from dropship.v3_release import build_v3_release_status
+from dropship.supabase_rest import SupabaseRestClient
+from dropship.supabase_persistence import persist_observations, load_observation_history, persist_run
+from dropship.operations_runner import run_persistent_real_shadow
+from dropship.persistence_health import assess_persistence_environment
 
 
 def sample_payload():
@@ -1333,3 +1337,99 @@ def test_flask_v30_endpoints_smoke():
     assert proof.get_json()["passed"] is True
     assert acceptance.get_json()["passed"] is True
     assert status.get_json()["status"] == "real_read_shadow_endpoint_reached"
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+    def raise_for_status(self):
+        return None
+    def json(self):
+        return self._payload
+
+
+class _FakeSession:
+    def __init__(self):
+        self.posts = []
+        self.gets = []
+    def post(self, url, headers, json, timeout):
+        self.posts.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return _FakeResponse([{"id": 1, **json}])
+    def get(self, url, headers, params, timeout):
+        self.gets.append({"url": url, "headers": headers, "params": params, "timeout": timeout})
+        return _FakeResponse([])
+
+
+def test_supabase_rest_client_is_server_side_append_only_shape():
+    session = _FakeSession()
+    client = SupabaseRestClient(
+        url="https://example.supabase.co",
+        key="server-secret",
+        session=session,
+    )
+    row = client.insert("dropship_research_runs", {"sha256": "x", "mode": "proof"})
+    assert row["mode"] == "proof"
+    assert session.posts[0]["headers"]["Authorization"] == "Bearer server-secret"
+    assert "server-secret" not in str(row)
+
+
+class _MemoryPersistenceClient:
+    def __init__(self):
+        self.tables = {
+            "dropship_observations": [],
+            "dropship_research_runs": [],
+        }
+    def insert(self, table, row):
+        stored = {"id": len(self.tables.setdefault(table, [])) + 1, **dict(row)}
+        self.tables[table].append(stored)
+        return stored
+    def select(self, table, **kwargs):
+        return list(self.tables.get(table, []))
+
+
+def test_persistent_runner_restores_history_and_appends_research_only():
+    persistence = _MemoryPersistenceClient()
+    supplier = FixtureSupplierProvider([
+        _opportunity_candidate("persistent-1", 10) | {"name": "Persistent Product"}
+    ])
+    market = FixtureMarketProvider({
+        "Persistent Product": [
+            {"price": 20, "currency": "USD"},
+            {"price": 21, "currency": "USD"},
+            {"price": 22, "currency": "USD"},
+        ]
+    })
+    first = run_persistent_real_shadow(
+        supplier,
+        market,
+        persistence_client=persistence,
+        supplier_currency="USD",
+        target_currency="USD",
+        shadow_thresholds={"min_observations": 1, "min_observation_days": 1},
+        mode="fixture_proof",
+    )
+    second = run_persistent_real_shadow(
+        supplier,
+        market,
+        persistence_client=persistence,
+        supplier_currency="USD",
+        target_currency="USD",
+        shadow_thresholds={"min_observations": 1, "min_observation_days": 1},
+        mode="fixture_proof",
+    )
+    assert first["research_persistence_enabled"] is True
+    assert second["history_loaded"] is True
+    assert second["history_count"] >= 1
+    assert len(persistence.tables["dropship_observations"]) >= 1
+    assert len(persistence.tables["dropship_research_runs"]) == 2
+    assert second["commerce_external_writes"] is False
+    assert second["live_execution_allowed"] is False
+
+
+def test_persistence_health_never_exposes_secret(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "hidden")
+    result = assess_persistence_environment()
+    assert result["status"] == "ready"
+    assert result["secret_values_exposed"] is False
+    assert "hidden" not in str(result)
