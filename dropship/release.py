@@ -37,6 +37,10 @@ CAPABILITIES = {
     "platform_adapter_contract": True,
     "policy_profile": True,
     "preflight_gate": True,
+    "outcome_record": True,
+    "learning_loop": True,
+    "sandbox_campaign": True,
+    "research_planner": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -46,7 +50,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v1.5-preflight-platform",
+        "release": "dropshipping-warashibe-v1.6-learning-loop",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
