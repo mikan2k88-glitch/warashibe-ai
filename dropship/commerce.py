@@ -19,19 +19,22 @@ def build_sandbox_commerce_plan(offers: list[dict]) -> dict:
         }
 
     offer = dict(best["offer"])
-    payload = {
-        **offer,
-        **best["economics"],
-        "platform_fee_rate": 0.0,
-        "payment_fee_rate": 0.0,
-        "ad_cost": best["economics"].get("ad_cost", 0.0),
-        "expected_return_cost": best["economics"].get("expected_return_cost", 0.0),
-        "refund_reserve": best["economics"].get("refund_reserve", 0.0),
+    payload = dict(best.get("input") or {})
+    payload.update({
+        "product_key": offer["product_key"],
+        "name": offer["name"],
+        "category": offer["category"],
+        "supplier": offer["supplier"],
+        "source": offer["source"],
+        "sale_price": offer["sale_price"],
+        "supplier_cost": offer["supplier_cost"],
+        "supplier_shipping": offer["supplier_shipping"],
+        "delivery_days": offer["delivery_days"],
         "supplier_allows_dropshipping": offer["supplier_allows_dropshipping"],
         "platform_terms_confirmed": offer["platform_terms_confirmed"],
         "supplier_reliable": offer["supplier_reliable"],
         "inventory_confirmed": offer["inventory_confirmed"],
-    }
+    })
     cycle = run_sandbox_cycle(payload)
     commerce_key = f"sandbox-{offer['product_key']}-{uuid4().hex[:8]}"
     return {
