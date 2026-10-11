@@ -90,6 +90,7 @@ from .dll_wake import wake_dll_concierge
 from .deployment_readiness import assess_deployment_readiness
 from .startup_preflight import build_startup_preflight
 from .runtime_probe import run_runtime_probe
+from .token_readiness import assess_token_readiness
 from .provider import FixtureSupplierProvider
 
 
@@ -872,3 +873,8 @@ def startup_preflight():
 @dropship_bp.get("/runtime/probe")
 def runtime_probe():
     return jsonify(run_runtime_probe())
+
+
+@dropship_bp.get("/tokens/readiness")
+def tokens_readiness():
+    return jsonify(assess_token_readiness())
