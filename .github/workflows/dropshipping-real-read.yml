@@ -32,4 +32,10 @@ jobs:
           DROPSHIP_MAX_SUPPLIER_ITEMS: "5"
           DROPSHIP_MAX_MARKET_QUERIES: "5"
           DROPSHIP_MAX_QUOTES: "10"
-        run: python scripts/dropship_real_read.py
+        run: python scripts/dropship_real_read.py | tee dropshipping-real-read.json
+      - name: Upload research evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropshipping-real-read-evidence
+          path: dropshipping-real-read.json
+          if-no-files-found: error
