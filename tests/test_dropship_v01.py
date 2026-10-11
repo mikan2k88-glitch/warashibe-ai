@@ -1,6 +1,9 @@
 from dropship.economics import evaluate_dropship_economics
 from dropship.policy import evaluate_dropship_policy
 from dropship.sandbox import run_sandbox_cycle
+from dropship.shadow import evaluate_shadow_candidate
+from dropship.promotion import assess_promotion
+from dropship.runtime import build_runtime_status
 
 
 def sample_payload():
@@ -53,3 +56,26 @@ def test_sandbox_cycle_finishes_without_external_writes():
     assert result["state"] == "SETTLED_SANDBOX"
     assert result["external_writes"] is False
     assert result["real_order"] is False
+
+
+def test_shadow_candidate_can_become_promotion_candidate():
+    result = evaluate_shadow_candidate(sample_payload())
+    assert result["mode"] == "shadow"
+    assert result["evidence_integrity_passed"] is True
+    assert result["promotion_candidate"] is True
+    assert result["external_writes"] is False
+
+
+def test_promotion_gate_separates_research_from_live():
+    shadow = evaluate_shadow_candidate(sample_payload())
+    result = assess_promotion(shadow)
+    assert result["promotion_ready"] is True
+    assert result["next_stage"] == "sandbox"
+    assert result["live_execution_allowed"] is False
+
+
+def test_runtime_status_remains_non_live():
+    result = build_runtime_status()
+    assert result["maturity_stage"] == "shadow_sandbox"
+    assert result["live_execution_allowed"] is False
+    assert result["external_writes_enabled"] is False
