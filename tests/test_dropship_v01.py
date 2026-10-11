@@ -94,6 +94,7 @@ from dropship.ops_status import build_ops_status
 from dropship.persistent_ops_status import build_persistent_ops_status
 from dropship.deployment_readiness import assess_deployment_readiness
 from dropship.startup_preflight import build_startup_preflight
+from dropship.runtime_probe import run_runtime_probe
 
 
 def sample_payload():
@@ -1507,4 +1508,34 @@ def test_startup_preflight_never_enables_live(monkeypatch):
     result = build_startup_preflight()
     assert result["safe_to_start_research_runtime"] is True
     assert result["safe_to_start_live_commerce"] is False
+    assert result["live_execution_allowed"] is False
+
+
+class _ProbeResponse:
+    def __init__(self, payload):
+        self.payload = payload
+    def raise_for_status(self):
+        return None
+    def json(self):
+        return self.payload
+
+
+class _ProbeSession:
+    def get(self, url, timeout):
+        if url.endswith("/dropship/health"):
+            return _ProbeResponse({
+                "status": "ok",
+                "service": "warashibe-dropshipping",
+                "version": "3.4",
+                "live_execution_allowed": False,
+            })
+        return _ProbeResponse({"components": []})
+
+
+def test_runtime_probe_verifies_safe_boundary_and_dll_reachability():
+    result = run_runtime_probe(session=_ProbeSession(), timeout=1)
+    assert result["status"] == "runtime_probe_ok"
+    assert result["warashibe_safe_boundary_verified"] is True
+    assert result["dll_registry_reachable"] is True
+    assert result["commerce_write_performed"] is False
     assert result["live_execution_allowed"] is False
