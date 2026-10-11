@@ -106,6 +106,9 @@ from .promotion_review_v52 import build_v52_promotion_review
 from .promotion_queue import build_promotion_queue
 from .v52_proof import build_v52_proof, build_v52_acceptance
 from .v52_release import build_v52_release_status
+from .v53_sandbox_controller import run_v53_sandbox_cycle
+from .v53_proof import build_v53_proof, build_v53_acceptance
+from .v53_release import build_v53_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -1006,3 +1009,28 @@ def v52_acceptance():
 @dropship_bp.get("/v5.2/status")
 def v52_status():
     return jsonify(build_v52_release_status())
+
+
+@dropship_bp.post("/v5.3/sandbox/run")
+def v53_sandbox_run():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_v53_sandbox_cycle(
+        payload.get("promotion_review") or {},
+        scenario=str(payload.get("scenario") or "delivered"),
+        quantity=int(payload.get("quantity") or 1),
+    ))
+
+
+@dropship_bp.get("/v5.3/proof")
+def v53_proof():
+    return jsonify(build_v53_proof())
+
+
+@dropship_bp.get("/v5.3/acceptance")
+def v53_acceptance():
+    return jsonify(build_v53_acceptance())
+
+
+@dropship_bp.get("/v5.3/status")
+def v53_status():
+    return jsonify(build_v53_release_status())
