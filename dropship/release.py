@@ -67,6 +67,11 @@ CAPABILITIES = {
     "price_stability": True,
     "opportunity_evaluation": True,
     "opportunity_ranking": True,
+    "credential_health": True,
+    "source_budget_guard": True,
+    "research_write_allowlist": True,
+    "market_quote_cache": True,
+    "real_read_runner": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -76,7 +81,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v2.5-opportunity-ranking",
+        "release": "dropshipping-warashibe-v2.6-real-read-runner",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
