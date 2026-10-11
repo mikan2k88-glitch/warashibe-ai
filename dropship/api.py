@@ -34,6 +34,9 @@ from .snapshot import build_research_snapshot
 from .release import build_release_status
 from .hq import build_hq_status
 from .human_gate import prepare_human_gate_package, verify_human_approval
+from .freshness import assess_freshness
+from .provider_registry import ProviderRegistry, ProviderDescriptor
+from .runtime_controller import run_runtime_controller
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -312,3 +315,35 @@ def human_gate_package():
 def human_gate_verify():
     payload = request.get_json(silent=True) or {}
     return jsonify(verify_human_approval(str(payload.get("code") or "")))
+
+
+@dropship_bp.post("/freshness/assess")
+def freshness_assess():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_freshness(
+        payload.get("observed_at"),
+        now=payload.get("now"),
+        max_age_hours=float(payload.get("max_age_hours") or 24),
+    ))
+
+
+@dropship_bp.post("/runtime/controller")
+def runtime_controller():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_runtime_controller(
+        payload.get("offers") or [],
+        historical_observations=payload.get("historical_observations") or [],
+        max_age_hours=float(payload.get("max_age_hours") or 24),
+    ))
+
+
+@dropship_bp.get("/providers")
+def providers():
+    registry = ProviderRegistry()
+    registry.register(ProviderDescriptor(name="fixture"))
+    registry.register(ProviderDescriptor(name="http-json"))
+    return jsonify({
+        "status": "ok",
+        "providers": registry.list(),
+        "live_order_provider_registered": False,
+    })
