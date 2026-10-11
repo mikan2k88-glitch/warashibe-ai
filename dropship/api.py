@@ -87,6 +87,8 @@ from .operations_runner import run_persistent_real_shadow
 from .ops_status import build_ops_status
 from .persistent_ops_status import build_persistent_ops_status
 from .dll_wake import wake_dll_concierge
+from .deployment_readiness import assess_deployment_readiness
+from .startup_preflight import build_startup_preflight
 from .provider import FixtureSupplierProvider
 
 
@@ -854,3 +856,13 @@ def ops_status():
 @dropship_bp.get("/dll/wake")
 def dll_wake():
     return jsonify(wake_dll_concierge())
+
+
+@dropship_bp.get("/deployment/readiness")
+def deployment_readiness():
+    return jsonify(assess_deployment_readiness())
+
+
+@dropship_bp.get("/startup/preflight")
+def startup_preflight():
+    return jsonify(build_startup_preflight())
