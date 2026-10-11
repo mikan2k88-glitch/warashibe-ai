@@ -20,6 +20,11 @@ from .research_cycle import run_research_cycle
 from .observations import summarize_observations
 from .live_guard import authorize_action
 from .dll_registry import find_components
+from .duplicate_guard import assess_duplicate_order
+from .recovery import classify_recovery
+from .audit import create_audit_record
+from .burn_in import assess_burn_in
+from .evidence_bundle import build_readiness_evidence
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -166,3 +171,53 @@ def dll_search():
         })
     except RuntimeError as exc:
         return jsonify({"status": "unavailable", "error": str(exc)}), 503
+
+
+@dropship_bp.post("/orders/duplicate-check")
+def duplicate_check():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_duplicate_order(
+        payload.get("order") or {},
+        payload.get("existing_fingerprints") or [],
+    ))
+
+
+@dropship_bp.post("/recovery/classify")
+def recovery_classify():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(classify_recovery(
+        str(payload.get("action") or ""),
+        str(payload.get("error_kind") or ""),
+        int(payload.get("attempts") or 0),
+        int(payload.get("max_attempts") or 3),
+    ))
+
+
+@dropship_bp.post("/audit/record")
+def audit_record():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(create_audit_record(
+        str(payload.get("event_type") or "unknown"),
+        payload.get("payload") or {},
+    ))
+
+
+@dropship_bp.post("/burn-in/assess")
+def burn_in_assess():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_burn_in(payload))
+
+
+@dropship_bp.post("/readiness/evidence")
+def readiness_evidence():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_readiness_evidence(
+        shadow_observations=int(payload.get("shadow_observations") or 0),
+        shadow_days=int(payload.get("shadow_days") or 0),
+        sandbox_cycles=int(payload.get("sandbox_cycles") or 0),
+        evidence_integrity_passed=payload.get("evidence_integrity_passed") is True,
+        promotion_gate_passed=payload.get("promotion_gate_passed") is True,
+        duplicate_order_guard=payload.get("duplicate_order_guard", True) is True,
+        kill_switch_ready=payload.get("kill_switch_ready", True) is True,
+        audit_log_ready=payload.get("audit_log_ready", True) is True,
+    ))
