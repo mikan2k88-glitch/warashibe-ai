@@ -20,14 +20,14 @@ jobs:
         run: pip install -r requirements.txt pytest
       - name: Run dropshipping test suite
         run: python -m pytest -q tests/test_dropship_v01.py
-      - name: Verify v3.0 proof and acceptance
+      - name: Verify v4.0 proof and acceptance
         run: |
           python - <<'PY'
-          from dropship.v3_proof import build_v3_proof, build_v3_acceptance
+          from dropship.v4_proof import build_v4_proof, build_v4_acceptance
           from dropship.release import build_release_status
 
-          proof = build_v3_proof()
-          acceptance = build_v3_acceptance()
+          proof = build_v4_proof()
+          acceptance = build_v4_acceptance()
           status = build_release_status()
 
           assert proof["passed"] is True
