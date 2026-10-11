@@ -30,6 +30,8 @@ from .maturity import determine_maturity
 from .dashboard import build_dashboard_summary
 from .controller import run_controller
 from .proof import build_proof, build_acceptance
+from .snapshot import build_research_snapshot
+from .release import build_release_status
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -268,4 +270,25 @@ def v09_proof():
 
 @dropship_bp.get("/v0.9/acceptance")
 def v09_acceptance():
+    return jsonify(build_acceptance())
+
+
+@dropship_bp.post("/snapshot/build")
+def snapshot_build():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_research_snapshot(payload))
+
+
+@dropship_bp.get("/v1.0/status")
+def v10_status():
+    return jsonify(build_release_status())
+
+
+@dropship_bp.get("/v1.0/proof")
+def v10_proof():
+    return jsonify(build_proof())
+
+
+@dropship_bp.get("/v1.0/acceptance")
+def v10_acceptance():
     return jsonify(build_acceptance())
