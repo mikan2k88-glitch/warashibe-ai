@@ -48,6 +48,8 @@ from .outcome import build_outcome_record
 from .learning import summarize_learning, propose_learning_actions
 from .campaign import run_sandbox_campaign
 from .research_plan import build_next_research_plan
+from .orchestrator import run_orchestrator
+from .v2_proof import build_v2_proof, build_v2_acceptance
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -456,3 +458,24 @@ def campaign_run():
 def research_plan():
     payload = request.get_json(silent=True) or {}
     return jsonify(build_next_research_plan(payload))
+
+
+@dropship_bp.post("/orchestrator/run")
+def orchestrator_run():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_orchestrator(
+        payload.get("batches") or [],
+        available_capital=float(payload.get("available_capital") or 3000),
+        strategy=str(payload.get("strategy") or "balanced"),
+        state=payload.get("state") or {},
+    ))
+
+
+@dropship_bp.get("/v2.0/proof")
+def v20_proof():
+    return jsonify(build_v2_proof())
+
+
+@dropship_bp.get("/v2.0/acceptance")
+def v20_acceptance():
+    return jsonify(build_v2_acceptance())
