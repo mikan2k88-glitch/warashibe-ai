@@ -47,6 +47,9 @@ V2_ENDPOINTS = [
     {"method": "GET", "path": "/dropship/startup/preflight", "purpose": "startup research preflight"},
     {"method": "GET", "path": "/dropship/runtime/probe", "purpose": "read-only Render and DLL runtime probe"},
     {"method": "GET", "path": "/dropship/tokens/readiness", "purpose": "static or dynamic read-token readiness"},
+    {"method": "GET", "path": "/dropship/v4.0/proof", "purpose": "v4 token automation proof"},
+    {"method": "GET", "path": "/dropship/v4.0/acceptance", "purpose": "v4 acceptance"},
+    {"method": "GET", "path": "/dropship/v4.0/status", "purpose": "v4 release status"},
 ]
 
 
