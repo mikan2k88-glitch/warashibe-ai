@@ -41,6 +41,10 @@ from dropship.walk_forward import run_walk_forward
 from dropship.strategy_promotion import assess_strategy_promotion
 from dropship.preflight import run_preflight
 from dropship.platform_adapter import SandboxSalesChannelAdapter
+from dropship.outcome import build_outcome_record
+from dropship.learning import summarize_learning, propose_learning_actions
+from dropship.campaign import run_sandbox_campaign
+from dropship.research_plan import build_next_research_plan
 
 
 def sample_payload():
@@ -600,3 +604,42 @@ def test_policy_profile_can_block_slow_delivery():
     )
     assert result["passed"] is False
     assert "delivery_days_exceed_profile" in result["policy"]["reasons"]
+
+
+def test_outcome_learning_loop_remains_research_only():
+    outcomes = [
+        build_outcome_record({"product_key": "a", "supplier": "s1", "category": "general", "strategy": "balanced", "expected_net_profit": 100, "realized_net_profit": 120, "delivered": True}),
+        build_outcome_record({"product_key": "b", "supplier": "s1", "category": "general", "strategy": "balanced", "expected_net_profit": 100, "realized_net_profit": 80, "delivered": True}),
+        build_outcome_record({"product_key": "c", "supplier": "s2", "category": "general", "strategy": "safe", "expected_net_profit": 50, "realized_net_profit": 60, "delivered": True}),
+    ]
+    summary = summarize_learning(outcomes)
+    actions = propose_learning_actions(summary)
+    assert summary["outcome_count"] == 3
+    assert summary["automatic_strategy_change"] is False
+    assert actions["automatic_execution"] is False
+
+
+def test_sandbox_campaign_uses_zero_real_orders():
+    base = sample_payload() | {
+        "product_key": "campaign",
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    result = run_sandbox_campaign([[base], [base]], strategy="balanced", available_capital=3000)
+    assert result["cycles"] == 2
+    assert result["real_orders"] == 0
+    assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_research_plan_prioritizes_evidence_gap():
+    result = build_next_research_plan({
+        "eligible_candidates": 5,
+        "shadow_days": 30,
+        "walk_forward_windows": 3,
+        "sandbox_cycles": 10,
+        "evidence_integrity_passed": False,
+    })
+    assert result["next_task"] == "repair_evidence_integrity"
+    assert result["execution_authorized"] is False
