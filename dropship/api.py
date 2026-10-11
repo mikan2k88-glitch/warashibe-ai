@@ -25,6 +25,9 @@ from .recovery import classify_recovery
 from .audit import create_audit_record
 from .burn_in import assess_burn_in
 from .evidence_bundle import build_readiness_evidence
+from .selection import select_single_candidate
+from .maturity import determine_maturity
+from .dashboard import build_dashboard_summary
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -221,3 +224,26 @@ def readiness_evidence():
         kill_switch_ready=payload.get("kill_switch_ready", True) is True,
         audit_log_ready=payload.get("audit_log_ready", True) is True,
     ))
+
+
+@dropship_bp.post("/selection/single")
+def selection_single():
+    payload = request.get_json(silent=True) or {}
+    ranking = rank_supplier_offers(payload.get("offers") or [])
+    return jsonify(select_single_candidate(
+        ranking,
+        strategy=str(payload.get("strategy") or "balanced"),
+        available_capital=float(payload.get("available_capital") or 0),
+    ))
+
+
+@dropship_bp.post("/maturity/assess")
+def maturity_assess():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(determine_maturity(payload))
+
+
+@dropship_bp.post("/dashboard/summary")
+def dashboard_summary():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_dashboard_summary(payload))
