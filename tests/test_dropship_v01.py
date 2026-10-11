@@ -26,6 +26,8 @@ from dropship.maturity import determine_maturity
 from dropship.dashboard import build_dashboard_summary
 from dropship.controller import run_controller
 from dropship.proof import build_proof, build_acceptance
+from dropship.snapshot import build_research_snapshot
+from dropship.release import build_release_status
 
 
 def sample_payload():
@@ -372,3 +374,39 @@ def test_v09_acceptance_stops_at_human_gate():
     assert result["passed"] is True
     assert result["readiness"]["status"] == "ready_for_human_gate"
     assert result["live_execution_allowed"] is False
+
+
+def test_research_snapshot_is_append_only_and_non_live():
+    result = build_research_snapshot({
+        "maturity_stage": "sandbox",
+        "candidate_count": 8,
+        "eligible_count": 2,
+        "shadow_observations": 20,
+        "shadow_days": 10,
+        "sandbox_cycles": 5,
+        "selected_product_key": "sku-1",
+        "estimated_net_profit": 300,
+    })
+    assert result["append_only_intent"] is True
+    assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
+    assert len(result["sha256"]) == 64
+
+
+def test_v10_release_status_reaches_research_endpoint():
+    result = build_release_status()
+    assert result["status"] == "research_endpoint_reached"
+    assert result["capabilities"]["live_commerce_enabled"] is False
+    assert result["maturity_ceiling"] == "ready_for_human_gate"
+    assert result["live_execution_allowed"] is False
+
+
+def test_flask_v10_proof_and_status_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v1.0/proof")
+    status = client.get("/dropship/v1.0/status")
+    assert proof.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert status.status_code == 200
+    assert status.get_json()["status"] == "research_endpoint_reached"
