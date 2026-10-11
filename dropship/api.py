@@ -82,6 +82,8 @@ from .run_quality import assess_run_quality
 from .real_read_readiness import assess_real_read_readiness
 from .v3_proof import build_v3_proof, build_v3_acceptance
 from .v3_release import build_v3_release_status
+from .persistence_health import assess_persistence_environment
+from .operations_runner import run_persistent_real_shadow
 from .provider import FixtureSupplierProvider
 
 
@@ -811,3 +813,26 @@ def v30_acceptance():
 @dropship_bp.get("/v3.0/status")
 def v30_status():
     return jsonify(build_v3_release_status())
+
+
+@dropship_bp.get("/persistence/health")
+def persistence_health():
+    return jsonify(assess_persistence_environment())
+
+
+@dropship_bp.post("/operations/persistent-fixture")
+def operations_persistent_fixture():
+    payload = request.get_json(silent=True) or {}
+    supplier = FixtureSupplierProvider(payload.get("supplier_offers") or [])
+    market = FixtureMarketProvider(payload.get("quotes_by_query") or {})
+    return jsonify(run_persistent_real_shadow(
+        supplier,
+        market,
+        persistence_client=None,
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency") or "USD",
+        fx_rates=payload.get("fx_rates") or {},
+        budget=payload.get("budget") or {},
+        shadow_thresholds=payload.get("shadow_thresholds") or {},
+        mode="fixture_proof",
+    ))
