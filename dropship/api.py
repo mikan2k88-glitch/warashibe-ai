@@ -95,6 +95,17 @@ from .v4_proof import build_v4_proof, build_v4_acceptance
 from .v4_release import build_v4_release_status
 from .provider_onboarding import build_provider_onboarding_status
 from .provider_handshake import run_provider_handshake
+from .provider_diagnostics import classify_provider_error, summarize_handshake
+from .discovery_plan import build_discovery_plan
+from .market_confidence import assess_market_confidence
+from .market_liquidity import assess_market_liquidity
+from .real_product_ranking import rank_real_products
+from .evidence_maturity import assess_evidence_maturity
+from .shadow_statistics import build_product_shadow_statistics
+from .promotion_review_v52 import build_v52_promotion_review
+from .promotion_queue import build_promotion_queue
+from .v52_proof import build_v52_proof, build_v52_acceptance
+from .v52_release import build_v52_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -907,3 +918,91 @@ def providers_onboarding():
 @dropship_bp.get("/providers/handshake")
 def providers_handshake():
     return jsonify(run_provider_handshake())
+
+
+@dropship_bp.post("/provider/diagnostics")
+def provider_diagnostics():
+    payload = request.get_json(silent=True) or {}
+    if payload.get("handshake"):
+        return jsonify(summarize_handshake(payload.get("handshake") or {}))
+    return jsonify(classify_provider_error(str(payload.get("error") or "")))
+
+
+@dropship_bp.post("/discovery/plan")
+def discovery_plan():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_discovery_plan(
+        payload.get("candidates") or [],
+        max_queries=int(payload.get("max_queries") or 20),
+        per_candidate_keywords=int(payload.get("per_candidate_keywords") or 3),
+    ))
+
+
+@dropship_bp.post("/market/confidence")
+def market_confidence():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_market_confidence(payload.get("quotes") or []))
+
+
+@dropship_bp.post("/market/liquidity")
+def market_liquidity():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_market_liquidity(payload.get("quotes") or []))
+
+
+@dropship_bp.post("/v5.0/rank")
+def v50_rank():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(rank_real_products(
+        payload.get("candidates") or [],
+        payload.get("quotes_by_product") or {},
+        available_capital=float(payload.get("available_capital") or 3000),
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency") or "USD",
+        fx_rates=payload.get("fx_rates") or {},
+    ))
+
+
+@dropship_bp.post("/v5.1/evidence/maturity")
+def v51_evidence_maturity():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_evidence_maturity(
+        shadow_metrics=payload.get("shadow_metrics") or {},
+        market_confidence=payload.get("market_confidence") or {},
+        opportunity_score=float(payload.get("opportunity_score") or 0),
+        positive_profit_observation_rate=float(payload.get("positive_profit_observation_rate") or 0),
+        supplier_cost_drift=float(payload.get("supplier_cost_drift") or 0),
+        thresholds=payload.get("thresholds") or {},
+    ))
+
+
+@dropship_bp.post("/v5.2/review")
+def v52_review():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_v52_promotion_review(
+        payload.get("ranked_product") or {},
+        shadow_metrics=payload.get("shadow_metrics") or {},
+        observations=payload.get("observations") or [],
+        thresholds=payload.get("thresholds") or {},
+    ))
+
+
+@dropship_bp.post("/v5.2/queue")
+def v52_queue():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_promotion_queue(payload.get("reviews") or []))
+
+
+@dropship_bp.get("/v5.2/proof")
+def v52_proof():
+    return jsonify(build_v52_proof())
+
+
+@dropship_bp.get("/v5.2/acceptance")
+def v52_acceptance():
+    return jsonify(build_v52_acceptance())
+
+
+@dropship_bp.get("/v5.2/status")
+def v52_status():
+    return jsonify(build_v52_release_status())
