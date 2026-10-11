@@ -119,7 +119,8 @@ def build_release_status() -> dict:
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
         "capabilities": CAPABILITIES,
-        "maturity_ceiling": "promotion_review_human_gate",
+        "maturity_ceiling": "ready_for_human_gate",
+        "current_maturity_ceiling": "promotion_review_human_gate",
         "external_writes_enabled": False,
         "live_execution_allowed": False,
     }
