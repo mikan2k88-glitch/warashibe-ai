@@ -14,6 +14,8 @@ from .supplier import evaluate_supplier_offer
 from .ranking import rank_supplier_offers
 from .commerce import build_sandbox_commerce_plan
 from .stop_loss import assess_listing_stop_loss
+from .pipeline import run_dropship_decision_pipeline
+from .readiness import assess_live_readiness
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -110,3 +112,16 @@ def listing_stop_loss():
         payload,
         ad_cost_cap=float(payload.get("ad_cost_cap") or 1000.0),
     ))
+
+
+@dropship_bp.post("/pipeline/evaluate")
+def pipeline_evaluate():
+    payload = request.get_json(silent=True) or {}
+    offers = payload.get("offers") or []
+    return jsonify(run_dropship_decision_pipeline(offers))
+
+
+@dropship_bp.post("/readiness/assess")
+def readiness_assess():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_live_readiness(payload))
