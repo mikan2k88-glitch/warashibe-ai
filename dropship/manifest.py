@@ -46,13 +46,14 @@ V2_ENDPOINTS = [
     {"method": "GET", "path": "/dropship/deployment/readiness", "purpose": "deployment mode readiness"},
     {"method": "GET", "path": "/dropship/startup/preflight", "purpose": "startup research preflight"},
     {"method": "GET", "path": "/dropship/runtime/probe", "purpose": "read-only Render and DLL runtime probe"},
+    {"method": "GET", "path": "/dropship/tokens/readiness", "purpose": "static or dynamic read-token readiness"},
 ]
 
 
 def build_manifest() -> dict:
     return {
         "service": "warashibe-dropshipping",
-        "version": "3.4",
+        "version": "4.0",
         "mode": "research",
         "endpoint_count": len(V2_ENDPOINTS),
         "endpoints": V2_ENDPOINTS,
