@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from .credential_health import check_credential_env
+from .token_readiness import assess_token_readiness
 from .next_action import determine_next_action
 from .ops_summary import summarize_operations
 from .persistence_health import assess_persistence_environment
 
-
-REAL_READ_CREDENTIALS = ["CJ_ACCESS_TOKEN", "EBAY_ACCESS_TOKEN"]
 
 
 def build_ops_status(
@@ -20,14 +18,14 @@ def build_ops_status(
         runs,
         promotion_reviews=promotion_reviews,
     )
-    credentials = check_credential_env(REAL_READ_CREDENTIALS)
+    credentials = assess_token_readiness()
     persistence = assess_persistence_environment()
 
     max_shadow_days = max(
         [int(row.get("observation_days") or 0) for row in summary["products"]] or [0]
     )
     next_action = determine_next_action(
-        credentials_ready=credentials["all_configured"],
+        credentials_ready=credentials["all_ready"],
         persistence_ready=persistence["status"] == "ready",
         observation_count=summary["observation_count"],
         shadow_days=max_shadow_days,
