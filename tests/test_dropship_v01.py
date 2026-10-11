@@ -31,6 +31,9 @@ from dropship.release import build_release_status
 from dropship.hq import build_hq_status
 from dropship.human_gate import prepare_human_gate_package, verify_human_approval
 from dropship.repository import MemoryAppendOnlyRepository
+from dropship.freshness import assess_freshness
+from dropship.provider_registry import ProviderRegistry, ProviderDescriptor
+from dropship.runtime_controller import run_runtime_controller
 
 
 def sample_payload():
@@ -444,3 +447,47 @@ def test_memory_repository_is_append_only_contract():
     repo.append_observation({"product_key": "sku-1"})
     repo.append_observation({"product_key": "sku-1"})
     assert len(repo.observations) == 2
+
+
+def test_freshness_gate_rejects_stale_observation():
+    result = assess_freshness(
+        "2026-10-01T00:00:00+00:00",
+        now="2026-10-03T00:00:00+00:00",
+        max_age_hours=24,
+    )
+    assert result["fresh"] is False
+    assert result["reason"] == "stale_observation"
+
+
+def test_provider_registry_rejects_order_capable_provider():
+    registry = ProviderRegistry()
+    registry.register(ProviderDescriptor(name="fixture"))
+    assert registry.get("fixture")["mode"] == "read_only"
+    try:
+        registry.register(ProviderDescriptor(name="unsafe", supports_orders=True))
+    except ValueError:
+        pass
+    else:
+        assert False, "order-capable provider must be rejected"
+
+
+def test_runtime_controller_filters_stale_offers():
+    fresh = sample_payload() | {
+        "product_key": "fresh",
+        "name": "fresh",
+        "supplier": "s1",
+        "source": "fixture",
+        "observed_at": "2026-10-11T04:00:00+00:00",
+    }
+    stale = sample_payload() | {
+        "product_key": "stale",
+        "name": "stale",
+        "supplier": "s2",
+        "source": "fixture",
+        "observed_at": "2026-09-01T00:00:00+00:00",
+    }
+    result = run_runtime_controller([fresh, stale], max_age_hours=48)
+    assert result["status"] == "completed"
+    assert result["fresh_offer_count"] >= 1
+    assert result["stale_offer_count"] >= 1
+    assert result["live_execution_allowed"] is False
