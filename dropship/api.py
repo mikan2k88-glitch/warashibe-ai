@@ -10,6 +10,8 @@ from .sandbox import run_sandbox_cycle
 from .shadow import evaluate_shadow_candidate
 from .promotion import assess_promotion
 from .runtime import build_runtime_status
+from .supplier import evaluate_supplier_offer
+from .ranking import rank_supplier_offers
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -77,3 +79,16 @@ def promotion_assess():
 @dropship_bp.get("/runtime/status")
 def runtime_status():
     return jsonify(build_runtime_status())
+
+
+@dropship_bp.post("/supplier/evaluate")
+def supplier_evaluate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(evaluate_supplier_offer(payload))
+
+
+@dropship_bp.post("/supplier/rank")
+def supplier_rank():
+    payload = request.get_json(silent=True) or {}
+    offers = payload.get("offers") or []
+    return jsonify(rank_supplier_offers(offers))
