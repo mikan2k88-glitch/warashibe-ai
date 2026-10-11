@@ -41,13 +41,18 @@ V2_ENDPOINTS = [
     {"method": "GET", "path": "/dropship/v3.0/proof", "purpose": "v3 real-read shadow proof"},
     {"method": "GET", "path": "/dropship/v3.0/acceptance", "purpose": "v3 acceptance"},
     {"method": "GET", "path": "/dropship/v3.0/status", "purpose": "v3 release status"},
+    {"method": "GET", "path": "/dropship/persistence/health", "purpose": "append-only persistence environment health"},
+    {"method": "POST", "path": "/dropship/ops/status", "purpose": "shadow operations summary"},
+    {"method": "GET", "path": "/dropship/deployment/readiness", "purpose": "deployment mode readiness"},
+    {"method": "GET", "path": "/dropship/startup/preflight", "purpose": "startup research preflight"},
+    {"method": "GET", "path": "/dropship/runtime/probe", "purpose": "read-only Render and DLL runtime probe"},
 ]
 
 
 def build_manifest() -> dict:
     return {
         "service": "warashibe-dropshipping",
-        "version": "3.0",
+        "version": "3.4",
         "mode": "research",
         "endpoint_count": len(V2_ENDPOINTS),
         "endpoints": V2_ENDPOINTS,
