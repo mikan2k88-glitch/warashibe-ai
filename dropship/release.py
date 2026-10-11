@@ -97,6 +97,14 @@ CAPABILITIES = {
     "cj_api_key_token": True,
     "provider_onboarding": True,
     "provider_handshake": True,
+    "promotion_queue_v52": True,
+    "promotion_review_v52": True,
+    "long_shadow_evidence_v51": True,
+    "real_product_ranking_v50": True,
+    "market_confidence_v45": True,
+    "discovery_planner_v44": True,
+    "real_shadow_collection_v43": True,
+    "provider_diagnostics_v42": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -106,12 +114,12 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v4.1-provider-handshake",
+        "release": "dropshipping-warashibe-v5.2-promotion-review",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
         "capabilities": CAPABILITIES,
-        "maturity_ceiling": "ready_for_human_gate",
+        "maturity_ceiling": "promotion_review_human_gate",
         "external_writes_enabled": False,
         "live_execution_allowed": False,
     }
