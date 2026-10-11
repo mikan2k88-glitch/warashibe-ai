@@ -1615,11 +1615,11 @@ def test_token_readiness_supports_dynamic_credentials(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("CJ_API_KEY", "cj-key")
     monkeypatch.setenv("EBAY_CLIENT_ID", "client")
-    monkeypatch.setenv("EBAY_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("EBAY_CLIENT_SECRET", "ebay-secret-value")
     result = assess_token_readiness()
     assert result["cj"]["ready"] is True
     assert result["ebay"]["ready"] is True
     assert result["all_ready"] is True
     assert result["secret_values_exposed"] is False
     assert "cj-key" not in str(result)
-    assert "secret" not in str(result)
+    assert "ebay-secret-value" not in str(result)
