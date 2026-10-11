@@ -21,6 +21,9 @@ from dropship.recovery import classify_recovery
 from dropship.audit import create_audit_record
 from dropship.burn_in import assess_burn_in
 from dropship.evidence_bundle import build_readiness_evidence
+from dropship.selection import select_single_candidate
+from dropship.maturity import determine_maturity
+from dropship.dashboard import build_dashboard_summary
 
 
 def sample_payload():
@@ -294,3 +297,46 @@ def test_readiness_evidence_stops_at_human_gate():
     )
     assert result["readiness"]["status"] == "ready_for_human_gate"
     assert result["live_execution_allowed"] is False
+
+
+def test_single_selection_obeys_capital_and_one_item_rule():
+    base = sample_payload() | {
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    ranking = rank_supplier_offers([
+        base | {"product_key": "cheap", "supplier_cost": 800, "supplier_shipping": 100},
+        base | {"product_key": "expensive", "supplier_cost": 2500, "supplier_shipping": 500},
+    ])
+    result = select_single_candidate(ranking, strategy="balanced", available_capital=1500)
+    assert result["one_item_only"] is True
+    assert result["selected"]["offer"]["product_key"] == "cheap"
+    assert result["capital_blocked_count"] == 1
+
+
+def test_maturity_never_enables_live_by_itself():
+    result = determine_maturity({
+        "shadow_observations": 30,
+        "sandbox_cycles": 20,
+        "ready_for_human_gate": True,
+    })
+    assert result["stage"] == "live_readiness"
+    assert result["allowed_actions"]["live_listing"] is False
+    assert result["allowed_actions"]["live_supplier_order"] is False
+
+
+def test_dashboard_summary_stays_non_live():
+    result = build_dashboard_summary({
+        "version": "0.8",
+        "candidate_count": 10,
+        "eligible_count": 3,
+        "shadow_observations": 30,
+        "shadow_days": 30,
+        "sandbox_cycles": 10,
+        "ready_for_human_gate": True,
+        "estimated_net_profit": 250,
+    })
+    assert result["maturity"]["stage"] == "live_readiness"
+    assert result["live_execution_allowed"] is False
+    assert result["next_focus"] == "human_gate_review"
