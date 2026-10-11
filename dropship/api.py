@@ -7,6 +7,9 @@ from .dll_concierge_client import fetch_registry
 from .economics import evaluate_dropship_economics
 from .policy import evaluate_dropship_policy
 from .sandbox import run_sandbox_cycle
+from .shadow import evaluate_shadow_candidate
+from .promotion import assess_promotion
+from .runtime import build_runtime_status
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -56,3 +59,21 @@ def evaluate():
 def sandbox_cycle():
     payload = request.get_json(silent=True) or {}
     return jsonify(run_sandbox_cycle(payload))
+
+
+@dropship_bp.post("/shadow/evaluate")
+def shadow_evaluate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(evaluate_shadow_candidate(payload))
+
+
+@dropship_bp.post("/promotion/assess")
+def promotion_assess():
+    payload = request.get_json(silent=True) or {}
+    shadow_result = evaluate_shadow_candidate(payload)
+    return jsonify(assess_promotion(shadow_result))
+
+
+@dropship_bp.get("/runtime/status")
+def runtime_status():
+    return jsonify(build_runtime_status())
