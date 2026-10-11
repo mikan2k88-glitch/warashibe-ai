@@ -311,7 +311,7 @@ def test_single_selection_obeys_capital_and_one_item_rule():
     }
     ranking = rank_supplier_offers([
         base | {"product_key": "cheap", "supplier_cost": 800, "supplier_shipping": 100},
-        base | {"product_key": "expensive", "supplier_cost": 2500, "supplier_shipping": 500},
+        base | {"product_key": "expensive", "supplier_cost": 1300, "supplier_shipping": 300},
     ])
     result = select_single_candidate(ranking, strategy="balanced", available_capital=1500)
     assert result["one_item_only"] is True
