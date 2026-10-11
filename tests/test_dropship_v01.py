@@ -84,6 +84,8 @@ from dropship.run_quality import assess_run_quality
 from dropship.provider_failover import fetch_first_available, search_first_available_market
 from dropship.circuit_breaker import ReadOnlyCircuitBreaker
 from dropship.real_read_readiness import assess_real_read_readiness
+from dropship.v3_proof import build_v3_proof, build_v3_acceptance
+from dropship.v3_release import build_v3_release_status
 
 
 def sample_payload():
@@ -1298,3 +1300,36 @@ def test_real_read_readiness_requires_quality_credentials_and_shadow_start():
     assert readiness["ready"] is True
     assert readiness["status"] == "real_read_shadow_ready"
     assert readiness["live_execution_allowed"] is False
+
+
+def test_v3_proof_reaches_promotion_review_without_live():
+    proof = build_v3_proof()
+    assert proof["passed"] is True
+    assert proof["shadow"]["status"] == "promotion_review_ready"
+    assert proof["shadow"]["ready_product_keys"] == ["v3-proof-product"]
+    assert proof["live_execution_allowed"] is False
+
+
+def test_v3_acceptance_and_release_status():
+    acceptance = build_v3_acceptance()
+    status = build_v3_release_status()
+    assert acceptance["passed"] is True
+    assert acceptance["maturity_ceiling"] == "promotion_review_human_gate"
+    assert status["status"] == "real_read_shadow_endpoint_reached"
+    assert status["real_supplier_tokens_required_for_external_read"] is True
+    assert status["commerce_external_writes_enabled"] is False
+    assert status["live_execution_allowed"] is False
+
+
+def test_flask_v30_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v3.0/proof")
+    acceptance = client.get("/dropship/v3.0/acceptance")
+    status = client.get("/dropship/v3.0/status")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert status.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
+    assert status.get_json()["status"] == "real_read_shadow_endpoint_reached"
