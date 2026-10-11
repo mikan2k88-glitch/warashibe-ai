@@ -32,6 +32,8 @@ from .controller import run_controller
 from .proof import build_proof, build_acceptance
 from .snapshot import build_research_snapshot
 from .release import build_release_status
+from .hq import build_hq_status
+from .human_gate import prepare_human_gate_package, verify_human_approval
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -292,3 +294,21 @@ def v10_proof():
 @dropship_bp.get("/v1.0/acceptance")
 def v10_acceptance():
     return jsonify(build_acceptance())
+
+
+@dropship_bp.post("/hq/status")
+def hq_status():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_hq_status(payload))
+
+
+@dropship_bp.post("/human-gate/package")
+def human_gate_package():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(prepare_human_gate_package(payload))
+
+
+@dropship_bp.post("/human-gate/verify")
+def human_gate_verify():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(verify_human_approval(str(payload.get("code") or "")))
