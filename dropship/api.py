@@ -66,6 +66,9 @@ from .collection_pipeline import run_collection_pipeline
 from .market_price import summarize_market_quotes
 from .pricing_enrichment import enrich_candidate_with_market_price
 from .provider_catalog import list_provider_catalog
+from .market_match import build_market_query, group_quotes_by_product
+from .opportunity import evaluate_opportunity
+from .opportunity_pipeline import rank_opportunities
 from .provider import FixtureSupplierProvider
 
 
@@ -643,6 +646,41 @@ def pricing_enrich():
     return jsonify(enrich_candidate_with_market_price(
         payload.get("candidate") or {},
         payload.get("quotes") or [],
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency"),
+        fx_rates=payload.get("fx_rates") or {},
+        target_discount=float(payload.get("target_discount") or 0.95),
+    ))
+
+
+@dropship_bp.post("/market/query/build")
+def market_query_build():
+    payload = request.get_json(silent=True) or {}
+    return jsonify({
+        "query": build_market_query(payload.get("candidate") or {}),
+        "live_execution_allowed": False,
+    })
+
+
+@dropship_bp.post("/opportunity/evaluate")
+def opportunity_evaluate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(evaluate_opportunity(
+        payload.get("candidate") or {},
+        payload.get("quotes") or [],
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency"),
+        fx_rates=payload.get("fx_rates") or {},
+        target_discount=float(payload.get("target_discount") or 0.95),
+    ))
+
+
+@dropship_bp.post("/opportunity/rank")
+def opportunity_rank():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(rank_opportunities(
+        payload.get("candidates") or [],
+        payload.get("quotes_by_product") or {},
         supplier_currency=str(payload.get("supplier_currency") or "USD"),
         target_currency=payload.get("target_currency"),
         fx_rates=payload.get("fx_rates") or {},
