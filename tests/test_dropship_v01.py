@@ -60,6 +60,11 @@ from dropship.field_mapping import apply_field_mapping, validate_field_mapping
 from dropship.data_quality import assess_data_quality, filter_quality
 from dropship.candidate_builder import build_latest_candidates
 from dropship.collection_pipeline import run_collection_pipeline
+from dropship.market_price import summarize_market_quotes
+from dropship.pricing_enrichment import enrich_candidate_with_market_price
+from dropship.cj_provider import normalize_cj_product
+from dropship.printful_provider import normalize_printful_product
+from dropship.provider_catalog import list_provider_catalog
 
 
 def sample_payload():
@@ -881,3 +886,67 @@ def test_collection_pipeline_builds_candidates_and_stays_non_live():
     assert result["candidate_count"] == 1
     assert result["runtime"]["live_execution_allowed"] is False
     assert result["external_writes"] is False
+
+
+def test_market_quote_summary_uses_median():
+    result = summarize_market_quotes([
+        {"price": 10, "currency": "USD"},
+        {"price": 20, "currency": "USD"},
+        {"price": 100, "currency": "USD"},
+    ])
+    assert result["status"] == "ok"
+    assert result["median_price"] == 20.0
+    assert result["currency"] == "USD"
+
+
+def test_pricing_enrichment_joins_supplier_and_market_currency():
+    result = enrich_candidate_with_market_price(
+        {"product_key": "x", "supplier_cost": 10},
+        [
+            {"price": 20, "currency": "USD"},
+            {"price": 24, "currency": "USD"},
+            {"price": 28, "currency": "USD"},
+        ],
+        supplier_currency="USD",
+        target_currency="USD",
+        target_discount=0.95,
+    )
+    assert result["status"] == "ok"
+    assert result["candidate"]["sale_price"] == 22.8
+    assert result["candidate"]["supplier_cost"] == 10.0
+    assert result["live_execution_allowed"] is False
+
+
+def test_cj_normalizer_stays_research_only():
+    result = normalize_cj_product({
+        "id": "pid-1",
+        "nameEn": "CJ Product",
+        "sku": "CJ1",
+        "sellPrice": "11.85",
+        "totalVerifiedInventory": 5,
+        "deliveryCycle": "3-5",
+        "threeCategoryName": "Home",
+    })
+    assert result["product_key"] == "pid-1"
+    assert result["supplier_cost"] == 11.85
+    assert result["inventory_confirmed"] is True
+    assert result["sale_price"] == 0.0
+    assert result["supplier_allows_dropshipping"] is False
+
+
+def test_printful_normalizer_is_discovery_only():
+    result = normalize_printful_product({
+        "id": 13,
+        "title": "T-Shirt",
+        "type_name": "T-Shirt",
+        "brand": "Brand",
+    })
+    assert result["supplier"] == "Printful"
+    assert result["supplier_cost"] == 0.0
+    assert result["metadata"]["provider_stage"] == "catalog_discovery"
+
+
+def test_provider_catalog_has_no_live_order_provider():
+    result = list_provider_catalog()
+    assert result["live_order_provider_enabled"] is False
+    assert any(row["name"] == "cjdropshipping-list-v2" for row in result["providers"])
