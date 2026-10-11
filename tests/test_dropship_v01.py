@@ -56,6 +56,10 @@ from dropship.auth import describe_auth_config
 from dropship.pagination import extract_items, next_page_url
 from dropship.daily_summary import build_daily_shadow_summary
 from dropship.observation_record import build_observation_record
+from dropship.field_mapping import apply_field_mapping, validate_field_mapping
+from dropship.data_quality import assess_data_quality, filter_quality
+from dropship.candidate_builder import build_latest_candidates
+from dropship.collection_pipeline import run_collection_pipeline
 
 
 def sample_payload():
@@ -801,3 +805,79 @@ def test_daily_shadow_summary_aggregates_days():
     assert result["day_count"] == 2
     assert result["days"][0]["observations"] == 2
     assert result["live_execution_allowed"] is False
+
+
+def test_field_mapping_supports_nested_provider_shape():
+    mapping = {
+        "product_key": "variant.sku",
+        "name": "product.title",
+        "sale_price": "pricing.retail",
+        "supplier_cost": "pricing.cost",
+    }
+    assert validate_field_mapping(mapping)["valid"] is True
+    result = apply_field_mapping({
+        "variant": {"sku": "sku-nested"},
+        "product": {"title": "Nested Product"},
+        "pricing": {"retail": 3000, "cost": 1200},
+    }, mapping)
+    assert result["product_key"] == "sku-nested"
+    assert result["name"] == "Nested Product"
+    assert result["sale_price"] == 3000
+    assert result["supplier_cost"] == 1200
+
+
+def test_data_quality_blocks_missing_supplier():
+    row = {
+        "product_key": "x",
+        "name": "X",
+        "sale_price": 2000,
+        "supplier_cost": 1000,
+        "delivery_days": 5,
+        "inventory_confirmed": True,
+        "source": "fixture",
+        "observed_at": "2026-10-11T00:00:00+00:00",
+    }
+    quality = assess_data_quality(row)
+    assert quality["critical_fields_passed"] is False
+    assert quality["promotion_data_ready"] is False
+
+
+def test_candidate_builder_uses_latest_observation():
+    rows = [
+        {"product_key": "a", "sale_price": 1000, "observed_at": "2026-10-10T00:00:00+00:00"},
+        {"product_key": "a", "sale_price": 1200, "observed_at": "2026-10-11T00:00:00+00:00"},
+    ]
+    result = build_latest_candidates(rows)
+    assert len(result) == 1
+    assert result[0]["sale_price"] == 1200
+    assert result[0]["observation_count"] == 2
+
+
+def test_collection_pipeline_builds_candidates_and_stays_non_live():
+    rows = [
+        {
+            "product_key": "sku-p",
+            "name": "Product",
+            "supplier": "supplier-a",
+            "category": "general",
+            "sale_price": 3000,
+            "supplier_cost": 1200,
+            "supplier_shipping": 200,
+            "delivery_days": 5,
+            "inventory_confirmed": True,
+            "supplier_allows_dropshipping": True,
+            "platform_terms_confirmed": True,
+            "supplier_reliable": True,
+            "observed_at": "2026-10-11T04:00:00+00:00",
+        }
+    ]
+    result = run_collection_pipeline(
+        rows,
+        provider_name="fixture",
+        max_age_hours=48,
+        min_quality_score=0.8,
+    )
+    assert result["status"] == "completed"
+    assert result["candidate_count"] == 1
+    assert result["runtime"]["live_execution_allowed"] is False
+    assert result["external_writes"] is False
