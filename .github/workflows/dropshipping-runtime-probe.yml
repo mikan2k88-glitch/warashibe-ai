@@ -1,0 +1,36 @@
+name: Dropshipping Runtime Probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "57 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropshipping-runtime-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Probe Render research runtime
+        env:
+          WARASHIBE_RUNTIME_URL: ${{ vars.WARASHIBE_RUNTIME_URL }}
+          DLL_CONCIERGE_BASE_URL: ${{ vars.DLL_CONCIERGE_BASE_URL }}
+        run: python scripts/dropship_runtime_probe.py | tee dropshipping-runtime-probe.json
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropshipping-runtime-probe
+          path: dropshipping-runtime-probe.json
+          if-no-files-found: warn
