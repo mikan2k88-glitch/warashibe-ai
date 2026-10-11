@@ -24,6 +24,8 @@ from dropship.evidence_bundle import build_readiness_evidence
 from dropship.selection import select_single_candidate
 from dropship.maturity import determine_maturity
 from dropship.dashboard import build_dashboard_summary
+from dropship.controller import run_controller
+from dropship.proof import build_proof, build_acceptance
 
 
 def sample_payload():
@@ -340,3 +342,33 @@ def test_dashboard_summary_stays_non_live():
     assert result["maturity"]["stage"] == "live_readiness"
     assert result["live_execution_allowed"] is False
     assert result["next_focus"] == "human_gate_review"
+
+
+def test_controller_respects_strategy_and_capital():
+    base = sample_payload() | {
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    result = run_controller([
+        base | {"product_key": "a", "supplier_cost": 2400, "supplier_shipping": 400},
+        base | {"product_key": "b", "supplier_cost": 900, "supplier_shipping": 100, "supplier": "supplier-b"},
+    ], strategy="balanced", available_capital=1500)
+    assert result["status"] == "completed"
+    assert result["selected_product_key"] == "b"
+    assert result["required_working_capital"] <= 1500
+    assert result["live_execution_allowed"] is False
+
+
+def test_v09_proof_passes_without_live_writes():
+    result = build_proof()
+    assert result["passed"] is True
+    assert result["controller"]["live_execution_allowed"] is False
+    assert result["guards"]["live_write_blocked"]["allowed"] is False
+
+
+def test_v09_acceptance_stops_at_human_gate():
+    result = build_acceptance()
+    assert result["passed"] is True
+    assert result["readiness"]["status"] == "ready_for_human_gate"
+    assert result["live_execution_allowed"] is False
