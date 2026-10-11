@@ -112,6 +112,9 @@ from dropship.promotion_review_v52 import build_v52_promotion_review
 from dropship.promotion_queue import build_promotion_queue
 from dropship.v52_proof import build_v52_proof, build_v52_acceptance
 from dropship.v52_release import build_v52_release_status
+from dropship.v53_sandbox_controller import run_v53_sandbox_cycle
+from dropship.v53_proof import build_v53_proof, build_v53_acceptance
+from dropship.v53_release import build_v53_release_status
 
 
 def sample_payload():
@@ -1807,3 +1810,65 @@ def test_flask_v52_endpoints_smoke():
     assert proof.get_json()["passed"] is True
     assert acceptance.get_json()["passed"] is True
     assert status.get_json()["status"] == "promotion_review_endpoint_reached"
+
+
+def test_v53_sandbox_requires_promotion_review():
+    result = run_v53_sandbox_cycle({"eligible_for_human_review": False})
+    assert result["status"] == "blocked"
+    assert result["reason"] == "promotion_review_not_ready"
+    assert result["live_execution_allowed"] is False
+
+
+def test_v53_happy_path_completes_without_real_commerce():
+    review = build_v52_proof()["review"]
+    result = run_v53_sandbox_cycle(review, scenario="delivered")
+    assert result["status"] == "completed"
+    assert result["settlement"]["status"] == "settled_sandbox"
+    assert result["outcome"]["live_transaction"] is False
+    assert result["real_listing_created"] is False
+    assert result["real_supplier_order_created"] is False
+    assert result["real_payment_captured"] is False
+    assert result["commerce_external_writes"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_v53_failure_scenarios_are_sandbox_only():
+    review = build_v52_proof()["review"]
+    refunded = run_v53_sandbox_cycle(review, scenario="refunded")
+    delayed = run_v53_sandbox_cycle(review, scenario="delayed")
+    cancelled = run_v53_sandbox_cycle(review, scenario="cancelled")
+    supplier_failure = run_v53_sandbox_cycle(review, scenario="supplier_failure")
+    assert refunded["settlement"]["status"] == "refunded_sandbox"
+    assert delayed["status"] == "in_progress"
+    assert cancelled["settlement"]["status"] == "cancelled_sandbox"
+    assert supplier_failure["settlement"]["status"] == "cancelled_sandbox"
+    for row in (refunded, delayed, cancelled, supplier_failure):
+        assert row["live_execution_allowed"] is False
+        assert row["commerce_external_writes"] is False
+
+
+def test_v53_proof_acceptance_and_release():
+    proof = build_v53_proof()
+    acceptance = build_v53_acceptance()
+    status = build_v53_release_status()
+    assert proof["passed"] is True
+    assert acceptance["passed"] is True
+    assert status["status"] == "sandbox_commerce_endpoint_reached"
+    assert status["real_listing_enabled"] is False
+    assert status["real_supplier_order_enabled"] is False
+    assert status["real_payment_enabled"] is False
+    assert status["live_execution_allowed"] is False
+
+
+def test_flask_v53_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v5.3/proof")
+    acceptance = client.get("/dropship/v5.3/acceptance")
+    status = client.get("/dropship/v5.3/status")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert status.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
+    assert status.get_json()["status"] == "sandbox_commerce_endpoint_reached"
