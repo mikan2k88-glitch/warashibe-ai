@@ -93,6 +93,8 @@ from .runtime_probe import run_runtime_probe
 from .token_readiness import assess_token_readiness
 from .v4_proof import build_v4_proof, build_v4_acceptance
 from .v4_release import build_v4_release_status
+from .provider_onboarding import build_provider_onboarding_status
+from .provider_handshake import run_provider_handshake
 from .provider import FixtureSupplierProvider
 
 
@@ -895,3 +897,13 @@ def v40_acceptance():
 @dropship_bp.get("/v4.0/status")
 def v40_status():
     return jsonify(build_v4_release_status())
+
+
+@dropship_bp.get("/providers/onboarding")
+def providers_onboarding():
+    return jsonify(build_provider_onboarding_status())
+
+
+@dropship_bp.get("/providers/handshake")
+def providers_handshake():
+    return jsonify(run_provider_handshake())
