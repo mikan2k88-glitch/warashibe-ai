@@ -1,3 +1,3 @@
 """Dropshipping commerce layer for Warashibe AI."""
 
-DROPSHIP_VERSION = "3.2"
+DROPSHIP_VERSION = "3.3"
