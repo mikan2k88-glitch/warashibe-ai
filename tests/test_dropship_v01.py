@@ -52,6 +52,10 @@ from dropship.provider_config import ProviderConfig
 from dropship.provider_normalizer import normalize_provider_row
 from dropship.dedupe import deduplicate_observations
 from dropship.shadow_collector import collect_shadow_observations
+from dropship.auth import describe_auth_config
+from dropship.pagination import extract_items, next_page_url
+from dropship.daily_summary import build_daily_shadow_summary
+from dropship.observation_record import build_observation_record
 
 
 def sample_payload():
@@ -761,4 +765,39 @@ def test_shadow_collector_is_read_only_and_persistable():
     assert result["persisted"] == 1
     assert len(repo.observations) == 1
     assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_auth_description_never_exposes_secret():
+    result = describe_auth_config(token_env="TOKEN", api_key_env="KEY")
+    assert result["secrets_exposed"] is False
+    assert result["mode"] == "read_only"
+
+
+def test_generic_pagination_extracts_items_and_next():
+    payload = {"items": [{"id": 1}], "next": "https://example.com/page/2"}
+    assert extract_items(payload) == [{"id": 1}]
+    assert next_page_url(payload) == "https://example.com/page/2"
+
+
+def test_observation_record_adds_fingerprint():
+    result = build_observation_record({
+        "product_key": "sku-x",
+        "supplier": "s1",
+        "source": "fixture",
+        "sale_price": 2000,
+        "supplier_cost": 1000,
+    })
+    assert result["product_key"] == "sku-x"
+    assert len(result["observation_fingerprint"]) == 64
+
+
+def test_daily_shadow_summary_aggregates_days():
+    result = build_daily_shadow_summary([
+        {"product_key": "a", "sale_price": 2000, "supplier_cost": 1000, "inventory_confirmed": True, "observed_at": "2026-10-10T00:00:00+00:00"},
+        {"product_key": "b", "sale_price": 3000, "supplier_cost": 1500, "inventory_confirmed": False, "observed_at": "2026-10-10T01:00:00+00:00"},
+        {"product_key": "a", "sale_price": 2200, "supplier_cost": 1100, "inventory_confirmed": True, "observed_at": "2026-10-11T00:00:00+00:00"},
+    ])
+    assert result["day_count"] == 2
+    assert result["days"][0]["observations"] == 2
     assert result["live_execution_allowed"] is False
