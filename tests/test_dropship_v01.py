@@ -36,6 +36,9 @@ from dropship.provider_registry import ProviderRegistry, ProviderDescriptor
 from dropship.runtime_controller import run_runtime_controller
 from dropship.dll_resilience import RegistryCache
 from dropship.dependency_health import build_dependency_health
+from dropship.strategy_experiment import compare_strategies
+from dropship.walk_forward import run_walk_forward
+from dropship.strategy_promotion import assess_strategy_promotion
 
 
 def sample_payload():
@@ -509,3 +512,52 @@ def test_dependency_health_allows_research_when_dll_degraded():
     assert result["status"] == "degraded"
     assert result["research_can_continue_without_dll_live"] is True
     assert result["live_execution_allowed"] is False
+
+
+def _strategy_batch(cost):
+    return [sample_payload() | {
+        "product_key": f"sku-{cost}",
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+        "supplier_cost": cost,
+    }]
+
+
+def test_strategy_experiment_compares_without_tuning():
+    result = compare_strategies(
+        [_strategy_batch(900), _strategy_batch(1000), _strategy_batch(1100)],
+        available_capital=3000,
+    )
+    assert result["recommended_strategy"] in {"safe", "balanced", "aggressive"}
+    assert len(result["strategies"]) == 3
+    assert result["parameter_tuning_performed"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_walk_forward_requires_multiple_windows():
+    windows = [
+        {"label": "w1", "test_batches": [_strategy_batch(900)]},
+        {"label": "w2", "test_batches": [_strategy_batch(1000)]},
+        {"label": "w3", "test_batches": [_strategy_batch(1100)]},
+    ]
+    result = run_walk_forward(
+        windows,
+        strategy="balanced",
+        available_capital=3000,
+        min_windows=3,
+    )
+    assert result["window_count"] == 3
+    assert result["research_usable"] is True
+    assert result["parameter_tuning_performed"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_strategy_promotion_never_auto_changes():
+    result = assess_strategy_promotion(
+        {"completion_rate": 0.8, "average_expected_net_profit": 100},
+        {"completion_rate": 0.8, "average_expected_net_profit": 120},
+    )
+    assert result["promote_challenger"] is True
+    assert result["human_review_required"] is True
+    assert result["automatic_strategy_change"] is False
