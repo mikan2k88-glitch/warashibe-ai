@@ -4,12 +4,15 @@ import json
 import os
 
 from dropship.cj_provider import CJDropshippingProductProvider
+from dropship.cj_token import CJAccessTokenProvider
 from dropship.ebay_market_provider import EbayBrowseMarketProvider
+from dropship.ebay_token import EbayApplicationTokenProvider
 from dropship.market_provider import FixtureMarketProvider
 from dropship.provider import FixtureSupplierProvider
 from dropship.operations_runner import run_persistent_real_shadow
 from dropship.persistence_health import assess_persistence_environment
 from dropship.supabase_rest import SupabaseRestClient
+from dropship.token_readiness import assess_token_readiness
 
 
 def fixture_supplier():
@@ -41,8 +44,17 @@ def fixture_market():
 
 
 def build_sources():
+    readiness = assess_token_readiness()
     cj_token = os.environ.get("CJ_ACCESS_TOKEN", "").strip()
     ebay_token = os.environ.get("EBAY_ACCESS_TOKEN", "").strip()
+
+    if readiness["cj"]["ready"] and not cj_token:
+        cj_token = CJAccessTokenProvider().get_token()
+
+    if readiness["ebay"]["ready"] and not ebay_token:
+        ebay_token = EbayApplicationTokenProvider(
+            environment=os.environ.get("EBAY_ENVIRONMENT", "production"),
+        ).get_token()
 
     if cj_token and ebay_token:
         return (
@@ -60,6 +72,9 @@ def build_sources():
             ),
             "real_read",
         )
+
+    if readiness["all_ready"]:
+        raise RuntimeError("real-read credentials are configured but access tokens could not be resolved")
 
     return fixture_supplier(), fixture_market(), "fixture_proof"
 
