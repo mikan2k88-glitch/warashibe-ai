@@ -34,6 +34,8 @@ from dropship.repository import MemoryAppendOnlyRepository
 from dropship.freshness import assess_freshness
 from dropship.provider_registry import ProviderRegistry, ProviderDescriptor
 from dropship.runtime_controller import run_runtime_controller
+from dropship.dll_resilience import RegistryCache
+from dropship.dependency_health import build_dependency_health
 
 
 def sample_payload():
@@ -490,4 +492,20 @@ def test_runtime_controller_filters_stale_offers():
     assert result["status"] == "completed"
     assert result["fresh_offer_count"] >= 1
     assert result["stale_offer_count"] >= 1
+    assert result["live_execution_allowed"] is False
+
+
+def test_registry_cache_can_hold_last_good_registry():
+    cache = RegistryCache()
+    cache.store({"components": [{"id": "x"}]})
+    cache.fail(RuntimeError("sleeping"))
+    assert cache.registry["components"][0]["id"] == "x"
+    assert cache.failures == 1
+    assert cache.last_error == "sleeping"
+
+
+def test_dependency_health_allows_research_when_dll_degraded():
+    result = build_dependency_health(dll_status="unavailable", provider_count=1)
+    assert result["status"] == "degraded"
+    assert result["research_can_continue_without_dll_live"] is True
     assert result["live_execution_allowed"] is False
