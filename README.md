@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **4.1**
+Current research version: **5.2**
 
 ### Research flow
 
@@ -127,3 +127,26 @@ Endpoints:
 - `GET /dropship/providers/handshake`
 
 A scheduled GitHub Actions handshake produces evidence artifacts and remains safe when credentials are absent.
+
+
+### v5.2 Promotion Review
+
+v5.2 completes the research path from provider diagnostics through real-product ranking,
+long Shadow evidence maturity, and a human-review Promotion Review package.
+
+Milestones included:
+
+- v4.2 provider diagnostics
+- v4.3 persistent Real Shadow collection
+- v4.4 bounded discovery planning
+- v4.5 outlier-filtered market confidence and liquidity
+- v5.0 capital-aware real-product ranking
+- v5.1 long Shadow evidence maturity
+- v5.2 Promotion Review package and queue
+
+A Promotion Review contains expected net profit, margin, required working capital,
+market confidence, Shadow observation depth, supplier-cost drift, policy checks,
+stop conditions, and Human Gate decision options.
+
+Passing v5.2 does not enable live listing, supplier ordering, payment, cancellation,
+refund, or automatic promotion.
