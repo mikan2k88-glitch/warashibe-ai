@@ -6,6 +6,9 @@ from dropship.promotion import assess_promotion
 from dropship.runtime import build_runtime_status
 from dropship.supplier import evaluate_supplier_offer
 from dropship.ranking import rank_supplier_offers
+from dropship.commerce import build_sandbox_commerce_plan
+from dropship.stop_loss import assess_listing_stop_loss
+from dropship.state_machine import transition
 
 
 def sample_payload():
@@ -111,3 +114,39 @@ def test_supplier_ranking_selects_best_eligible_offer():
     assert result["blocked_count"] == 1
     assert result["best"]["offer"]["product_key"] == "sku-b"
     assert result["live_execution_allowed"] is False
+
+
+def test_commerce_plan_completes_selected_sandbox_cycle():
+    base = sample_payload() | {
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    result = build_sandbox_commerce_plan([
+        base | {"product_key": "sku-a", "supplier_cost": 1600},
+        base | {"product_key": "sku-b", "supplier_cost": 1200, "supplier": "supplier-b"},
+    ])
+    assert result["status"] == "completed"
+    assert result["selected"]["offer"]["product_key"] == "sku-b"
+    assert result["supplier_order"]["real_supplier_order"] is False
+    assert result["supplier_order"]["automatic_retry_allowed"] is False
+    assert result["external_writes"] is False
+
+
+def test_stop_loss_pauses_bad_listing_without_live_action():
+    result = assess_listing_stop_loss({
+        "ad_spend": 1200,
+        "orders": 0,
+        "margin": -0.01,
+        "return_rate": 0.2,
+        "delay_rate": 0.3,
+        "supplier_reliable": False,
+        "inventory_confirmed": False,
+    })
+    assert result["pause_listing"] is True
+    assert result["automatic_live_action"] is False
+
+
+def test_state_machine_rejects_invalid_transition():
+    assert transition("DISCOVERED", "SUPPLIER_VERIFIED")["allowed"] is True
+    assert transition("DISCOVERED", "SETTLED_SANDBOX")["allowed"] is False
