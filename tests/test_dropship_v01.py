@@ -92,6 +92,8 @@ from dropship.operations_runner import run_persistent_real_shadow
 from dropship.persistence_health import assess_persistence_environment
 from dropship.ops_status import build_ops_status
 from dropship.persistent_ops_status import build_persistent_ops_status
+from dropship.deployment_readiness import assess_deployment_readiness
+from dropship.startup_preflight import build_startup_preflight
 
 
 def sample_payload():
@@ -1471,4 +1473,38 @@ def test_persistent_ops_status_reads_database_history():
     assert result["database_read_ok"] is True
     assert result["database_observation_count"] == 1
     assert result["database_run_count"] == 1
+    assert result["live_execution_allowed"] is False
+
+
+def test_deployment_readiness_defaults_to_fixture_without_credentials(monkeypatch):
+    for name in [
+        "CJ_ACCESS_TOKEN",
+        "EBAY_ACCESS_TOKEN",
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SECRET_KEY",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+    result = assess_deployment_readiness()
+    assert result["mode"] == "fixture_proof"
+    assert result["commerce_external_writes_enabled"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_deployment_readiness_detects_persistent_real_read(monkeypatch):
+    monkeypatch.setenv("CJ_ACCESS_TOKEN", "cj")
+    monkeypatch.setenv("EBAY_ACCESS_TOKEN", "ebay")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "secret")
+    result = assess_deployment_readiness()
+    assert result["mode"] == "real_read_persistent_shadow"
+    assert result["live_execution_allowed"] is False
+
+
+def test_startup_preflight_never_enables_live(monkeypatch):
+    monkeypatch.delenv("CJ_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("EBAY_ACCESS_TOKEN", raising=False)
+    result = build_startup_preflight()
+    assert result["safe_to_start_research_runtime"] is True
+    assert result["safe_to_start_live_commerce"] is False
     assert result["live_execution_allowed"] is False
