@@ -91,6 +91,7 @@ CAPABILITIES = {
     "dll_prewake": True,
     "deployment_readiness": True,
     "startup_preflight": True,
+    "runtime_probe": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -100,7 +101,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v3.3-deployment-readiness",
+        "release": "dropshipping-warashibe-v3.4-runtime-verification",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
