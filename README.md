@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **4.0**
+Current research version: **4.1**
 
 ### Research flow
 
@@ -108,3 +108,22 @@ New endpoints include:
 - `GET /dropship/v4.0/status`
 
 The maturity ceiling remains **Promotion Review / Human Gate**.
+
+
+### v4.1 provider handshake
+
+v4.1 adds a minimal, read-only onboarding handshake before real Shadow collection.
+
+Behavior:
+
+- if CJ/eBay credentials are not configured, the system waits safely
+- if credentials are configured, it mints/uses tokens and performs a single minimal READ
+- no listing, supplier-order, payment, cancellation, refund, or promotion write is performed
+- handshake output never returns token or credential values
+
+Endpoints:
+
+- `GET /dropship/providers/onboarding`
+- `GET /dropship/providers/handshake`
+
+A scheduled GitHub Actions handshake produces evidence artifacts and remains safe when credentials are absent.
