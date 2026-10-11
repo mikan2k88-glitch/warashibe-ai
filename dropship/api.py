@@ -39,6 +39,9 @@ from .provider_registry import ProviderRegistry, ProviderDescriptor
 from .runtime_controller import run_runtime_controller
 from .dll_resilience import fetch_registry_resilient
 from .dependency_health import build_dependency_health
+from .strategy_experiment import compare_strategies
+from .walk_forward import run_walk_forward
+from .strategy_promotion import assess_strategy_promotion
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -362,4 +365,33 @@ def dependencies_health():
     return jsonify(build_dependency_health(
         dll_status=str(payload.get("dll_status") or "unknown"),
         provider_count=int(payload.get("provider_count") or 0),
+    ))
+
+
+@dropship_bp.post("/strategy/experiment")
+def strategy_experiment():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(compare_strategies(
+        payload.get("batches") or [],
+        available_capital=float(payload.get("available_capital") or 3000),
+    ))
+
+
+@dropship_bp.post("/strategy/walk-forward")
+def strategy_walk_forward():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_walk_forward(
+        payload.get("windows") or [],
+        strategy=str(payload.get("strategy") or "balanced"),
+        available_capital=float(payload.get("available_capital") or 3000),
+        min_windows=int(payload.get("min_windows") or 3),
+    ))
+
+
+@dropship_bp.post("/strategy/promotion")
+def strategy_promotion():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_strategy_promotion(
+        payload.get("champion") or {},
+        payload.get("challenger") or {},
     ))
