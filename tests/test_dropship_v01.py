@@ -100,6 +100,8 @@ from dropship.cj_token import CJAccessTokenProvider
 from dropship.token_readiness import assess_token_readiness
 from dropship.v4_proof import build_v4_proof, build_v4_acceptance
 from dropship.v4_release import build_v4_release_status
+from dropship.provider_onboarding import build_provider_onboarding_status
+from dropship.provider_handshake import run_provider_handshake
 
 
 def sample_payload():
@@ -1657,3 +1659,34 @@ def test_flask_v40_endpoints_smoke():
     assert proof.get_json()["passed"] is True
     assert acceptance.get_json()["passed"] is True
     assert status.get_json()["status"] == "token_automation_endpoint_reached"
+
+
+def test_provider_onboarding_waits_safely_without_credentials(monkeypatch):
+    for name in [
+        "CJ_ACCESS_TOKEN", "CJ_API_KEY", "CJ_REFRESH_TOKEN",
+        "EBAY_ACCESS_TOKEN", "EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+    result = build_provider_onboarding_status()
+    assert result["all_credentials_ready"] is False
+    assert result["next_action"] == "configure_missing_credentials"
+    assert result["secret_values_exposed"] is False
+    assert result["live_execution_allowed"] is False
+
+
+class _NotConfiguredTokenProvider:
+    def configured(self):
+        return False
+
+
+def test_provider_handshake_is_safe_when_unconfigured():
+    result = run_provider_handshake(
+        cj_token_provider=_NotConfiguredTokenProvider(),
+        ebay_token_provider=_NotConfiguredTokenProvider(),
+    )
+    assert result["status"] == "real_provider_handshake_incomplete"
+    assert result["configured_provider_count"] == 0
+    assert result["successful_provider_count"] == 0
+    assert result["secret_values_exposed"] is False
+    assert result["commerce_write_performed"] is False
+    assert result["live_execution_allowed"] is False
