@@ -90,6 +90,8 @@ from dropship.supabase_rest import SupabaseRestClient
 from dropship.supabase_persistence import persist_observations, load_observation_history, persist_run
 from dropship.operations_runner import run_persistent_real_shadow
 from dropship.persistence_health import assess_persistence_environment
+from dropship.ops_status import build_ops_status
+from dropship.persistent_ops_status import build_persistent_ops_status
 
 
 def sample_payload():
@@ -1433,3 +1435,40 @@ def test_persistence_health_never_exposes_secret(monkeypatch):
     assert result["status"] == "ready"
     assert result["secret_values_exposed"] is False
     assert "hidden" not in str(result)
+
+
+def test_ops_status_prioritizes_credentials_before_shadow():
+    result = build_ops_status(
+        [{"product_key": "x", "observed_at": "2026-10-11T00:00:00+00:00"}],
+        [],
+        promotion_reviews=[],
+    )
+    assert result["status"] == "ops_status_ready"
+    assert result["next_action"]["automatic_live_action"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_persistent_ops_status_reads_database_history():
+    persistence = _MemoryPersistenceClient()
+    persistence.tables["dropship_observations"].append({
+        "product_key": "ops-x",
+        "supplier": "s1",
+        "source": "fixture",
+        "observed_at": "2026-10-11T00:00:00+00:00",
+        "observation_fingerprint": "f",
+        "observation": {
+            "product_key": "ops-x",
+            "observed_at": "2026-10-11T00:00:00+00:00",
+        },
+    })
+    persistence.tables["dropship_research_runs"].append({
+        "record": {
+            "mode": "fixture_proof",
+            "observed_at": "2026-10-11T00:01:00+00:00",
+        }
+    })
+    result = build_persistent_ops_status(persistence)
+    assert result["database_read_ok"] is True
+    assert result["database_observation_count"] == 1
+    assert result["database_run_count"] == 1
+    assert result["live_execution_allowed"] is False
