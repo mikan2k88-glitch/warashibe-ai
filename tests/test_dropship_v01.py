@@ -95,6 +95,9 @@ from dropship.persistent_ops_status import build_persistent_ops_status
 from dropship.deployment_readiness import assess_deployment_readiness
 from dropship.startup_preflight import build_startup_preflight
 from dropship.runtime_probe import run_runtime_probe
+from dropship.ebay_token import EbayApplicationTokenProvider
+from dropship.cj_token import CJAccessTokenProvider
+from dropship.token_readiness import assess_token_readiness
 
 
 def sample_payload():
@@ -1539,3 +1542,84 @@ def test_runtime_probe_verifies_safe_boundary_and_dll_reachability():
     assert result["dll_registry_reachable"] is True
     assert result["commerce_write_performed"] is False
     assert result["live_execution_allowed"] is False
+
+
+class _TokenResponse:
+    def __init__(self, payload):
+        self.payload = payload
+    def raise_for_status(self):
+        return None
+    def json(self):
+        return self.payload
+
+
+class _EbayTokenSession:
+    def __init__(self):
+        self.calls = []
+    def post(self, url, headers, data, timeout):
+        self.calls.append({"url": url, "headers": headers, "data": data, "timeout": timeout})
+        return _TokenResponse({
+            "access_token": "ebay-generated-token",
+            "expires_in": 7200,
+            "token_type": "Application Access Token",
+        })
+
+
+class _CJTokenSession:
+    def __init__(self):
+        self.calls = []
+    def post(self, url, headers, json, timeout):
+        self.calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return _TokenResponse({
+            "code": 200,
+            "result": True,
+            "message": "Success",
+            "data": {
+                "accessToken": "cj-generated-token",
+                "refreshToken": "cj-refresh-token",
+            },
+        })
+
+
+def test_ebay_application_token_provider_mints_and_caches_token():
+    session = _EbayTokenSession()
+    provider = EbayApplicationTokenProvider(
+        client_id="client",
+        client_secret="secret",
+        session=session,
+    )
+    first = provider.get_token()
+    second = provider.get_token()
+    assert first == "ebay-generated-token"
+    assert second == first
+    assert len(session.calls) == 1
+    assert provider.describe()["secret_values_exposed"] is False
+
+
+def test_cj_token_provider_gets_token_from_api_key():
+    session = _CJTokenSession()
+    provider = CJAccessTokenProvider(
+        api_key="cj-api-key",
+        session=session,
+    )
+    first = provider.get_token()
+    second = provider.get_token()
+    assert first == "cj-generated-token"
+    assert second == first
+    assert len(session.calls) == 1
+    assert provider.describe()["secret_values_exposed"] is False
+
+
+def test_token_readiness_supports_dynamic_credentials(monkeypatch):
+    for name in ["CJ_ACCESS_TOKEN", "EBAY_ACCESS_TOKEN"]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CJ_API_KEY", "cj-key")
+    monkeypatch.setenv("EBAY_CLIENT_ID", "client")
+    monkeypatch.setenv("EBAY_CLIENT_SECRET", "secret")
+    result = assess_token_readiness()
+    assert result["cj"]["ready"] is True
+    assert result["ebay"]["ready"] is True
+    assert result["all_ready"] is True
+    assert result["secret_values_exposed"] is False
+    assert "cj-key" not in str(result)
+    assert "secret" not in str(result)
