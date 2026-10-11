@@ -69,6 +69,11 @@ from .provider_catalog import list_provider_catalog
 from .market_match import build_market_query, group_quotes_by_product
 from .opportunity import evaluate_opportunity
 from .opportunity_pipeline import rank_opportunities
+from .credential_health import check_credential_env
+from .source_budget import normalize_source_budget
+from .research_write_policy import authorize_research_write
+from .real_read_runner import run_real_read_research
+from .market_provider import FixtureMarketProvider
 from .provider import FixtureSupplierProvider
 
 
@@ -685,4 +690,40 @@ def opportunity_rank():
         target_currency=payload.get("target_currency"),
         fx_rates=payload.get("fx_rates") or {},
         target_discount=float(payload.get("target_discount") or 0.95),
+    ))
+
+
+@dropship_bp.post("/research/credentials/health")
+def research_credentials_health():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(check_credential_env(payload.get("names") or []))
+
+
+@dropship_bp.post("/research/source-budget")
+def research_source_budget():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(normalize_source_budget(payload))
+
+
+@dropship_bp.post("/research/write-policy")
+def research_write_policy():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(authorize_research_write(
+        table=str(payload.get("table") or ""),
+        operation=str(payload.get("operation") or ""),
+    ))
+
+
+@dropship_bp.post("/research/real-read-fixture")
+def research_real_read_fixture():
+    payload = request.get_json(silent=True) or {}
+    supplier = FixtureSupplierProvider(payload.get("supplier_offers") or [])
+    market = FixtureMarketProvider(payload.get("quotes_by_query") or {})
+    return jsonify(run_real_read_research(
+        supplier,
+        market,
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency") or "USD",
+        fx_rates=payload.get("fx_rates") or {},
+        budget=payload.get("budget") or {},
     ))
