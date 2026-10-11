@@ -45,6 +45,8 @@ from dropship.outcome import build_outcome_record
 from dropship.learning import summarize_learning, propose_learning_actions
 from dropship.campaign import run_sandbox_campaign
 from dropship.research_plan import build_next_research_plan
+from dropship.orchestrator import run_orchestrator
+from dropship.v2_proof import build_v2_proof, build_v2_acceptance
 
 
 def sample_payload():
@@ -643,3 +645,55 @@ def test_research_plan_prioritizes_evidence_gap():
     })
     assert result["next_task"] == "repair_evidence_integrity"
     assert result["execution_authorized"] is False
+
+
+def test_v2_orchestrator_full_research_loop():
+    base = sample_payload() | {
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+        "observed_at": "2026-10-11T04:00:00+00:00",
+    }
+    batches = [
+        [base | {"product_key": "v2-a", "supplier_cost": 1200}],
+        [base | {"product_key": "v2-b", "supplier_cost": 1100}],
+        [base | {"product_key": "v2-c", "supplier_cost": 1000}],
+    ]
+    result = run_orchestrator(
+        batches,
+        available_capital=3000,
+        strategy="balanced",
+        state={
+            "shadow_observations": 20,
+            "shadow_days": 30,
+            "sandbox_cycles": 10,
+            "walk_forward_windows": 3,
+            "evidence_integrity_passed": True,
+            "ready_for_human_gate": True,
+        },
+    )
+    assert result["status"] == "orchestration_complete"
+    assert result["controller"]["status"] == "completed"
+    assert result["snapshot"]["append_only_intent"] is True
+    assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_v2_proof_and_acceptance_pass():
+    proof = build_v2_proof()
+    acceptance = build_v2_acceptance()
+    assert proof["passed"] is True
+    assert acceptance["passed"] is True
+    assert proof["live_execution_allowed"] is False
+    assert acceptance["live_execution_allowed"] is False
+
+
+def test_flask_v20_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v2.0/proof")
+    acceptance = client.get("/dropship/v2.0/acceptance")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
