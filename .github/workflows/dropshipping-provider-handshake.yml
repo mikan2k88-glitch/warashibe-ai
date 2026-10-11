@@ -1,0 +1,40 @@
+name: Dropshipping Provider Handshake
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropshipping-provider-handshake
+  cancel-in-progress: true
+
+jobs:
+  handshake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run read-only provider handshake
+        env:
+          CJ_ACCESS_TOKEN: ${{ secrets.CJ_ACCESS_TOKEN }}
+          CJ_API_KEY: ${{ secrets.CJ_API_KEY }}
+          CJ_REFRESH_TOKEN: ${{ secrets.CJ_REFRESH_TOKEN }}
+          EBAY_ACCESS_TOKEN: ${{ secrets.EBAY_ACCESS_TOKEN }}
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+        run: python scripts/dropship_provider_handshake.py | tee dropshipping-provider-handshake.json
+      - name: Upload handshake evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropshipping-provider-handshake
+          path: dropshipping-provider-handshake.json
+          if-no-files-found: warn
