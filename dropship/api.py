@@ -28,6 +28,8 @@ from .evidence_bundle import build_readiness_evidence
 from .selection import select_single_candidate
 from .maturity import determine_maturity
 from .dashboard import build_dashboard_summary
+from .controller import run_controller
+from .proof import build_proof, build_acceptance
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -247,3 +249,23 @@ def maturity_assess():
 def dashboard_summary():
     payload = request.get_json(silent=True) or {}
     return jsonify(build_dashboard_summary(payload))
+
+
+@dropship_bp.post("/controller/run")
+def controller_run():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_controller(
+        payload.get("offers") or [],
+        strategy=str(payload.get("strategy") or "balanced"),
+        available_capital=float(payload.get("available_capital") or 3000),
+    ))
+
+
+@dropship_bp.get("/v0.9/proof")
+def v09_proof():
+    return jsonify(build_proof())
+
+
+@dropship_bp.get("/v0.9/acceptance")
+def v09_acceptance():
+    return jsonify(build_acceptance())
