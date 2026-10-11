@@ -7,7 +7,9 @@ from dropship.cj_provider import CJDropshippingProductProvider
 from dropship.ebay_market_provider import EbayBrowseMarketProvider
 from dropship.market_provider import FixtureMarketProvider
 from dropship.provider import FixtureSupplierProvider
-from dropship.real_read_runner import run_real_read_research
+from dropship.operations_runner import run_persistent_real_shadow
+from dropship.persistence_health import assess_persistence_environment
+from dropship.supabase_rest import SupabaseRestClient
 
 
 def fixture_supplier():
@@ -62,11 +64,20 @@ def build_sources():
     return fixture_supplier(), fixture_market(), "fixture_proof"
 
 
+def build_persistence_client():
+    health = assess_persistence_environment()
+    if health["status"] != "ready":
+        return None
+    return SupabaseRestClient()
+
+
 def main():
     supplier, market, mode = build_sources()
-    result = run_real_read_research(
+    persistence_client = build_persistence_client()
+    result = run_persistent_real_shadow(
         supplier,
         market,
+        persistence_client=persistence_client,
         supplier_currency=os.environ.get("DROPSHIP_SUPPLIER_CURRENCY", "USD"),
         target_currency=os.environ.get("DROPSHIP_TARGET_CURRENCY", "USD"),
         budget={
@@ -74,6 +85,11 @@ def main():
             "max_market_queries": int(os.environ.get("DROPSHIP_MAX_MARKET_QUERIES", "5")),
             "max_market_quotes_per_query": int(os.environ.get("DROPSHIP_MAX_QUOTES", "10")),
         },
+        shadow_thresholds={
+            "min_observations": int(os.environ.get("DROPSHIP_SHADOW_MIN_OBSERVATIONS", "20")),
+            "min_observation_days": int(os.environ.get("DROPSHIP_SHADOW_MIN_DAYS", "7")),
+        },
+        mode=mode,
     )
     output = {
         "mode": mode,
