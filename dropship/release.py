@@ -62,6 +62,11 @@ CAPABILITIES = {
     "market_price_evidence": True,
     "currency_guard": True,
     "pricing_enrichment": True,
+    "ebay_market_read_provider": True,
+    "market_query_builder": True,
+    "price_stability": True,
+    "opportunity_evaluation": True,
+    "opportunity_ranking": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -71,7 +76,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v2.4-market-evidence",
+        "release": "dropshipping-warashibe-v2.5-opportunity-ranking",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
