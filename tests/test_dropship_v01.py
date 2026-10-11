@@ -80,6 +80,10 @@ from dropship.evidence_pack import build_real_read_evidence_pack
 from dropship.run_repository import MemoryResearchRunRepository
 from dropship.evidence_service import record_evidence_pack
 from dropship.real_shadow_controller import run_real_shadow_controller
+from dropship.run_quality import assess_run_quality
+from dropship.provider_failover import fetch_first_available, search_first_available_market
+from dropship.circuit_breaker import ReadOnlyCircuitBreaker
+from dropship.real_read_readiness import assess_real_read_readiness
 
 
 def sample_payload():
@@ -1227,3 +1231,70 @@ def test_real_shadow_controller_can_prepare_human_review_without_live():
     assert review["automatic_promotion"] is False
     assert review["live_execution_allowed"] is False
     assert result["commerce_external_writes"] is False
+
+
+class _FailSupplier:
+    provider_name = "fail-supplier"
+    def fetch_offers(self):
+        raise RuntimeError("supplier down")
+
+
+class _OkSupplier:
+    provider_name = "ok-supplier"
+    def fetch_offers(self):
+        return [{"product_key": "x"}]
+
+
+class _FailMarket:
+    provider_name = "fail-market"
+    def search(self, query):
+        raise RuntimeError("market down")
+
+
+class _OkMarket:
+    provider_name = "ok-market"
+    def search(self, query):
+        return [{"price": 10, "currency": "USD"}]
+
+
+def test_provider_failover_uses_next_available_source():
+    supplier = fetch_first_available([_FailSupplier(), _OkSupplier()])
+    market = search_first_available_market([_FailMarket(), _OkMarket()], "x")
+    assert supplier["status"] == "ok"
+    assert supplier["provider_name"] == "ok-supplier"
+    assert len(supplier["attempts"]) == 2
+    assert market["status"] == "ok"
+    assert market["provider_name"] == "ok-market"
+
+
+def test_read_only_circuit_breaker_opens_after_threshold():
+    breaker = ReadOnlyCircuitBreaker(failure_threshold=2)
+    assert breaker.allow_request() is True
+    breaker.record_failure()
+    assert breaker.allow_request() is True
+    breaker.record_failure()
+    assert breaker.allow_request() is False
+    assert breaker.snapshot()["open"] is True
+    breaker.record_success()
+    assert breaker.allow_request() is True
+
+
+def test_real_read_readiness_requires_quality_credentials_and_shadow_start():
+    run_result = {
+        "supplier_candidate_count": 1,
+        "market_query_count": 1,
+        "errors": [],
+        "quotes_by_product": {"x": [{"price": 10, "currency": "USD"}]},
+        "ranking": {"evaluated_count": 1},
+        "commerce_external_writes": False,
+        "live_execution_allowed": False,
+    }
+    readiness = assess_real_read_readiness(
+        run_result,
+        credential_health={"all_configured": True},
+        shadow_days=1,
+        shadow_observations=1,
+    )
+    assert readiness["ready"] is True
+    assert readiness["status"] == "real_read_shadow_ready"
+    assert readiness["live_execution_allowed"] is False
