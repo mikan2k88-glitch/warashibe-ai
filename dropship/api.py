@@ -80,6 +80,8 @@ from .evidence_pack import build_real_read_evidence_pack
 from .real_shadow_controller import run_real_shadow_controller
 from .run_quality import assess_run_quality
 from .real_read_readiness import assess_real_read_readiness
+from .v3_proof import build_v3_proof, build_v3_acceptance
+from .v3_release import build_v3_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -794,3 +796,18 @@ def research_real_read_readiness():
         shadow_days=int(payload.get("shadow_days") or 0),
         shadow_observations=int(payload.get("shadow_observations") or 0),
     ))
+
+
+@dropship_bp.get("/v3.0/proof")
+def v30_proof():
+    return jsonify(build_v3_proof())
+
+
+@dropship_bp.get("/v3.0/acceptance")
+def v30_acceptance():
+    return jsonify(build_v3_acceptance())
+
+
+@dropship_bp.get("/v3.0/status")
+def v30_status():
+    return jsonify(build_v3_release_status())
