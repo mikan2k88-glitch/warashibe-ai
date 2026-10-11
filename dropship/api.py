@@ -16,6 +16,10 @@ from .commerce import build_sandbox_commerce_plan
 from .stop_loss import assess_listing_stop_loss
 from .pipeline import run_dropship_decision_pipeline
 from .readiness import assess_live_readiness
+from .research_cycle import run_research_cycle
+from .observations import summarize_observations
+from .live_guard import authorize_action
+from .dll_registry import find_components
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -125,3 +129,40 @@ def pipeline_evaluate():
 def readiness_assess():
     payload = request.get_json(silent=True) or {}
     return jsonify(assess_live_readiness(payload))
+
+
+@dropship_bp.post("/research/cycle")
+def research_cycle():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_research_cycle(
+        payload.get("offers") or [],
+        payload.get("historical_observations") or [],
+    ))
+
+
+@dropship_bp.post("/observations/summarize")
+def observations_summarize():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(summarize_observations(payload.get("observations") or []))
+
+
+@dropship_bp.post("/guard/authorize")
+def guard_authorize():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(authorize_action(
+        str(payload.get("action") or ""),
+        human_approved=payload.get("human_approved") is True,
+    ))
+
+
+@dropship_bp.post("/dll/search")
+def dll_search():
+    payload = request.get_json(silent=True) or {}
+    try:
+        registry = fetch_registry()
+        return jsonify({
+            "status": "ok",
+            "matches": find_components(registry, payload.get("keywords") or []),
+        })
+    except RuntimeError as exc:
+        return jsonify({"status": "unavailable", "error": str(exc)}), 503
