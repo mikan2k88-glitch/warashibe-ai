@@ -50,6 +50,7 @@ from .campaign import run_sandbox_campaign
 from .research_plan import build_next_research_plan
 from .orchestrator import run_orchestrator
 from .v2_proof import build_v2_proof, build_v2_acceptance
+from .manifest import build_manifest
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -479,3 +480,19 @@ def v20_proof():
 @dropship_bp.get("/v2.0/acceptance")
 def v20_acceptance():
     return jsonify(build_v2_acceptance())
+
+
+@dropship_bp.get("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "service": "warashibe-dropshipping",
+        "version": DROPSHIP_VERSION,
+        "mode": "research",
+        "live_execution_allowed": False,
+    })
+
+
+@dropship_bp.get("/v2.0/manifest")
+def v20_manifest():
+    return jsonify(build_manifest())
