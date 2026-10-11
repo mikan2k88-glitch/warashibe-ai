@@ -42,6 +42,8 @@ from .dependency_health import build_dependency_health
 from .strategy_experiment import compare_strategies
 from .walk_forward import run_walk_forward
 from .strategy_promotion import assess_strategy_promotion
+from .preflight import run_preflight
+from .policy_profile import evaluate_policy_profile
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -394,4 +396,27 @@ def strategy_promotion():
     return jsonify(assess_strategy_promotion(
         payload.get("champion") or {},
         payload.get("challenger") or {},
+    ))
+
+
+@dropship_bp.post("/preflight")
+def preflight():
+    payload = request.get_json(silent=True) or {}
+    candidate = payload.get("candidate") or {}
+    return jsonify(run_preflight(
+        candidate,
+        available_capital=float(payload.get("available_capital") or 3000),
+        max_age_hours=float(payload.get("max_age_hours") or 24),
+        policy_profile=payload.get("policy_profile") or None,
+    ))
+
+
+@dropship_bp.post("/policy/profile")
+def policy_profile():
+    payload = request.get_json(silent=True) or {}
+    economics = evaluate_dropship_economics(payload.get("candidate") or {})
+    return jsonify(evaluate_policy_profile(
+        payload.get("candidate") or {},
+        economics,
+        payload.get("profile") or None,
     ))
