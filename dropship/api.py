@@ -44,6 +44,10 @@ from .walk_forward import run_walk_forward
 from .strategy_promotion import assess_strategy_promotion
 from .preflight import run_preflight
 from .policy_profile import evaluate_policy_profile
+from .outcome import build_outcome_record
+from .learning import summarize_learning, propose_learning_actions
+from .campaign import run_sandbox_campaign
+from .research_plan import build_next_research_plan
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -420,3 +424,35 @@ def policy_profile():
         economics,
         payload.get("profile") or None,
     ))
+
+
+@dropship_bp.post("/outcome/build")
+def outcome_build():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_outcome_record(payload))
+
+
+@dropship_bp.post("/learning/summarize")
+def learning_summarize():
+    payload = request.get_json(silent=True) or {}
+    summary = summarize_learning(payload.get("outcomes") or [])
+    return jsonify({
+        "summary": summary,
+        "actions": propose_learning_actions(summary),
+    })
+
+
+@dropship_bp.post("/campaign/run")
+def campaign_run():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(run_sandbox_campaign(
+        payload.get("batches") or [],
+        strategy=str(payload.get("strategy") or "balanced"),
+        available_capital=float(payload.get("available_capital") or 3000),
+    ))
+
+
+@dropship_bp.post("/research/plan")
+def research_plan():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_next_research_plan(payload))
