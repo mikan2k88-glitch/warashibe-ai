@@ -5,6 +5,10 @@ V2_ENDPOINTS = [
     {"method": "GET", "path": "/dropship/health", "purpose": "lightweight wake and health"},
     {"method": "GET", "path": "/dropship/status", "purpose": "research service status"},
     {"method": "GET", "path": "/dropship/providers", "purpose": "registered read-only provider types"},
+    {"method": "POST", "path": "/dropship/provider/config/validate", "purpose": "read-only provider config validation"},
+    {"method": "POST", "path": "/dropship/provider/normalize", "purpose": "provider row normalization"},
+    {"method": "POST", "path": "/dropship/provider/dedupe", "purpose": "observation deduplication"},
+    {"method": "POST", "path": "/dropship/shadow/collect-fixture", "purpose": "read-only shadow collection proof"},
     {"method": "GET", "path": "/dropship/dll/registry", "purpose": "DLL Concierge v5.3 Registry read"},
     {"method": "GET", "path": "/dropship/dll/resilient", "purpose": "DLL Registry degraded/cache read"},
     {"method": "POST", "path": "/dropship/supplier/evaluate", "purpose": "supplier offer evaluation"},
@@ -29,7 +33,7 @@ V2_ENDPOINTS = [
 def build_manifest() -> dict:
     return {
         "service": "warashibe-dropshipping",
-        "version": "2.0",
+        "version": "2.1",
         "mode": "research",
         "endpoint_count": len(V2_ENDPOINTS),
         "endpoints": V2_ENDPOINTS,
