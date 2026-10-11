@@ -41,6 +41,9 @@ CAPABILITIES = {
     "learning_loop": True,
     "sandbox_campaign": True,
     "research_planner": True,
+    "orchestrator": True,
+    "v2_proof": True,
+    "v2_acceptance": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -50,7 +53,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v1.6-learning-loop",
+        "release": "dropshipping-warashibe-v2.0-research-complete",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
