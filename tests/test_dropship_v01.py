@@ -79,6 +79,7 @@ from dropship.shadow_gate import assess_shadow_gate
 from dropship.evidence_pack import build_real_read_evidence_pack
 from dropship.run_repository import MemoryResearchRunRepository
 from dropship.evidence_service import record_evidence_pack
+from dropship.real_shadow_controller import run_real_shadow_controller
 
 
 def sample_payload():
@@ -1181,3 +1182,48 @@ def test_evidence_service_can_append_run_record():
     assert result["research_repository_write"] is True
     assert result["commerce_external_writes"] is False
     assert len(repo.rows) == 1
+
+
+def test_real_shadow_controller_can_prepare_human_review_without_live():
+    supplier_offer = _opportunity_candidate("shadow-ready", 10) | {
+        "name": "Shadow Ready Product",
+        "observed_at": "2026-10-11T00:00:00+00:00",
+    }
+    supplier = FixtureSupplierProvider([supplier_offer])
+    market = FixtureMarketProvider({
+        "Shadow Ready Product": [
+            {"price": 20, "currency": "USD"},
+            {"price": 21, "currency": "USD"},
+            {"price": 22, "currency": "USD"},
+        ]
+    })
+    history = []
+    for day in range(1, 8):
+        for index in range(3):
+            history.append({
+                "product_key": "shadow-ready",
+                "sale_price": 20 + index,
+                "supplier_cost": 10,
+                "inventory_confirmed": True,
+                "observed_at": f"2026-10-{day:02d}T00:00:00+00:00",
+            })
+
+    result = run_real_shadow_controller(
+        supplier,
+        market,
+        historical_observations=history,
+        supplier_currency="USD",
+        target_currency="USD",
+        shadow_thresholds={
+            "min_observations": 20,
+            "min_observation_days": 7,
+        },
+        mode="fixture_proof",
+    )
+    assert result["status"] == "promotion_review_ready"
+    assert result["ready_product_keys"] == ["shadow-ready"]
+    review = result["promotion_reviews"][0]
+    assert review["eligible_for_human_review"] is True
+    assert review["automatic_promotion"] is False
+    assert review["live_execution_allowed"] is False
+    assert result["commerce_external_writes"] is False
