@@ -39,6 +39,8 @@ from dropship.dependency_health import build_dependency_health
 from dropship.strategy_experiment import compare_strategies
 from dropship.walk_forward import run_walk_forward
 from dropship.strategy_promotion import assess_strategy_promotion
+from dropship.preflight import run_preflight
+from dropship.platform_adapter import SandboxSalesChannelAdapter
 
 
 def sample_payload():
@@ -561,3 +563,40 @@ def test_strategy_promotion_never_auto_changes():
     assert result["promote_challenger"] is True
     assert result["human_review_required"] is True
     assert result["automatic_strategy_change"] is False
+
+
+def test_sandbox_sales_channel_is_preview_only():
+    preview = SandboxSalesChannelAdapter().build_listing_preview({
+        "product_key": "sku-preview",
+        "name": "Preview Product",
+        "sale_price": 2500,
+    })
+    assert preview["status"] == "preview_only"
+    assert preview["external_write"] is False
+    assert preview["live_listing_created"] is False
+
+
+def test_preflight_passes_safe_fresh_candidate():
+    candidate = sample_payload() | {
+        "product_key": "sku-preflight",
+        "name": "sample",
+        "supplier": "supplier-a",
+        "source": "fixture",
+        "observed_at": "2026-10-11T04:00:00+00:00",
+    }
+    result = run_preflight(candidate, available_capital=3000, max_age_hours=48)
+    assert result["passed"] is True
+    assert result["listing_preview"]["external_write"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_policy_profile_can_block_slow_delivery():
+    candidate = sample_payload() | {"delivery_days": 20}
+    result = run_preflight(
+        candidate,
+        available_capital=3000,
+        max_age_hours=99999,
+        policy_profile={"max_delivery_days": 10},
+    )
+    assert result["passed"] is False
+    assert "delivery_days_exceed_profile" in result["policy"]["reasons"]
