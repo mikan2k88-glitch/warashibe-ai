@@ -72,6 +72,10 @@ CAPABILITIES = {
     "research_write_allowlist": True,
     "market_quote_cache": True,
     "real_read_runner": True,
+    "shadow_metrics": True,
+    "shadow_gate": True,
+    "real_read_evidence_pack": True,
+    "research_run_ledger": True,
     "human_gate_required": True,
     "live_commerce_enabled": False,
 }
@@ -81,7 +85,7 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v2.6-real-read-runner",
+        "release": "dropshipping-warashibe-v2.7-evidence-ledger",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
