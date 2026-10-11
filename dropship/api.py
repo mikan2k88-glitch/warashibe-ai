@@ -12,6 +12,8 @@ from .promotion import assess_promotion
 from .runtime import build_runtime_status
 from .supplier import evaluate_supplier_offer
 from .ranking import rank_supplier_offers
+from .commerce import build_sandbox_commerce_plan
+from .stop_loss import assess_listing_stop_loss
 
 
 dropship_bp = Blueprint("dropship", __name__, url_prefix="/dropship")
@@ -92,3 +94,19 @@ def supplier_rank():
     payload = request.get_json(silent=True) or {}
     offers = payload.get("offers") or []
     return jsonify(rank_supplier_offers(offers))
+
+
+@dropship_bp.post("/commerce/plan")
+def commerce_plan():
+    payload = request.get_json(silent=True) or {}
+    offers = payload.get("offers") or []
+    return jsonify(build_sandbox_commerce_plan(offers))
+
+
+@dropship_bp.post("/listing/stop-loss")
+def listing_stop_loss():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_listing_stop_loss(
+        payload,
+        ad_cost_cap=float(payload.get("ad_cost_cap") or 1000.0),
+    ))
