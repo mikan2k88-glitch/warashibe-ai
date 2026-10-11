@@ -69,6 +69,11 @@ from dropship.market_match import build_market_query
 from dropship.opportunity import evaluate_opportunity
 from dropship.opportunity_pipeline import rank_opportunities
 from dropship.ebay_market_provider import normalize_ebay_item
+from dropship.credential_health import check_credential_env
+from dropship.source_budget import normalize_source_budget
+from dropship.research_write_policy import authorize_research_write
+from dropship.real_read_runner import run_real_read_research
+from dropship.market_provider import FixtureMarketProvider
 
 
 def sample_payload():
@@ -1040,4 +1045,64 @@ def test_opportunity_ranking_selects_better_capital_efficiency():
     )
     assert result["best"]["product_key"] == "b"
     assert result["evaluated_count"] == 2
+    assert result["live_execution_allowed"] is False
+
+
+def test_source_budget_is_bounded():
+    result = normalize_source_budget({
+        "max_supplier_items": 9999,
+        "max_market_queries": 9999,
+        "max_market_quotes_per_query": 9999,
+    })
+    assert result["max_supplier_items"] == 200
+    assert result["max_market_queries"] == 100
+    assert result["max_market_quotes_per_query"] == 200
+
+
+def test_research_write_policy_is_append_only_allowlist():
+    allowed = authorize_research_write(
+        table="dropship_observations",
+        operation="insert",
+    )
+    denied = authorize_research_write(
+        table="orders",
+        operation="insert",
+    )
+    assert allowed["allowed"] is True
+    assert allowed["commerce_write"] is False
+    assert denied["allowed"] is False
+
+
+def test_credential_health_never_returns_values(monkeypatch):
+    monkeypatch.setenv("TEST_SECRET_A", "super-secret")
+    result = check_credential_env(["TEST_SECRET_A", "TEST_SECRET_B"])
+    assert result["configured"]["TEST_SECRET_A"] is True
+    assert result["configured"]["TEST_SECRET_B"] is False
+    assert result["secret_values_exposed"] is False
+    assert "super-secret" not in str(result)
+
+
+def test_real_read_runner_fixture_reaches_opportunity_ranking():
+    supplier = FixtureSupplierProvider([
+        _opportunity_candidate("runner-1", 10) | {"name": "Runner Product"}
+    ])
+    market = FixtureMarketProvider({
+        "Runner Product": [
+            {"price": 20, "currency": "USD"},
+            {"price": 21, "currency": "USD"},
+            {"price": 22, "currency": "USD"},
+        ]
+    })
+    result = run_real_read_research(
+        supplier,
+        market,
+        supplier_currency="USD",
+        target_currency="USD",
+        budget={"max_supplier_items": 5, "max_market_queries": 5},
+    )
+    assert result["status"] == "completed"
+    assert result["supplier_candidate_count"] == 1
+    assert result["market_query_count"] == 1
+    assert result["ranking"]["best"]["product_key"] == "runner-1"
+    assert result["commerce_external_writes"] is False
     assert result["live_execution_allowed"] is False
