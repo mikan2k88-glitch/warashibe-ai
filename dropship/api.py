@@ -77,6 +77,7 @@ from .market_provider import FixtureMarketProvider
 from .shadow_metrics import build_shadow_metrics
 from .shadow_gate import assess_shadow_gate
 from .evidence_pack import build_real_read_evidence_pack
+from .real_shadow_controller import run_real_shadow_controller
 from .provider import FixtureSupplierProvider
 
 
@@ -755,4 +756,22 @@ def evidence_real_read_pack():
         payload.get("observations") or [],
         mode=str(payload.get("mode") or "fixture_proof"),
         thresholds=payload.get("thresholds") or {},
+    ))
+
+
+@dropship_bp.post("/shadow/controller-fixture")
+def shadow_controller_fixture():
+    payload = request.get_json(silent=True) or {}
+    supplier = FixtureSupplierProvider(payload.get("supplier_offers") or [])
+    market = FixtureMarketProvider(payload.get("quotes_by_query") or {})
+    return jsonify(run_real_shadow_controller(
+        supplier,
+        market,
+        historical_observations=payload.get("historical_observations") or [],
+        supplier_currency=str(payload.get("supplier_currency") or "USD"),
+        target_currency=payload.get("target_currency") or "USD",
+        fx_rates=payload.get("fx_rates") or {},
+        budget=payload.get("budget") or {},
+        shadow_thresholds=payload.get("shadow_thresholds") or {},
+        mode="fixture_proof",
     ))
