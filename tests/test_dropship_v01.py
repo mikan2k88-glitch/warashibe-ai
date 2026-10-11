@@ -11,6 +11,11 @@ from dropship.stop_loss import assess_listing_stop_loss
 from dropship.state_machine import transition
 from dropship.pipeline import run_dropship_decision_pipeline
 from dropship.readiness import assess_live_readiness
+from dropship.research_cycle import run_research_cycle
+from dropship.observations import summarize_observations
+from dropship.live_guard import authorize_action
+from dropship.dll_registry import find_components
+from dropship.provider import FixtureSupplierProvider
 
 
 def sample_payload():
@@ -187,3 +192,52 @@ def test_live_readiness_only_reaches_human_gate():
     assert result["research_ready_for_human_gate"] is True
     assert result["live_execution_allowed"] is False
     assert result["human_gate_required"] is True
+
+
+def test_fixture_provider_is_read_only_shape():
+    provider = FixtureSupplierProvider([
+        {"product_key": "sku-x", "name": "x", "sale_price": 1000}
+    ])
+    rows = provider.fetch_offers()
+    assert len(rows) == 1
+    assert rows[0]["source"] == "fixture"
+    assert "observed_at" in rows[0]
+
+
+def test_observation_summary_groups_product_history():
+    rows = [
+        {"product_key": "sku-x", "sale_price": 1000, "supplier_cost": 500, "delivery_days": 4, "inventory_confirmed": True, "observed_at": "2026-10-01T00:00:00+00:00"},
+        {"product_key": "sku-x", "sale_price": 1100, "supplier_cost": 550, "delivery_days": 5, "inventory_confirmed": True, "observed_at": "2026-10-02T00:00:00+00:00"},
+    ]
+    result = summarize_observations(rows)
+    assert result["total_observations"] == 2
+    assert result["product_count"] == 1
+    assert result["products"][0]["observation_days"] == 2
+
+
+def test_research_cycle_remains_non_live():
+    base = sample_payload() | {
+        "product_key": "sku-r",
+        "name": "sample",
+        "source": "fixture",
+        "supplier": "supplier-a",
+    }
+    result = run_research_cycle([base])
+    assert result["status"] == "completed"
+    assert result["mode"] == "research"
+    assert result["external_writes"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_live_guard_default_deny_for_live_actions():
+    assert authorize_action("fetch_inventory")["allowed"] is True
+    blocked = authorize_action("submit_supplier_order", human_approved=True)
+    assert blocked["allowed"] is False
+    assert blocked["human_approval_required"] is True
+
+
+def test_dll_registry_keyword_matcher():
+    registry = {"components": [{"id": "retry", "name": "HTTP Retry Client"}, {"id": "db", "name": "Database"}]}
+    matches = find_components(registry, ["retry", "http"])
+    assert matches
+    assert matches[0]["component"]["id"] == "retry"
