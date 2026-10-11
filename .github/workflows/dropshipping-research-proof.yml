@@ -1,0 +1,43 @@
+name: Dropshipping Research Proof
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run dropshipping test suite
+        run: python -m pytest -q tests/test_dropship_v01.py
+      - name: Verify v1.0 proof and acceptance
+        run: |
+          python - <<'PY'
+          from dropship.proof import build_proof, build_acceptance
+          from dropship.release import build_release_status
+
+          proof = build_proof()
+          acceptance = build_acceptance()
+          status = build_release_status()
+
+          assert proof["passed"] is True
+          assert acceptance["passed"] is True
+          assert status["status"] == "research_endpoint_reached"
+          assert status["live_execution_allowed"] is False
+          print({
+              "proof_passed": proof["passed"],
+              "acceptance_passed": acceptance["passed"],
+              "status": status["status"],
+              "live_execution_allowed": status["live_execution_allowed"],
+          })
+          PY
