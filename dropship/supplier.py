@@ -19,6 +19,7 @@ def evaluate_supplier_offer(payload: dict) -> dict:
     reliability_score += 0.10 if 0 < offer["delivery_days"] <= 7 else 0.0
 
     return {
+        "input": dict(payload),
         "offer": offer,
         "evidence": evidence,
         "economics": economics,
