@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **6.0**
+Current research version: **6.1**
 
 ### Research flow
 
@@ -186,3 +186,20 @@ Passing v6.0 means the package is ready for a human decision only.
 
 No real listing, supplier order, payment, refund, cancellation, or external commerce write
 is enabled by the v6.0 proof path.
+
+
+### v6.1 Real-Evidence Qualification
+
+v6.1 prevents fixture or mixed proof data from satisfying the final Human Gate path.
+
+A candidate must now demonstrate:
+
+- a non-fixture supplier in the Promotion Review
+- real-read opportunity observations
+- at least one real_read run
+- persistent Shadow history enabled
+- successful CJ/eBay provider handshake
+- no fixture markers in supplier, source, run mode, or provider evidence
+
+Fixture proofs remain useful for CI and architecture validation, but they cannot qualify a
+candidate for the real-evidence Human Gate.
