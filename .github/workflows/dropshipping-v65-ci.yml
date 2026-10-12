@@ -1,0 +1,23 @@
+name: Dropshipping v6.5 CI
+
+on:
+  push:
+    branches:
+      - feature/dropshipping-v65-cost-evidence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run v6.5 tests
+        run: PYTHONPATH=. python -m pytest -q tests/test_dropship_v65.py
