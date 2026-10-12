@@ -65,6 +65,7 @@ def main():
         },
         destination_country=os.environ.get("DROPSHIP_FREIGHT_DESTINATION", "US"),
         quantity=int(os.environ.get("DROPSHIP_FREIGHT_QUANTITY", "1")),
+        freight_max_items=int(os.environ.get("DROPSHIP_FREIGHT_MAX_ITEMS", "1")),
     )
 
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
