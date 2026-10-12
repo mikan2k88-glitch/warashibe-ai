@@ -114,6 +114,9 @@ from .idempotency import reserve_idempotency
 from .limited_live_limits import assess_limited_live_limits
 from .refund_recovery_readiness import assess_refund_recovery_readiness
 from .live_preflight_audit import build_live_preflight_audit
+from .limited_live_gate_v60 import build_v60_gate
+from .v60_proof import build_v60_proof, build_v60_acceptance
+from .v60_release import build_v60_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -1081,3 +1084,24 @@ def v54_preflight_audit():
         kill_switch=payload.get("kill_switch"),
         recovery=payload.get("recovery") or {},
     ))
+
+
+@dropship_bp.post("/v6.0/gate")
+def v60_gate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_v60_gate(payload.get("promotion_review") or {}))
+
+
+@dropship_bp.get("/v6.0/proof")
+def v60_proof():
+    return jsonify(build_v60_proof())
+
+
+@dropship_bp.get("/v6.0/acceptance")
+def v60_acceptance():
+    return jsonify(build_v60_acceptance())
+
+
+@dropship_bp.get("/v6.0/status")
+def v60_status():
+    return jsonify(build_v60_release_status())
