@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **5.3**
+Current research version: **6.0**
 
 ### Research flow
 
@@ -167,3 +167,22 @@ It also proves cancellation, supplier-failure, delayed-shipment, and refund scen
 
 All v5.3 flows remain non-live: no listing is created, no supplier order is submitted,
 no payment is captured, and no external commerce write is performed.
+
+
+### v6.0 Human-Controlled Gate
+
+v6.0 adds a single-use Human-Controlled gate on top of v5.4 readiness.
+
+The package contains:
+
+- single-use approval intent
+- one-shot contract
+- non-executed receipt evidence
+- manual recovery plan
+- transition gate
+- final Human Gate package
+
+Passing v6.0 means the package is ready for a human decision only.
+
+No real listing, supplier order, payment, refund, cancellation, or external commerce write
+is enabled by the v6.0 proof path.
