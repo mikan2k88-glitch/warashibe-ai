@@ -7,7 +7,7 @@ AIわらしべ長者システム。
 `feature/dropshipping-v0.1` では、既存Warashibe AIを共通Coreとして再利用し、
 在庫を持たないドロップシッピング研究レイヤーを実装しています。
 
-Current research version: **6.1**
+Current research version: **6.2**
 
 ### Research flow
 
@@ -203,3 +203,23 @@ A candidate must now demonstrate:
 
 Fixture proofs remain useful for CI and architecture validation, but they cannot qualify a
 candidate for the real-evidence Human Gate.
+
+
+### v6.2 Actual Evidence Controller
+
+v6.2 connects the real provider path end-to-end:
+
+- resolve real CJ/eBay credentials
+- run provider handshake
+- perform bounded real READ
+- persist observations and run evidence to Supabase
+- reload accumulated history
+- compute real-product ranking
+- rebuild Shadow metrics
+- build v5.2 Promotion Reviews
+- apply v6.1 real-evidence qualification
+
+If credentials, persistence, or handshake are missing, the controller returns setup_required
+instead of falling back to fixture data.
+
+The v6.2 workflow never enables automatic execution or external commerce writes.
