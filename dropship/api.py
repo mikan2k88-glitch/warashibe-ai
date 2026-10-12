@@ -124,6 +124,11 @@ from .v61_release import build_v61_release_status
 from .actual_evidence_controller import run_actual_evidence_controller
 from .v62_proof import build_v62_proof, build_v62_acceptance
 from .v62_release import build_v62_release_status
+from .cost_completeness import assess_cost_completeness
+from .terms_evidence import assess_terms_evidence
+from .v64_gate import assess_v64_promotion_gate
+from .v64_proof import build_v64_proof, build_v64_acceptance
+from .v64_release import build_v64_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -1166,3 +1171,39 @@ def v62_acceptance():
 @dropship_bp.get("/v6.2/status")
 def v62_status():
     return jsonify(build_v62_release_status())
+
+
+@dropship_bp.post("/v6.4/cost-completeness")
+def v64_cost_completeness():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_cost_completeness(payload.get("candidate") or payload))
+
+
+@dropship_bp.post("/v6.4/terms-evidence")
+def v64_terms_evidence():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_terms_evidence(payload.get("candidate") or payload))
+
+
+@dropship_bp.post("/v6.4/gate")
+def v64_gate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_v64_promotion_gate(
+        payload.get("ranked_product") or {},
+        payload.get("promotion_review") or {},
+    ))
+
+
+@dropship_bp.get("/v6.4/proof")
+def v64_proof():
+    return jsonify(build_v64_proof())
+
+
+@dropship_bp.get("/v6.4/acceptance")
+def v64_acceptance():
+    return jsonify(build_v64_acceptance())
+
+
+@dropship_bp.get("/v6.4/status")
+def v64_status():
+    return jsonify(build_v64_release_status())

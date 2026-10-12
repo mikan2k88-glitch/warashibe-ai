@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from dropship.actual_evidence_controller import run_actual_evidence_controller
+from dropship.actual_evidence_controller_v64 import run_actual_evidence_controller_v64
 from dropship.persistence_health import assess_persistence_environment
 from dropship.provider_handshake import run_provider_handshake
 from dropship.real_runtime_sources import build_real_runtime_sources
@@ -43,7 +43,7 @@ def main():
         raise SystemExit(1)
 
     client = SupabaseRestClient()
-    result = run_actual_evidence_controller(
+    result = run_actual_evidence_controller_v64(
         sources["supplier_provider"],
         sources["market_provider"],
         persistence_client=client,
