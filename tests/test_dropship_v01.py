@@ -128,6 +128,10 @@ from dropship.transition_gate_v59 import assess_transition_gate
 from dropship.limited_live_gate_v60 import build_v60_gate
 from dropship.v60_proof import build_v60_proof, build_v60_acceptance
 from dropship.v60_release import build_v60_release_status
+from dropship.real_evidence_qualification import qualify_real_evidence
+from dropship.v61_real_gate import build_v61_real_gate
+from dropship.v61_proof import build_v61_proof, build_v61_acceptance
+from dropship.v61_release import build_v61_release_status
 
 
 def sample_payload():
@@ -2087,3 +2091,56 @@ def test_v60_proof_acceptance_and_release():
     assert status["automatic_execution_enabled"] is False
     assert status["external_writes_enabled"] is False
     assert status["live_execution_allowed"] is False
+
+
+def test_v61_fixture_review_is_rejected():
+    review = build_v52_proof()["review"]
+    result = qualify_real_evidence(
+        review,
+        observations=[{
+            "product_key": review["product_key"],
+            "supplier": "cjdropshipping-list-v2",
+            "source": "real-read-opportunity",
+        }],
+        recent_runs=[{
+            "mode": "real_read",
+            "supplier_provider": "cjdropshipping-list-v2",
+            "market_provider": "ebay-browse",
+        }],
+        persistence_enabled=True,
+        provider_handshake={
+            "status": "real_provider_handshake_ready",
+            "successful_provider_count": 2,
+        },
+    )
+    assert result["qualified"] is False
+    assert result["fixture_detected"] is True
+    assert result["live_execution_allowed"] is False
+
+
+def test_v61_proof_acceptance_and_release():
+    proof = build_v61_proof()
+    acceptance = build_v61_acceptance()
+    status = build_v61_release_status()
+    assert proof["passed"] is True
+    assert proof["fixture_case"]["status"] == "blocked"
+    assert proof["real_case"]["status"] == "real_evidence_human_gate_ready"
+    assert acceptance["passed"] is True
+    assert status["status"] == "real_evidence_gate_endpoint_reached"
+    assert status["automatic_execution_enabled"] is False
+    assert status["external_writes_enabled"] is False
+    assert status["live_execution_allowed"] is False
+
+
+def test_flask_v61_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v6.1/proof")
+    acceptance = client.get("/dropship/v6.1/acceptance")
+    status = client.get("/dropship/v6.1/status")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert status.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
+    assert status.get_json()["status"] == "real_evidence_gate_endpoint_reached"
