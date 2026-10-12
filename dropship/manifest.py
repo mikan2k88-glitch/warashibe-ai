@@ -76,13 +76,16 @@ V2_ENDPOINTS = [
     {"method": "GET", "path": "/dropship/v6.1/proof", "purpose": "v6.1 real-evidence proof"},
     {"method": "GET", "path": "/dropship/v6.1/acceptance", "purpose": "v6.1 acceptance"},
     {"method": "GET", "path": "/dropship/v6.1/status", "purpose": "v6.1 release status"},
+    {"method": "GET", "path": "/dropship/v6.2/proof", "purpose": "v6.2 actual-evidence controller proof"},
+    {"method": "GET", "path": "/dropship/v6.2/acceptance", "purpose": "v6.2 acceptance"},
+    {"method": "GET", "path": "/dropship/v6.2/status", "purpose": "v6.2 release status"},
 ]
 
 
 def build_manifest() -> dict:
     return {
         "service": "warashibe-dropshipping",
-        "version": "6.1",
+        "version": "6.2",
         "mode": "research",
         "endpoint_count": len(V2_ENDPOINTS),
         "endpoints": V2_ENDPOINTS,
