@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import os
 
-from dropship.actual_evidence_controller_v64 import run_actual_evidence_controller_v64
+from dropship.actual_evidence_controller_v65 import run_actual_evidence_controller_v65
+from dropship.cj_freight_provider import CJFreightEvidenceProvider
 from dropship.persistence_health import assess_persistence_environment
 from dropship.provider_handshake import run_provider_handshake
 from dropship.real_runtime_sources import build_real_runtime_sources
@@ -43,9 +44,11 @@ def main():
         raise SystemExit(1)
 
     client = SupabaseRestClient()
-    result = run_actual_evidence_controller_v64(
+    freight_provider = CJFreightEvidenceProvider(token=getattr(sources["supplier_provider"], "token", ""))
+    result = run_actual_evidence_controller_v65(
         sources["supplier_provider"],
         sources["market_provider"],
+        freight_provider=freight_provider,
         persistence_client=client,
         provider_handshake=handshake,
         available_capital=float(os.environ.get("DROPSHIP_AVAILABLE_CAPITAL", "3000")),
@@ -60,6 +63,9 @@ def main():
             "min_observations": int(os.environ.get("DROPSHIP_SHADOW_MIN_OBSERVATIONS", "20")),
             "min_observation_days": int(os.environ.get("DROPSHIP_SHADOW_MIN_DAYS", "7")),
         },
+        destination_country=os.environ.get("DROPSHIP_FREIGHT_DESTINATION", "US"),
+        quantity=int(os.environ.get("DROPSHIP_FREIGHT_QUANTITY", "1")),
+        freight_max_items=int(os.environ.get("DROPSHIP_FREIGHT_MAX_ITEMS", "1")),
     )
 
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
