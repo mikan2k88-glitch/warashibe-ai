@@ -8,6 +8,7 @@ def assess_persistence_environment() -> dict:
     service_key_present = bool(
         os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
         or os.environ.get("SUPABASE_SECRET_KEY", "").strip()
+        or os.environ.get("SUPABASE_KEY", "").strip()
     )
     return {
         "status": "ready" if url_present and service_key_present else "not_configured",
