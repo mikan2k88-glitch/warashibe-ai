@@ -41,16 +41,19 @@ class SupabaseRestClient:
             json=dict(row),
             timeout=self.timeout,
         )
-        if not response.ok:
+        status_code = getattr(response, "status_code", None)
+        if status_code is None:
+            response.raise_for_status()
+        elif int(status_code) >= 400:
             code = None
             try:
-                payload = response.json()
-                if isinstance(payload, dict):
-                    code = payload.get("code")
+                error_payload = response.json()
+                if isinstance(error_payload, dict):
+                    code = error_payload.get("code")
             except (TypeError, ValueError):
                 code = None
             raise RuntimeError(
-                f"{table} insert failed: status={response.status_code} code={code or 'unknown'}"
+                f"{table} insert failed: status={status_code} code={code or 'unknown'}"
             )
 
         payload = response.json()
