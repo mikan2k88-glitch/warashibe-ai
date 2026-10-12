@@ -357,3 +357,48 @@ def test_v65_variant_with_missing_price_is_not_preferred():
     )
     assert evidence["status"] == "known"
     assert evidence["variant_id"] == "priced"
+
+
+def test_v65_controller_caps_freight_acquisition_to_one_by_default():
+    class _TwoOfferSupplier(_SupplierWithUnknownShipping):
+        def fetch_offers(self):
+            first = super().fetch_offers()[0]
+            second = dict(first)
+            second["product_key"] = "p2"
+            second["name"] = "V65 Product 2"
+            return [first, second]
+
+    class _CountingFreight(_KnownFreight):
+        def __init__(self):
+            self.calls = 0
+
+        def fetch_shipping_evidence(self, candidate, *, destination_country, quantity):
+            self.calls += 1
+            return super().fetch_shipping_evidence(
+                candidate,
+                destination_country=destination_country,
+                quantity=quantity,
+            )
+
+    freight = _CountingFreight()
+    result = run_actual_evidence_controller_v65(
+        _TwoOfferSupplier(),
+        _Market(),
+        freight_provider=freight,
+        persistence_client=_MemoryPersistence(),
+        provider_handshake=_handshake(),
+        available_capital=3000,
+        supplier_currency="USD",
+        target_currency="USD",
+        budget={
+            "max_supplier_items": 5,
+            "max_market_queries": 5,
+            "max_market_quotes_per_query": 10,
+        },
+        shadow_thresholds={
+            "min_observations": 20,
+            "min_observation_days": 7,
+        },
+    )
+    assert freight.calls == 1
+    assert result["freight_evidence"]["attempted_count"] == 1
