@@ -40,3 +40,23 @@ Even a v6.1-qualified candidate still has:
 - live_execution_allowed = false
 
 v6.1 only qualifies evidence quality. It does not execute commerce.
+
+
+## GitHub Actions required secrets for Actual Evidence
+
+The scheduled/bootstrapped Actual Evidence workflow requires these repository secrets.
+
+CJ (choose a supported credential mode):
+- CJ_ACCESS_TOKEN
+- or CJ_API_KEY
+- optionally CJ_REFRESH_TOKEN
+
+eBay (choose a supported credential mode):
+- EBAY_ACCESS_TOKEN
+- or EBAY_CLIENT_ID + EBAY_CLIENT_SECRET
+
+Persistent Shadow:
+- SUPABASE_URL
+- SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
+
+If these are absent, Actual Evidence must report setup_required and must not fall back to fixtures.
