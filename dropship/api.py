@@ -121,6 +121,9 @@ from .real_evidence_qualification import qualify_real_evidence
 from .v61_real_gate import build_v61_real_gate
 from .v61_proof import build_v61_proof, build_v61_acceptance
 from .v61_release import build_v61_release_status
+from .actual_evidence_controller import run_actual_evidence_controller
+from .v62_proof import build_v62_proof, build_v62_acceptance
+from .v62_release import build_v62_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -1148,3 +1151,18 @@ def v61_acceptance():
 @dropship_bp.get("/v6.1/status")
 def v61_status():
     return jsonify(build_v61_release_status())
+
+
+@dropship_bp.get("/v6.2/proof")
+def v62_proof():
+    return jsonify(build_v62_proof())
+
+
+@dropship_bp.get("/v6.2/acceptance")
+def v62_acceptance():
+    return jsonify(build_v62_acceptance())
+
+
+@dropship_bp.get("/v6.2/status")
+def v62_status():
+    return jsonify(build_v62_release_status())
