@@ -49,13 +49,19 @@ def qualify_real_evidence(
         if row.get("market_provider")
     }
 
-    fixture_detected = any(
+    review_candidate = (review.get("review") or {}).get("candidate") or {}
+    review_supplier = str(review_candidate.get("supplier") or "").strip().lower()
+
+    fixture_detected = (
+        review_supplier in FIXTURE_MARKERS
+        or any(
         marker in sources
         or marker in suppliers
         or marker in modes
         or marker in supplier_providers
         or marker in market_providers
         for marker in FIXTURE_MARKERS
+        )
     )
 
     real_read_observations = [
