@@ -105,6 +105,11 @@ CAPABILITIES = {
     "sandbox_supplier_order_v53": True,
     "sandbox_customer_order_v53": True,
     "listing_preview_v53": True,
+    "live_preflight_audit_v54": True,
+    "refund_recovery_readiness_v54": True,
+    "single_order_limit_v54": True,
+    "idempotency_reservation_v54": True,
+    "kill_switch_v54": True,
     "promotion_review_v52": True,
     "long_shadow_evidence_v51": True,
     "real_product_ranking_v50": True,
@@ -121,13 +126,13 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v5.3-sandbox-commerce-validation",
+        "release": "dropshipping-warashibe-v5.4-human-gate-readiness",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
         "capabilities": CAPABILITIES,
         "maturity_ceiling": "ready_for_human_gate",
-        "current_maturity_ceiling": "sandbox_commerce_validated",
+        "current_maturity_ceiling": "live_readiness_human_gate",
         "external_writes_enabled": False,
         "live_execution_allowed": False,
     }
