@@ -1,0 +1,57 @@
+name: Dropshipping v6.0 Gate Proof
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropshipping-v60-gate-proof
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Build v6.0 gate evidence
+        run: |
+          python - <<'PY' | tee dropshipping-v60-gate-proof.json
+          import json
+          from dropship.v60_proof import build_v60_proof, build_v60_acceptance
+          from dropship.v60_release import build_v60_release_status
+
+          proof = build_v60_proof()
+          acceptance = build_v60_acceptance()
+          status = build_v60_release_status()
+
+          output = {
+              "proof": proof,
+              "acceptance": acceptance,
+              "status": status,
+          }
+          print(json.dumps(output, ensure_ascii=False, sort_keys=True))
+
+          assert proof["passed"] is True
+          assert acceptance["passed"] is True
+          assert status["status"] == "v6_gate_endpoint_reached"
+          assert status["human_gate_required"] is True
+          assert status["automatic_execution_enabled"] is False
+          assert status["external_writes_enabled"] is False
+          assert status["live_execution_allowed"] is False
+          PY
+      - name: Upload v6.0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropshipping-v60-gate-proof
+          path: dropshipping-v60-gate-proof.json
+          if-no-files-found: warn
