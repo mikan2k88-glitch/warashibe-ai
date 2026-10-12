@@ -86,6 +86,7 @@ class CJFreightEvidenceProvider:
             return None
         rows.sort(
             key=lambda row: (
+                _number(row.get("variantSellPrice")) <= 0,
                 _number(row.get("variantSellPrice")),
                 str(row.get("vid") or ""),
             )
