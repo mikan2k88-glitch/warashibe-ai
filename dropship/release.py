@@ -108,6 +108,11 @@ CAPABILITIES = {
     "live_preflight_audit_v54": True,
     "limited_live_gate_v60": True,
     "v61_real_gate": True,
+    "actual_evidence_workflow_v62": True,
+    "real_review_bridge_v62": True,
+    "persistent_evidence_reload_v62": True,
+    "actual_evidence_controller_v62": True,
+    "real_runtime_sources_v62": True,
     "provider_handshake_required_v61": True,
     "persistent_history_required_v61": True,
     "fixture_rejection_v61": True,
@@ -137,13 +142,13 @@ def build_release_status() -> dict:
     proof = build_proof()
     acceptance = build_acceptance()
     return {
-        "release": "dropshipping-warashibe-v6.1-real-evidence-gate",
+        "release": "dropshipping-warashibe-v6.2-actual-evidence-controller",
         "status": "research_endpoint_reached" if proof["passed"] and acceptance["passed"] else "blocked",
         "proof_passed": proof["passed"],
         "acceptance_passed": acceptance["passed"],
         "capabilities": CAPABILITIES,
         "maturity_ceiling": "ready_for_human_gate",
-        "current_maturity_ceiling": "real_evidence_human_gate",
+        "current_maturity_ceiling": "actual_evidence_human_gate",
         "external_writes_enabled": False,
         "live_execution_allowed": False,
     }
