@@ -1,0 +1,51 @@
+name: Dropshipping Actual Evidence
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropshipping-actual-evidence
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run actual evidence controller
+        env:
+          CJ_ACCESS_TOKEN: ${{ secrets.CJ_ACCESS_TOKEN }}
+          CJ_API_KEY: ${{ secrets.CJ_API_KEY }}
+          CJ_REFRESH_TOKEN: ${{ secrets.CJ_REFRESH_TOKEN }}
+          EBAY_ACCESS_TOKEN: ${{ secrets.EBAY_ACCESS_TOKEN }}
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DROPSHIP_AVAILABLE_CAPITAL: "3000"
+          DROPSHIP_MAX_SUPPLIER_ITEMS: "5"
+          DROPSHIP_MAX_MARKET_QUERIES: "5"
+          DROPSHIP_MAX_QUOTES: "10"
+          DROPSHIP_SHADOW_MIN_OBSERVATIONS: "20"
+          DROPSHIP_SHADOW_MIN_DAYS: "7"
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python scripts/dropship_actual_evidence.py | tee dropshipping-actual-evidence.json
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropshipping-actual-evidence
+          path: dropshipping-actual-evidence.json
+          if-no-files-found: warn

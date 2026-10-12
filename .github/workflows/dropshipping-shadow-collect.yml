@@ -1,0 +1,29 @@
+name: Dropshipping Shadow Collect
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropshipping-shadow-collect
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run read-only shadow collector
+        env:
+          DROPSHIP_PROVIDER_URL: ${{ vars.DROPSHIP_PROVIDER_URL }}
+          DROPSHIP_PROVIDER_NAME: ${{ vars.DROPSHIP_PROVIDER_NAME }}
+        run: python scripts/dropship_shadow_collect.py

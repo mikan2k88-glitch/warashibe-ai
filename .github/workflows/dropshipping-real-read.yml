@@ -1,0 +1,48 @@
+name: Dropshipping Real Read Research
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropshipping-real-read
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run bounded read-only research
+        env:
+          CJ_ACCESS_TOKEN: ${{ secrets.CJ_ACCESS_TOKEN }}
+          CJ_API_KEY: ${{ secrets.CJ_API_KEY }}
+          CJ_REFRESH_TOKEN: ${{ secrets.CJ_REFRESH_TOKEN }}
+          EBAY_ACCESS_TOKEN: ${{ secrets.EBAY_ACCESS_TOKEN }}
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          EBAY_MARKETPLACE_ID: ${{ vars.EBAY_MARKETPLACE_ID }}
+          DROPSHIP_SEARCH_KEYWORD: ${{ vars.DROPSHIP_SEARCH_KEYWORD }}
+          DROPSHIP_SUPPLIER_COUNTRY: ${{ vars.DROPSHIP_SUPPLIER_COUNTRY }}
+          DROPSHIP_MAX_SUPPLIER_ITEMS: "5"
+          DROPSHIP_MAX_MARKET_QUERIES: "5"
+          DROPSHIP_MAX_QUOTES: "10"
+        run: python scripts/dropship_real_read.py | tee dropshipping-real-read.json
+      - name: Upload research evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropshipping-real-read-evidence
+          path: dropshipping-real-read.json
+          if-no-files-found: error
