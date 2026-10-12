@@ -120,6 +120,14 @@ from dropship.idempotency import build_idempotency_key, reserve_idempotency
 from dropship.limited_live_limits import assess_limited_live_limits
 from dropship.refund_recovery_readiness import assess_refund_recovery_readiness
 from dropship.live_preflight_audit import build_live_preflight_audit
+from dropship.approval_intent import build_approval_intent, validate_approval_intent
+from dropship.one_shot_contract import build_one_shot_contract
+from dropship.execution_receipt import build_execution_receipt
+from dropship.recovery_plan_v58 import build_recovery_plan
+from dropship.transition_gate_v59 import assess_transition_gate
+from dropship.limited_live_gate_v60 import build_v60_gate
+from dropship.v60_proof import build_v60_proof, build_v60_acceptance
+from dropship.v60_release import build_v60_release_status
 
 
 def sample_payload():
@@ -1961,3 +1969,121 @@ def test_v54_preflight_audit_reaches_human_gate_only():
     assert result["limited_live_execution_enabled"] is False
     assert result["live_execution_allowed"] is False
     assert len(result["sha256"]) == 64
+
+
+def test_v55_approval_intent_is_single_use_and_non_executing():
+    review = build_v52_proof()["review"]
+    intent = build_approval_intent(
+        review,
+        approval_id="a1",
+        max_amount=1000,
+        expires_at="2099-12-31T23:59:59+00:00",
+    )
+    valid = validate_approval_intent(intent, used_ids=[])
+    reused = validate_approval_intent(intent, used_ids=["a1"])
+    assert valid["valid"] is True
+    assert reused["valid"] is False
+    assert intent["single_use"] is True
+    assert intent["external_write_enabled"] is False
+
+
+def test_v56_one_shot_contract_requires_preflight():
+    review = build_v52_proof()["review"]
+    preflight = build_live_preflight_audit(
+        review,
+        existing_idempotency_keys=[],
+        limits={
+            "max_orders": 1,
+            "max_products": 1,
+            "max_quantity_per_order": 1,
+            "max_working_capital": 3000,
+            "max_expected_loss": 3000,
+        },
+        kill_switch=False,
+        recovery={
+            "refund_terms_known": True,
+            "supplier_cancel_path_known": True,
+            "customer_contact_path_known": True,
+            "manual_intervention_available": True,
+            "automatic_refund_enabled": False,
+            "automatic_cancel_enabled": False,
+        },
+    )
+    intent = build_approval_intent(
+        review,
+        approval_id="a2",
+        max_amount=1000,
+        expires_at="2099-12-31T23:59:59+00:00",
+    )
+    contract = build_one_shot_contract(intent, preflight)
+    assert contract["status"] == "contract_ready"
+    assert contract["single_use"] is True
+    assert contract["automatic_retry_allowed"] is False
+    assert contract["external_write_enabled"] is False
+
+
+def test_v57_receipt_proves_no_execution():
+    receipt = build_execution_receipt(
+        {"approval_id": "a3", "product_key": "p3"},
+        result="not_executed",
+    )
+    assert receipt["result"] == "not_executed"
+    assert receipt["external_write_performed"] is False
+    assert receipt["payment_captured"] is False
+    assert receipt["supplier_order_created"] is False
+    assert len(receipt["sha256"]) == 64
+
+
+def test_v58_recovery_plan_remains_manual():
+    plan = build_recovery_plan({
+        "manual_contact_path": "human",
+        "supplier_cancel_path": "manual",
+        "refund_terms_known": True,
+        "kill_switch_available": True,
+        "support_owner": "human",
+    })
+    assert plan["status"] == "recovery_plan_ready"
+    assert plan["manual_only"] is True
+    assert plan["automatic_cancel_enabled"] is False
+    assert plan["automatic_refund_enabled"] is False
+
+
+def test_v59_transition_gate_stops_before_execution():
+    gate = assess_transition_gate(
+        contract={
+            "status": "contract_ready",
+            "single_use": True,
+            "external_write_enabled": False,
+        },
+        receipt={"result": "not_executed"},
+        recovery_plan={"status": "recovery_plan_ready"},
+        kill_switch_enabled=False,
+    )
+    assert gate["ready"] is True
+    assert gate["allowed_next_action"] == "final_human_review"
+    assert gate["automatic_transition"] is False
+    assert gate["external_write_enabled"] is False
+
+
+def test_v60_gate_reaches_human_control_boundary_only():
+    review = build_v52_proof()["review"]
+    gate = build_v60_gate(review)
+    assert gate["passed"] is True
+    assert gate["status"] == "limited_live_gate_ready"
+    assert gate["human_gate_required"] is True
+    assert gate["automatic_execution"] is False
+    assert gate["external_write_enabled"] is False
+    assert gate["live_execution_allowed"] is False
+
+
+def test_v60_proof_acceptance_and_release():
+    proof = build_v60_proof()
+    acceptance = build_v60_acceptance()
+    status = build_v60_release_status()
+    assert proof["passed"] is True
+    assert acceptance["passed"] is True
+    assert status["status"] == "v6_gate_endpoint_reached"
+    assert status["human_gate_required"] is True
+    assert status["automatic_execution_enabled"] is False
+    assert status["external_writes_enabled"] is False
+    assert status["live_execution_allowed"] is False
