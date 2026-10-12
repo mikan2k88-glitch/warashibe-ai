@@ -6,6 +6,7 @@ FIXTURE_MARKERS = {
     "fixture-market",
     "fixture-supplier",
     "fixture_proof",
+    "proof-supplier",
 }
 
 
