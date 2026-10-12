@@ -1,6 +1,9 @@
 from dropship.cost_completeness import assess_cost_completeness
 from dropship.cost_evidence_acquisition import acquire_cost_evidence
 from dropship.cj_freight_provider import CJFreightEvidenceProvider
+from dropship.actual_evidence_controller_v65 import run_actual_evidence_controller_v65
+from dropship.v65_proof import build_v65_proof, build_v65_acceptance
+from dropship.v65_release import build_v65_release_status
 
 
 class _Response:
@@ -164,3 +167,148 @@ def test_v65_never_calls_order_or_payment_endpoints():
     urls = [u for u, _ in session.get_calls] + [u for u, _ in session.post_calls]
     assert all("/shopping/" not in u for u in urls)
     assert all("/listed/" not in u for u in urls)
+
+
+class _SupplierWithUnknownShipping:
+    provider_name = "proof-v65-supplier"
+
+    def fetch_offers(self):
+        row = _candidate()
+        row.update({
+            "name": "V65 Product",
+            "supplier": self.provider_name,
+            "category": "home",
+            "delivery_days": 5,
+            "inventory_confirmed": True,
+            "supplier_allows_dropshipping": True,
+            "platform_terms_confirmed": True,
+            "return_terms_confirmed": True,
+            "cancellation_terms_confirmed": True,
+            "supplier_reliable": True,
+            "terms_evidence": {
+                "supplier_dropshipping_permission": {"status": "confirmed"},
+                "platform_terms": {"status": "confirmed"},
+                "return_terms": {"status": "confirmed"},
+                "cancellation_terms": {"status": "confirmed"},
+            },
+        })
+        return [row]
+
+
+class _Market:
+    provider_name = "ebay-browse"
+
+    def search(self, query):
+        return [
+            {"price": 24, "currency": "USD", "seller_username": "a"},
+            {"price": 25, "currency": "USD", "seller_username": "b"},
+            {"price": 26, "currency": "USD", "seller_username": "c"},
+            {"price": 25.5, "currency": "USD", "seller_username": "d"},
+            {"price": 24.5, "currency": "USD", "seller_username": "e"},
+            {"price": 26.5, "currency": "USD", "seller_username": "f"},
+        ]
+
+
+class _KnownFreight:
+    def fetch_shipping_evidence(self, candidate, *, destination_country, quantity):
+        return {
+            "status": "known",
+            "source": "cj-freight-calculate",
+            "shipping_cost": 4.5,
+            "currency": "USD",
+            "variant_id": "v1",
+            "origin_country": "CN",
+            "destination_country": destination_country,
+            "quantity": quantity,
+            "logistic_name": "Economy",
+            "logistic_aging": "8-12",
+            "commerce_external_writes": False,
+            "live_execution_allowed": False,
+        }
+
+
+class _MemoryPersistence:
+    def __init__(self):
+        self.tables = {
+            "dropship_observations": [],
+            "dropship_research_runs": [],
+        }
+        for day in range(1, 8):
+            for index in range(3):
+                observation = {
+                    "product_key": "p1",
+                    "supplier": "proof-v65-supplier",
+                    "source": "real-read-opportunity",
+                    "sale_price": 24 + index * 0.5,
+                    "supplier_cost": 8 + index * 0.05,
+                    "inventory_confirmed": True,
+                    "expected_net_profit": 5 + index,
+                    "opportunity_score": 0.8,
+                    "observed_at": f"2026-10-{day:02d}T0{index}:00:00+00:00",
+                }
+                self.tables["dropship_observations"].append({
+                    "product_key": observation["product_key"],
+                    "supplier": observation["supplier"],
+                    "source": observation["source"],
+                    "observed_at": observation["observed_at"],
+                    "observation_fingerprint": f"v65-{day}-{index}",
+                    "observation": observation,
+                })
+
+    def insert(self, table, row):
+        stored = {"id": len(self.tables.setdefault(table, [])) + 1, **dict(row)}
+        self.tables[table].append(stored)
+        return stored
+
+    def select(self, table, **kwargs):
+        return list(self.tables.get(table, []))
+
+
+def _handshake():
+    return {
+        "status": "real_provider_handshake_ready",
+        "successful_provider_count": 2,
+    }
+
+
+def test_v65_controller_acquires_shipping_before_v64_gate():
+    result = run_actual_evidence_controller_v65(
+        _SupplierWithUnknownShipping(),
+        _Market(),
+        freight_provider=_KnownFreight(),
+        persistence_client=_MemoryPersistence(),
+        provider_handshake=_handshake(),
+        available_capital=3000,
+        supplier_currency="USD",
+        target_currency="USD",
+        budget={
+            "max_supplier_items": 5,
+            "max_market_queries": 5,
+            "max_market_quotes_per_query": 10,
+        },
+        shadow_thresholds={
+            "min_observations": 20,
+            "min_observation_days": 7,
+        },
+    )
+    assert result["controller_version"] == "6.5"
+    assert result["freight_evidence"]["attempted_count"] == 1
+    assert result["freight_evidence"]["acquired_count"] == 1
+    assert result["human_gate_ready_count"] == 1
+    assert result["live_execution_allowed"] is False
+
+
+def test_v65_proof_acceptance_release_and_flask_endpoints():
+    proof = build_v65_proof()
+    acceptance = build_v65_acceptance()
+    status = build_v65_release_status()
+    assert proof["passed"] is True
+    assert acceptance["passed"] is True
+    assert status["status"] == "cost_evidence_acquisition_endpoint_reached"
+    assert status["live_execution_allowed"] is False
+
+    from app import app
+    client = app.test_client()
+    assert client.get("/dropship/v6.5/proof").status_code == 200
+    assert client.get("/dropship/v6.5/acceptance").status_code == 200
+    assert client.get("/dropship/v6.5/status").status_code == 200
