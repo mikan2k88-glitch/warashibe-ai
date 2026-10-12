@@ -17,7 +17,7 @@ class SupabaseRestClient:
         session=None,
     ):
         self.url = (url or os.environ.get("SUPABASE_URL") or "").rstrip("/")
-        self.key = key or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SECRET_KEY") or ""
+        self.key = key or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_KEY") or ""
         self.timeout = int(timeout)
         self.session = session or requests
 
