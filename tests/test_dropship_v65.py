@@ -312,3 +312,48 @@ def test_v65_proof_acceptance_release_and_flask_endpoints():
     assert client.get("/dropship/v6.5/proof").status_code == 200
     assert client.get("/dropship/v6.5/acceptance").status_code == 200
     assert client.get("/dropship/v6.5/status").status_code == 200
+
+
+def test_v65_variant_with_missing_price_is_not_preferred():
+    class _MissingPriceSession(_Session):
+        def get(self, url, headers, params, timeout):
+            self.get_calls.append((url, params))
+            if url.endswith("/product/variant/query"):
+                return _Response({
+                    "code": 200,
+                    "result": True,
+                    "data": [
+                        {"vid": "missing-price", "variantSellPrice": None},
+                        {"vid": "priced", "variantSellPrice": 8.0},
+                    ],
+                })
+            if url.endswith("/product/variant/queryByVid"):
+                assert params["vid"] == "priced"
+                return _Response({
+                    "code": 200,
+                    "result": True,
+                    "data": {
+                        "vid": "priced",
+                        "inventories": [
+                            {"countryCode": "CN", "totalInventory": 10},
+                        ],
+                    },
+                })
+            raise AssertionError(url)
+
+        def post(self, url, headers, json, timeout):
+            assert json["products"][0]["vid"] == "priced"
+            return _Response({
+                "code": 200,
+                "result": True,
+                "data": [{"logisticName": "Economy", "totalPostageFee": 3.0}],
+            })
+
+    provider = CJFreightEvidenceProvider(token="secret", session=_MissingPriceSession())
+    evidence = provider.fetch_shipping_evidence(
+        _candidate(),
+        destination_country="US",
+        quantity=1,
+    )
+    assert evidence["status"] == "known"
+    assert evidence["variant_id"] == "priced"
