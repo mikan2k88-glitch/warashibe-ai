@@ -40,6 +40,50 @@ def normalize_cj_product(row: dict) -> dict:
         "supplier_allows_dropshipping": False,
         "platform_terms_confirmed": False,
         "supplier_reliable": False,
+        "cost_evidence": {
+            "supplier_cost": {
+                "status": "known" if cost > 0 else "unknown",
+                "source": "cj-product-list-v2",
+            },
+            "supplier_shipping": {
+                "status": "unknown",
+                "source": "not_returned_by_product-list-v2",
+            },
+            "platform_fee_rate": {
+                "status": "unknown",
+                "source": "marketplace_specific",
+            },
+            "payment_fee_rate": {
+                "status": "unknown",
+                "source": "payment_path_specific",
+            },
+            "expected_return_cost": {
+                "status": "unknown",
+                "source": "return_terms_required",
+            },
+            "refund_reserve": {
+                "status": "unknown",
+                "source": "return_terms_required",
+            },
+        },
+        "terms_evidence": {
+            "supplier_dropshipping_permission": {
+                "status": "unknown",
+                "source": "terms_evidence_required",
+            },
+            "platform_terms": {
+                "status": "unknown",
+                "source": "marketplace_terms_required",
+            },
+            "return_terms": {
+                "status": "unknown",
+                "source": "return_terms_required",
+            },
+            "cancellation_terms": {
+                "status": "unknown",
+                "source": "cancellation_terms_required",
+            },
+        },
         "metadata": {
             "sku": row.get("sku"),
             "spu": row.get("spu"),
