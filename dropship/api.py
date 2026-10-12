@@ -117,6 +117,10 @@ from .live_preflight_audit import build_live_preflight_audit
 from .limited_live_gate_v60 import build_v60_gate
 from .v60_proof import build_v60_proof, build_v60_acceptance
 from .v60_release import build_v60_release_status
+from .real_evidence_qualification import qualify_real_evidence
+from .v61_real_gate import build_v61_real_gate
+from .v61_proof import build_v61_proof, build_v61_acceptance
+from .v61_release import build_v61_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -1105,3 +1109,42 @@ def v60_acceptance():
 @dropship_bp.get("/v6.0/status")
 def v60_status():
     return jsonify(build_v60_release_status())
+
+
+@dropship_bp.post("/v6.1/qualify-evidence")
+def v61_qualify_evidence():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(qualify_real_evidence(
+        payload.get("promotion_review") or {},
+        observations=payload.get("observations") or [],
+        recent_runs=payload.get("recent_runs") or [],
+        persistence_enabled=payload.get("persistence_enabled") is True,
+        provider_handshake=payload.get("provider_handshake") or {},
+    ))
+
+
+@dropship_bp.post("/v6.1/gate")
+def v61_gate():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_v61_real_gate(
+        payload.get("promotion_review") or {},
+        observations=payload.get("observations") or [],
+        recent_runs=payload.get("recent_runs") or [],
+        persistence_enabled=payload.get("persistence_enabled") is True,
+        provider_handshake=payload.get("provider_handshake") or {},
+    ))
+
+
+@dropship_bp.get("/v6.1/proof")
+def v61_proof():
+    return jsonify(build_v61_proof())
+
+
+@dropship_bp.get("/v6.1/acceptance")
+def v61_acceptance():
+    return jsonify(build_v61_acceptance())
+
+
+@dropship_bp.get("/v6.1/status")
+def v61_status():
+    return jsonify(build_v61_release_status())
