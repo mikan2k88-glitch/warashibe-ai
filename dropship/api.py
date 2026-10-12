@@ -109,6 +109,11 @@ from .v52_release import build_v52_release_status
 from .v53_sandbox_controller import run_v53_sandbox_cycle
 from .v53_proof import build_v53_proof, build_v53_acceptance
 from .v53_release import build_v53_release_status
+from .kill_switch import assess_kill_switch
+from .idempotency import reserve_idempotency
+from .limited_live_limits import assess_limited_live_limits
+from .refund_recovery_readiness import assess_refund_recovery_readiness
+from .live_preflight_audit import build_live_preflight_audit
 from .provider import FixtureSupplierProvider
 
 
@@ -1034,3 +1039,45 @@ def v53_acceptance():
 @dropship_bp.get("/v5.3/status")
 def v53_status():
     return jsonify(build_v53_release_status())
+
+
+@dropship_bp.post("/v5.4/kill-switch")
+def v54_kill_switch():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_kill_switch(explicit=payload.get("enabled")))
+
+
+@dropship_bp.post("/v5.4/idempotency")
+def v54_idempotency():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(reserve_idempotency(
+        payload.get("intent") or {},
+        payload.get("existing_keys") or [],
+    ))
+
+
+@dropship_bp.post("/v5.4/limits")
+def v54_limits():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_limited_live_limits(
+        payload.get("state") or {},
+        payload.get("limits") or {},
+    ))
+
+
+@dropship_bp.post("/v5.4/recovery-readiness")
+def v54_recovery_readiness():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(assess_refund_recovery_readiness(payload))
+
+
+@dropship_bp.post("/v5.4/preflight-audit")
+def v54_preflight_audit():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(build_live_preflight_audit(
+        payload.get("promotion_review") or {},
+        existing_idempotency_keys=payload.get("existing_idempotency_keys") or [],
+        limits=payload.get("limits") or {},
+        kill_switch=payload.get("kill_switch"),
+        recovery=payload.get("recovery") or {},
+    ))
