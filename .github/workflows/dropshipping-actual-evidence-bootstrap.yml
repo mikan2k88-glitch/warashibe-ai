@@ -41,7 +41,9 @@ jobs:
           DROPSHIP_MAX_QUOTES: "10"
           DROPSHIP_SHADOW_MIN_OBSERVATIONS: "20"
           DROPSHIP_SHADOW_MIN_DAYS: "7"
-        run: python scripts/dropship_actual_evidence.py | tee dropshipping-actual-evidence-bootstrap.json
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python scripts/dropship_actual_evidence.py | tee dropshipping-actual-evidence-bootstrap.json
       - name: Upload bootstrap evidence
         if: always()
         uses: actions/upload-artifact@v4
