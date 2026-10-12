@@ -115,6 +115,11 @@ from dropship.v52_release import build_v52_release_status
 from dropship.v53_sandbox_controller import run_v53_sandbox_cycle
 from dropship.v53_proof import build_v53_proof, build_v53_acceptance
 from dropship.v53_release import build_v53_release_status
+from dropship.kill_switch import assess_kill_switch
+from dropship.idempotency import build_idempotency_key, reserve_idempotency
+from dropship.limited_live_limits import assess_limited_live_limits
+from dropship.refund_recovery_readiness import assess_refund_recovery_readiness
+from dropship.live_preflight_audit import build_live_preflight_audit
 
 
 def sample_payload():
@@ -1872,3 +1877,87 @@ def test_flask_v53_endpoints_smoke():
     assert proof.get_json()["passed"] is True
     assert acceptance.get_json()["passed"] is True
     assert status.get_json()["status"] == "sandbox_commerce_endpoint_reached"
+
+
+def test_v54_kill_switch_blocks_readiness():
+    result = assess_kill_switch(explicit=True)
+    assert result["enabled"] is True
+    assert result["limited_live_preparation_allowed"] is False
+    assert result["live_execution_allowed"] is False
+
+
+def test_v54_idempotency_duplicate_is_denied():
+    payload = {
+        "customer_order_id": "future-single-order",
+        "product_key": "p1",
+        "supplier": "s1",
+        "quantity": 1,
+    }
+    key = build_idempotency_key(payload)
+    result = reserve_idempotency(payload, [key])
+    assert result["duplicate"] is True
+    assert result["reserved"] is False
+    assert result["automatic_retry_allowed"] is False
+
+
+def test_v54_limits_keep_single_order_small_capital():
+    passed = assess_limited_live_limits({
+        "order_count": 1,
+        "product_count": 1,
+        "quantity": 1,
+        "required_working_capital": 1000,
+        "expected_max_loss": 500,
+    })
+    blocked = assess_limited_live_limits({
+        "order_count": 2,
+        "product_count": 1,
+        "quantity": 1,
+        "required_working_capital": 1000,
+        "expected_max_loss": 500,
+    })
+    assert passed["passed"] is True
+    assert blocked["passed"] is False
+    assert blocked["live_execution_allowed"] is False
+
+
+def test_v54_recovery_requires_manual_control():
+    result = assess_refund_recovery_readiness({
+        "refund_terms_known": True,
+        "supplier_cancel_path_known": True,
+        "customer_contact_path_known": True,
+        "manual_intervention_available": True,
+        "automatic_refund_enabled": False,
+        "automatic_cancel_enabled": False,
+    })
+    assert result["passed"] is True
+    assert result["automatic_refund_enabled"] is False
+    assert result["automatic_cancel_enabled"] is False
+
+
+def test_v54_preflight_audit_reaches_human_gate_only():
+    review = build_v52_proof()["review"]
+    result = build_live_preflight_audit(
+        review,
+        existing_idempotency_keys=[],
+        limits={
+            "max_orders": 1,
+            "max_products": 1,
+            "max_quantity_per_order": 1,
+            "max_working_capital": 3000,
+            "max_expected_loss": 3000,
+        },
+        kill_switch=False,
+        recovery={
+            "refund_terms_known": True,
+            "supplier_cancel_path_known": True,
+            "customer_contact_path_known": True,
+            "manual_intervention_available": True,
+            "automatic_refund_enabled": False,
+            "automatic_cancel_enabled": False,
+        },
+    )
+    assert result["ready_for_human_gate"] is True
+    assert result["human_gate_required"] is True
+    assert result["limited_live_execution_enabled"] is False
+    assert result["live_execution_allowed"] is False
+    assert len(result["sha256"]) == 64
