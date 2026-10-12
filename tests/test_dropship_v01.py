@@ -132,6 +132,8 @@ from dropship.real_evidence_qualification import qualify_real_evidence
 from dropship.v61_real_gate import build_v61_real_gate
 from dropship.v61_proof import build_v61_proof, build_v61_acceptance
 from dropship.v61_release import build_v61_release_status
+from dropship.v62_proof import build_v62_proof, build_v62_acceptance
+from dropship.v62_release import build_v62_release_status
 
 
 def sample_payload():
@@ -786,7 +788,7 @@ def test_flask_v20_endpoints_smoke():
 
 def test_manifest_and_health_are_non_live():
     manifest = build_manifest()
-    assert manifest["version"] == "6.1"
+    assert manifest["version"] == "6.2"
     assert manifest["endpoint_count"] >= 20
     assert manifest["live_execution_allowed"] is False
 
@@ -2144,3 +2146,38 @@ def test_flask_v61_endpoints_smoke():
     assert proof.get_json()["passed"] is True
     assert acceptance.get_json()["passed"] is True
     assert status.get_json()["status"] == "real_evidence_gate_endpoint_reached"
+
+
+def test_v62_actual_evidence_controller_proof():
+    proof = build_v62_proof()
+    assert proof["passed"] is True
+    assert proof["result"]["status"] == "human_gate_candidate_ready"
+    assert proof["result"]["human_gate_ready_count"] == 1
+    assert proof["result"]["automatic_execution"] is False
+    assert proof["result"]["external_write_enabled"] is False
+    assert proof["result"]["live_execution_allowed"] is False
+
+
+def test_v62_acceptance_and_release():
+    acceptance = build_v62_acceptance()
+    status = build_v62_release_status()
+    assert acceptance["passed"] is True
+    assert status["status"] == "actual_evidence_controller_endpoint_reached"
+    assert status["human_gate_required"] is True
+    assert status["automatic_execution_enabled"] is False
+    assert status["external_writes_enabled"] is False
+    assert status["live_execution_allowed"] is False
+
+
+def test_flask_v62_endpoints_smoke():
+    from app import app
+    client = app.test_client()
+    proof = client.get("/dropship/v6.2/proof")
+    acceptance = client.get("/dropship/v6.2/acceptance")
+    status = client.get("/dropship/v6.2/status")
+    assert proof.status_code == 200
+    assert acceptance.status_code == 200
+    assert status.status_code == 200
+    assert proof.get_json()["passed"] is True
+    assert acceptance.get_json()["passed"] is True
+    assert status.get_json()["status"] == "actual_evidence_controller_endpoint_reached"
