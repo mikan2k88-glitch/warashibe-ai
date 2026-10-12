@@ -65,6 +65,7 @@ def run_actual_evidence_controller_v65(
     run_limit: int = 200,
     destination_country: str = "US",
     quantity: int = 1,
+    freight_max_items: int = 1,
 ) -> dict:
     limits = dict(budget or {})
     wrapper = _CostEvidenceSupplierWrapper(
@@ -72,7 +73,10 @@ def run_actual_evidence_controller_v65(
         freight_provider,
         destination_country=destination_country,
         quantity=quantity,
-        max_items=int(limits.get("max_supplier_items") or 5),
+        max_items=min(
+            int(limits.get("max_supplier_items") or 5),
+            max(1, int(freight_max_items)),
+        ),
     )
 
     base = run_actual_evidence_controller_v64(
@@ -98,6 +102,7 @@ def run_actual_evidence_controller_v65(
             "destination_country": str(destination_country),
             "quantity": max(1, int(quantity)),
             "read_only": True,
+            "max_items": max(1, int(freight_max_items)),
         },
         "automatic_execution": False,
         "external_write_enabled": False,
