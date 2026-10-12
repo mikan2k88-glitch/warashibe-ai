@@ -3,6 +3,8 @@ from dropship.cost_completeness import assess_cost_completeness
 from dropship.terms_evidence import assess_terms_evidence
 from dropship.v64_proof import build_v64_acceptance, build_v64_proof
 from dropship.v64_release import build_v64_release_status
+from dropship.supabase_rest import SupabaseRestClient
+from dropship.supabase_persistence import persist_observations
 
 
 def _complete_candidate():
@@ -115,3 +117,36 @@ def test_flask_v64_endpoints_smoke():
     assert acceptance.get_json()["passed"] is True
     assert status.get_json()["status"] == "cost_completeness_endpoint_reached"
     assert incomplete.get_json()["passed"] is False
+
+
+class _ConflictResponse:
+    ok = False
+    status_code = 409
+
+    def json(self):
+        return {"code": "23505", "message": "duplicate key value violates unique constraint"}
+
+
+class _ConflictSession:
+    def post(self, *args, **kwargs):
+        return _ConflictResponse()
+
+
+def test_supabase_unique_conflict_is_classified_as_duplicate():
+    client = SupabaseRestClient(
+        url="https://example.supabase.co",
+        key="server-secret-placeholder",
+        session=_ConflictSession(),
+    )
+    result = persist_observations(client, [{
+        "product_key": "dup",
+        "supplier": "proof",
+        "source": "proof",
+        "observed_at": "2026-10-12T14:00:00+00:00",
+        "supplier_cost": 1,
+        "sale_price": 2,
+        "inventory_confirmed": True,
+    }])
+    assert result["inserted_count"] == 0
+    assert result["duplicate_count"] == 1
+    assert result["error_count"] == 0
