@@ -3,6 +3,7 @@ name: Dropshipping Actual Evidence Bootstrap
 on:
   push:
     branches:
+      - main
       - feature/dropshipping-v0.1
     paths:
       - ".github/actual-evidence-bootstrap"
