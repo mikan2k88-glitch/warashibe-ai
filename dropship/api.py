@@ -131,6 +131,8 @@ from .v64_proof import build_v64_proof, build_v64_acceptance
 from .v64_release import build_v64_release_status
 from .v65_proof import build_v65_proof, build_v65_acceptance
 from .v65_release import build_v65_release_status
+from .v66_proof import build_v66_proof, build_v66_acceptance
+from .v66_release import build_v66_release_status
 from .provider import FixtureSupplierProvider
 
 
@@ -1224,3 +1226,18 @@ def v65_acceptance():
 @dropship_bp.get("/v6.5/status")
 def v65_status():
     return jsonify(build_v65_release_status())
+
+
+@dropship_bp.get("/v6.6/proof")
+def v66_proof():
+    return jsonify(build_v66_proof())
+
+
+@dropship_bp.get("/v6.6/acceptance")
+def v66_acceptance():
+    return jsonify(build_v66_acceptance())
+
+
+@dropship_bp.get("/v6.6/status")
+def v66_status():
+    return jsonify(build_v66_release_status())
