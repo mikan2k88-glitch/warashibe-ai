@@ -1,0 +1,25 @@
+name: Dropshipping v6.8 User OAuth CI
+
+on:
+  push:
+    branches:
+      - feature/dropshipping-v68-user-oauth
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt pytest
+      - name: Run v6.8 and existing evidence regressions
+        run: |
+          PYTHONPATH=. python -m pytest -q tests/test_dropship_v68.py tests/test_dropship_v67.py tests/test_dropship_v66.py tests/test_dropship_v65.py tests/test_dropship_v64.py tests/test_ebay_account_deletion.py
+      - name: Compile OAuth module
+        run: python -m py_compile dropship/ebay_user_oauth_v68.py
