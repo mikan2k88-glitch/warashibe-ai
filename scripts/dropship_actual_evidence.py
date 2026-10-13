@@ -3,10 +3,8 @@ from __future__ import annotations
 import json
 import os
 
-from dropship.actual_evidence_controller_v66 import run_actual_evidence_controller_v66
+from dropship.actual_evidence_controller_v67 import run_actual_evidence_controller_v67
 from dropship.cj_freight_provider import CJFreightEvidenceProvider
-from dropship.fee_evidence import UnknownFeeEvidenceProvider
-from dropship.terms_evidence_acquisition import UnknownTermsEvidenceProvider
 from dropship.persistence_health import assess_persistence_environment
 from dropship.provider_handshake import run_provider_handshake
 from dropship.real_runtime_sources import build_real_runtime_sources
@@ -47,14 +45,10 @@ def main():
 
     client = SupabaseRestClient()
     freight_provider = CJFreightEvidenceProvider(token=getattr(sources["supplier_provider"], "token", ""))
-    fee_provider = UnknownFeeEvidenceProvider()
-    terms_provider = UnknownTermsEvidenceProvider()
-    result = run_actual_evidence_controller_v66(
+    result = run_actual_evidence_controller_v67(
         sources["supplier_provider"],
         sources["market_provider"],
         freight_provider=freight_provider,
-        fee_provider=fee_provider,
-        terms_provider=terms_provider,
         persistence_client=client,
         provider_handshake=handshake,
         available_capital=float(os.environ.get("DROPSHIP_AVAILABLE_CAPITAL", "3000")),
@@ -72,6 +66,8 @@ def main():
         destination_country=os.environ.get("DROPSHIP_FREIGHT_DESTINATION", "US"),
         quantity=int(os.environ.get("DROPSHIP_FREIGHT_QUANTITY", "1")),
         freight_max_items=int(os.environ.get("DROPSHIP_FREIGHT_MAX_ITEMS", "1")),
+        marketplace_id=os.environ.get("EBAY_MARKETPLACE_ID", "EBAY_US"),
+        ebay_user_access_token=os.environ.get("EBAY_USER_ACCESS_TOKEN", ""),
     )
 
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
