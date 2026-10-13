@@ -75,3 +75,5 @@ jobs:
                       "secret_values_exposed": False,
                   }))
           PY
+
+# rerun after deletion endpoint compliance save 2026-10-13T13:11Z
