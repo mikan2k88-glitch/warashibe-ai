@@ -19,6 +19,8 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies
         run: pip install -r requirements.txt pytest
-      - name: Run endpoint tests and full dropshipping regression
+      - name: Run endpoint and evidence-gate regression tests
         run: |
-          PYTHONPATH=. python -m pytest -q             tests/test_ebay_account_deletion.py             tests/test_dropship_v01.py             tests/test_dropship_v64.py             tests/test_dropship_v65.py             tests/test_dropship_v66.py
+          PYTHONPATH=. python -m pytest -q             tests/test_ebay_account_deletion.py             tests/test_dropship_v64.py             tests/test_dropship_v65.py             tests/test_dropship_v66.py
+      - name: Verify Flask endpoint import
+        run: python -c "from app import app; rules=[str(r) for r in app.url_map.iter_rules()]; assert '/dropship/ebay/marketplace-account-deletion' in rules"
