@@ -19,5 +19,10 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies
         run: pip install -r requirements.txt pytest
-      - name: Run v6.7 evidence tests
-        run: PYTHONPATH=. python -m pytest -q tests/test_dropship_v67.py
+      - name: Run v6.7 and stable evidence regression tests
+        run: |
+          PYTHONPATH=. python -m pytest -q             tests/test_dropship_v64.py             tests/test_dropship_v65.py             tests/test_dropship_v66.py             tests/test_dropship_v67.py             tests/test_ebay_account_deletion.py
+      - name: Verify Flask v6.7 endpoint
+        run: python -c "from app import app; assert '/dropship/v6.7/status' in [str(r) for r in app.url_map.iter_rules()]"
+      - name: Verify actual evidence runner imports
+        run: PYTHONPATH=. python -m py_compile scripts/dropship_actual_evidence.py
