@@ -133,6 +133,7 @@ from .v65_proof import build_v65_proof, build_v65_acceptance
 from .v65_release import build_v65_release_status
 from .v66_proof import build_v66_proof, build_v66_acceptance
 from .v66_release import build_v66_release_status
+from .ebay_account_deletion import build_challenge_response, acknowledge_deletion_notification
 from .provider import FixtureSupplierProvider
 
 
@@ -1241,3 +1242,20 @@ def v66_acceptance():
 @dropship_bp.get("/v6.6/status")
 def v66_status():
     return jsonify(build_v66_release_status())
+
+
+@dropship_bp.get("/ebay/marketplace-account-deletion")
+def ebay_marketplace_account_deletion_challenge():
+    challenge_code = str(request.args.get("challenge_code") or "")
+    if not challenge_code:
+        return jsonify({"error": "challenge_code_required"}), 400
+    try:
+        return jsonify(build_challenge_response(challenge_code))
+    except RuntimeError:
+        return jsonify({"error": "verification_token_not_configured"}), 503
+
+
+@dropship_bp.post("/ebay/marketplace-account-deletion")
+def ebay_marketplace_account_deletion_notification():
+    acknowledge_deletion_notification(request.get_json(silent=True) or {})
+    return ("", 204)
