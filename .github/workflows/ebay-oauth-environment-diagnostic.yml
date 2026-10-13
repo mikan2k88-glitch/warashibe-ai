@@ -1,4 +1,5 @@
 name: eBay OAuth Environment Diagnostic
+# rerun after secret update 2026-10-13
 
 on:
   push:
