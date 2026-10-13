@@ -46,13 +46,6 @@ class EbayOfficialFeeEvidenceProvider:
             "live_execution_allowed": False,
         }
 
-        if self.account_policy_provider is not None:
-            account = self.account_policy_provider.fetch_return_policy_evidence()
-            if account.get("status") == "known" and isinstance(account.get("return_terms"), dict):
-                result["return_terms"] = dict(account["return_terms"])
-
-        return result
-
 
 class EbayOfficialTermsEvidenceProvider:
     provider_name = "ebay-official-terms-policy-v67"
@@ -109,3 +102,10 @@ class EbayOfficialTermsEvidenceProvider:
             },
             "live_execution_allowed": False,
         }
+
+        if self.account_policy_provider is not None:
+            account = self.account_policy_provider.fetch_return_policy_evidence()
+            if account.get("status") == "known" and isinstance(account.get("return_terms"), dict):
+                result["return_terms"] = dict(account["return_terms"])
+
+        return result
