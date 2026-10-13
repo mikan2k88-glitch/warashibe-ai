@@ -22,13 +22,21 @@ from flask import Flask
 
 app = Flask(__name__)
 
+import os
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or None
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
 from candidate_api import candidate_bp
 from strategy_api import strategy_bp
 from dropship.api import dropship_bp
+from dropship.ebay_user_oauth_v68 import oauth_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
 app.register_blueprint(dropship_bp)
+app.register_blueprint(oauth_bp)
 
 
 # ============================================================
