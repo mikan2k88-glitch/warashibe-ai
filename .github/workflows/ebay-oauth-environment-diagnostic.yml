@@ -1,0 +1,76 @@
+name: eBay OAuth Environment Diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/ebay-oauth-environment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Diagnose eBay OAuth environment
+        env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+        run: |
+          python - <<'PY'
+          import base64, json, os, urllib.parse, urllib.request, urllib.error
+
+          cid = os.environ.get("EBAY_CLIENT_ID", "")
+          secret = os.environ.get("EBAY_CLIENT_SECRET", "")
+          print(json.dumps({
+              "client_id_present": bool(cid),
+              "client_secret_present": bool(secret),
+              "secret_values_exposed": False,
+          }))
+
+          auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
+          body = urllib.parse.urlencode({
+              "grant_type": "client_credentials",
+              "scope": "https://api.ebay.com/oauth/api_scope",
+          }).encode()
+
+          for env, url in [
+              ("production", "https://api.ebay.com/identity/v1/oauth2/token"),
+              ("sandbox", "https://api.sandbox.ebay.com/identity/v1/oauth2/token"),
+          ]:
+              req = urllib.request.Request(
+                  url,
+                  data=body,
+                  method="POST",
+                  headers={
+                      "Authorization": f"Basic {auth}",
+                      "Content-Type": "application/x-www-form-urlencoded",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      payload = json.loads(r.read().decode() or "{}")
+                      print(json.dumps({
+                          "environment": env,
+                          "http_status": r.status,
+                          "token_received": bool(payload.get("access_token")),
+                          "error": None,
+                          "secret_values_exposed": False,
+                      }))
+              except urllib.error.HTTPError as exc:
+                  try:
+                      payload = json.loads(exc.read().decode() or "{}")
+                  except Exception:
+                      payload = {}
+                  print(json.dumps({
+                      "environment": env,
+                      "http_status": exc.code,
+                      "token_received": False,
+                      "error": payload.get("error") or "http_error",
+                      "secret_values_exposed": False,
+                  }))
+          PY
