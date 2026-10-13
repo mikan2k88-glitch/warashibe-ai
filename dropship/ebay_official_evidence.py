@@ -46,18 +46,31 @@ class EbayOfficialFeeEvidenceProvider:
             "live_execution_allowed": False,
         }
 
+        if self.account_policy_provider is not None:
+            account = self.account_policy_provider.fetch_return_policy_evidence()
+            if account.get("status") == "known" and isinstance(account.get("return_terms"), dict):
+                result["return_terms"] = dict(account["return_terms"])
+
+        return result
+
 
 class EbayOfficialTermsEvidenceProvider:
     provider_name = "ebay-official-terms-policy-v67"
 
-    def __init__(self, *, marketplace_id: str = "EBAY_US"):
+    def __init__(
+        self,
+        *,
+        marketplace_id: str = "EBAY_US",
+        account_policy_provider=None,
+    ):
         self.marketplace_id = str(marketplace_id)
+        self.account_policy_provider = account_policy_provider
 
     def fetch_terms_evidence(self, candidate: dict) -> dict:
         supplier = str(candidate.get("supplier") or "").strip().lower()
         cj_supplier = supplier in {"cjdropshipping", "cj dropshipping", "cj"}
 
-        return {
+        result = {
             "status": "known",
             "supplier_dropshipping_permission": (
                 {
