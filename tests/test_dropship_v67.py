@@ -135,3 +135,85 @@ def test_v67_account_policy_provider_uses_sell_account_scope_semantics():
     assert result["status"] == "unknown"
     assert result["reason"] == "ebay_user_access_token_required"
     assert result["required_scope"] == "https://api.ebay.com/oauth/api_scope/sell.account.readonly"
+
+
+def test_v67_terms_provider_merges_account_return_policy():
+    class _Account:
+        def fetch_return_policy_evidence(self):
+            return {
+                "status": "known",
+                "return_terms": {
+                    "status": "confirmed",
+                    "source": "seller-account-api",
+                    "source_kind": "seller_account_api",
+                    "returns_accepted": True,
+                    "return_period_days": 30,
+                },
+            }
+
+    provider = EbayOfficialTermsEvidenceProvider(
+        marketplace_id="EBAY_US",
+        account_policy_provider=_Account(),
+    )
+    result = acquire_terms_evidence(_candidate(), terms_provider=provider)
+    terms = result["candidate"]["terms_evidence"]
+    assert terms["return_terms"]["status"] == "confirmed"
+    assert terms["return_terms"]["source_kind"] == "seller_account_api"
+
+
+def test_v67_controller_reports_user_oauth_readiness_without_opening_gate(monkeypatch):
+    monkeypatch.delenv("EBAY_USER_ACCESS_TOKEN", raising=False)
+
+    from dropship.actual_evidence_controller_v67 import run_actual_evidence_controller_v67
+    from dropship.v66_proof import _Supplier
+    from dropship.v65_proof import _KnownFreight
+    from dropship.v62_proof import _MemoryPersistence, _RealMarket, _handshake
+
+    result = run_actual_evidence_controller_v67(
+        _Supplier(),
+        _RealMarket(),
+        freight_provider=_KnownFreight(),
+        persistence_client=_MemoryPersistence(),
+        provider_handshake=_handshake(),
+        available_capital=3000,
+        supplier_currency="USD",
+        target_currency="USD",
+        budget={
+            "max_supplier_items": 5,
+            "max_market_queries": 5,
+            "max_market_quotes_per_query": 10,
+        },
+        shadow_thresholds={
+            "min_observations": 20,
+            "min_observation_days": 7,
+        },
+        marketplace_id="EBAY_US",
+    )
+
+    assert result["controller_version"] == "6.7"
+    assert result["ebay_user_oauth"]["status"] == "setup_required"
+    assert result["ebay_user_oauth"]["return_policy_read_ready"] is False
+    assert result["fee_evidence"]["acquired_count"] >= 1
+    assert result["terms_evidence"]["acquired_count"] >= 1
+    assert result["human_gate_ready_count"] == 0
+    assert result["live_execution_allowed"] is False
+
+
+def test_v67_proof_release_and_api():
+    from dropship.v67_proof import build_v67_proof, build_v67_acceptance
+    from dropship.v67_release import build_v67_release_status
+
+    proof = build_v67_proof()
+    acceptance = build_v67_acceptance()
+    status = build_v67_release_status()
+
+    assert proof["passed"] is True
+    assert acceptance["passed"] is True
+    assert status["status"] == "ebay_actual_evidence_endpoint_reached"
+    assert status["live_execution_allowed"] is False
+
+    from app import app
+    client = app.test_client()
+    assert client.get("/dropship/v6.7/proof").status_code == 200
+    assert client.get("/dropship/v6.7/acceptance").status_code == 200
+    assert client.get("/dropship/v6.7/status").status_code == 200
