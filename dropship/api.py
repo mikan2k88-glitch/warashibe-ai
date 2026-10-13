@@ -133,6 +133,8 @@ from .v65_proof import build_v65_proof, build_v65_acceptance
 from .v65_release import build_v65_release_status
 from .v66_proof import build_v66_proof, build_v66_acceptance
 from .v66_release import build_v66_release_status
+from .v67_proof import build_v67_proof, build_v67_acceptance
+from .v67_release import build_v67_release_status
 from .ebay_account_deletion import build_challenge_response, acknowledge_deletion_notification
 from .provider import FixtureSupplierProvider
 
@@ -1242,6 +1244,21 @@ def v66_acceptance():
 @dropship_bp.get("/v6.6/status")
 def v66_status():
     return jsonify(build_v66_release_status())
+
+
+@dropship_bp.get("/v6.7/proof")
+def v67_proof():
+    return jsonify(build_v67_proof())
+
+
+@dropship_bp.get("/v6.7/acceptance")
+def v67_acceptance():
+    return jsonify(build_v67_acceptance())
+
+
+@dropship_bp.get("/v6.7/status")
+def v67_status():
+    return jsonify(build_v67_release_status())
 
 
 @dropship_bp.get("/ebay/marketplace-account-deletion")

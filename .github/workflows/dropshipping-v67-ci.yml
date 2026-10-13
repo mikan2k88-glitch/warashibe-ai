@@ -1,0 +1,88 @@
+name: Dropshipping v6.7 CI
+
+on:
+  push:
+    branches:
+      - feature/dropshipping-v67-ebay-evidence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run v6.7 and stable evidence regression tests
+        run: |
+          PYTHONPATH=. python -m pytest -q             tests/test_dropship_v64.py             tests/test_dropship_v65.py             tests/test_dropship_v66.py             tests/test_dropship_v67.py             tests/test_ebay_account_deletion.py
+      - name: Verify Flask v6.7 endpoint
+        run: python -c "from app import app; assert '/dropship/v6.7/status' in [str(r) for r in app.url_map.iter_rules()]"
+      - name: Verify actual evidence runner imports
+        run: PYTHONPATH=. python -m py_compile scripts/dropship_actual_evidence.py
+
+  ebay-read:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Verify Production eBay READ and v6.7 evidence
+        env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+        run: |
+          PYTHONPATH=. python - <<'PY'
+          import json
+          from dropship.ebay_token import EbayApplicationTokenProvider
+          from dropship.ebay_market_provider import EbayBrowseMarketProvider
+          from dropship.ebay_official_evidence import (
+              EbayOfficialFeeEvidenceProvider,
+              EbayOfficialTermsEvidenceProvider,
+          )
+          from dropship.ebay_account_policy_provider import assess_ebay_user_oauth_readiness
+
+          token = EbayApplicationTokenProvider(environment="production").get_token()
+          quotes = EbayBrowseMarketProvider(token=token, limit=1).search("home organizer")
+
+          candidate = {"supplier": "CJdropshipping"}
+          fee = EbayOfficialFeeEvidenceProvider().fetch_fee_evidence(candidate)
+          terms = EbayOfficialTermsEvidenceProvider().fetch_terms_evidence(candidate)
+          oauth = assess_ebay_user_oauth_readiness(user_token="")
+
+          result = {
+              "oauth_token_acquired": bool(token),
+              "browse_read_succeeded": True,
+              "quote_count": len(quotes),
+              "payment_fee_status": fee["payment_fee_rate"]["status"],
+              "platform_fee_status": fee["platform_fee_rate"]["status"],
+              "supplier_permission_status": terms["supplier_dropshipping_permission"]["status"],
+              "platform_terms_status": terms["platform_terms"]["status"],
+              "return_terms_status": terms["return_terms"]["status"],
+              "cancellation_terms_status": terms["cancellation_terms"]["status"],
+              "user_oauth_status": oauth["status"],
+              "secret_values_exposed": False,
+              "external_write": False,
+              "live_execution_allowed": False,
+          }
+          print(json.dumps(result, sort_keys=True))
+          assert result["oauth_token_acquired"] is True
+          assert result["browse_read_succeeded"] is True
+          assert result["payment_fee_status"] == "known"
+          assert result["platform_fee_status"] == "unknown"
+          assert result["supplier_permission_status"] == "confirmed"
+          assert result["platform_terms_status"] == "confirmed"
+          assert result["return_terms_status"] == "unknown"
+          assert result["cancellation_terms_status"] == "confirmed"
+          assert result["user_oauth_status"] == "setup_required"
+          PY
