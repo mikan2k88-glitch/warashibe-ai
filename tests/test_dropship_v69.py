@@ -21,6 +21,9 @@ def test_explicit_fee_evidence():
         "fee_schedule_verified_at": "2026-10-15",
         "seller_fee_tier_verified": True,
         "all_additional_fees_verified": True,
+        "verified_per_order_fee_usd": 0.40,
+        "seller_fee_tier_source": "seller_account_review",
+        "category_fee_source": "official_category_fee_schedule",
     }
     result = estimate_v69_costs(candidate)
     assert abs(result["platform_fee"]["amount_usd"] - 2.576) < 0.0001
@@ -63,3 +66,14 @@ def test_v69_http_endpoint_read_only():
         assert result.status_code == 200
         assert result.json["complete"] is False
         assert result.json["live_execution_allowed"] is False
+
+
+def test_no_hardcoded_per_order_fee():
+    candidate = {
+        "sale_total_usd": 16, "verified_final_value_fee_rate": 0.136,
+        "verified_ebay_category_id": "123",
+        "fee_schedule_verified_at": "2026-10-15",
+        "seller_fee_tier_verified": True,
+        "all_additional_fees_verified": True,
+    }
+    assert estimate_v69_costs(candidate)["platform_fee"]["status"] == "unknown"

@@ -29,13 +29,17 @@ def estimate_v69_costs(candidate: dict, *, return_policy: dict | None = None) ->
     fee_version = candidate.get("fee_schedule_verified_at")
     verified_seller = candidate.get("seller_fee_tier_verified") is True
     extras_verified = candidate.get("all_additional_fees_verified") is True
+    fixed_fee = _number(candidate.get("verified_per_order_fee_usd"))
+    tier_source = candidate.get("seller_fee_tier_source")
+    category_source = candidate.get("category_fee_source")
     if (price is None or rate is None or rate > 1 or not category
-            or not fee_version or not verified_seller or not extras_verified):
-        fee = _unknown("category_seller_tier_total_and_all_fee_evidence_required")
+            or not fee_version or not verified_seller or not extras_verified
+            or fixed_fee is None or not tier_source or not category_source):
+        fee = _unknown("category_seller_tier_order_fee_and_full_schedule_evidence_required")
     else:
-        fixed = Decimal("0.30") if price <= Decimal("10") else Decimal("0.40")
-        # Additional international, currency, tax, ads and regulatory costs
-        # must be covered by explicitly verified all_additional_fees_verified.
+        fixed = fixed_fee
+        # Order fee and seller/category conditions must be independently verified.
+        # This is a research estimate, not a listing authorization.
         variable = price * rate
         fee = {"status": "known", "amount_usd": float(variable + fixed),
                "final_value_fee_rate": float(rate),
