@@ -7,6 +7,7 @@ Every unresolved evidence field blocks the economic promotion gate.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from math import isfinite
 from .v611_evidence_mapping import assess_observed_candidate
 from .cost_evidence_acquisition import acquire_cost_evidence
 
@@ -29,6 +30,8 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
     offers = supplier_provider.fetch_offers()[:max_candidates]
     report = []
     freight_attempts = 0
+    market_cache = {}
+    market_search_calls = 0
     for index, offer in enumerate(offers):
         if not isinstance(offer, dict):
             continue
@@ -39,18 +42,24 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
         name = str(offer.get("name") or "")[:100]
         quote_rows = []
         error_kind = None
-        if index < max_market_queries and name:
+        # Deduplicate case-insensitive queries to reduce eBay API quota use.
+        query = " ".join(name.casefold().split())
+        if query in market_cache:
+            quote_rows, error_kind = market_cache[query]
+        elif query and market_search_calls < max_market_queries:
+            market_search_calls += 1
             try:
                 quote_rows = market_provider.search(name)[:max_quotes]
             except Exception as exc:
                 error_kind = type(exc).__name__
+            market_cache[query] = (quote_rows, error_kind)
         prices = sorted([
             float(q["price"]) for q in quote_rows
             if isinstance(q, dict) and q.get("currency") == "USD"
             and isinstance(q.get("price"), (float, int))
-            and 0 < q["price"] < 100000
+            and isfinite(q["price"]) and 0 < q["price"] < 100000
         ])
-        market_median = prices[len(prices)//2] if prices else None
+        market_median = (prices[(len(prices)-1)//2] + prices[len(prices)//2]) / 2 if prices else None
         evidence = {}
         cost = offer.get("supplier_cost")
         cost_status = (offer.get("cost_evidence") or {}).get("supplier_cost") or {}
@@ -110,6 +119,7 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
         "observed_at": timestamp,
         "candidate_count": len(report),
         "freight_quote_attempts": freight_attempts,
+        "market_search_calls": market_search_calls,
         "candidates": report,
         "proposed_single_candidate": selected,
         "next_evidence_actions": selected["assessment"]["next_evidence_actions"] if selected else [],

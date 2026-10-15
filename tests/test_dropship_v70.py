@@ -14,7 +14,7 @@ def test_read_only_actual_adapter_and_unknown_costs():
     result = research_v70(Supplier(), Market(), capital_usd=20)
     assert result["candidate_count"] == 1
     item = result["proposed_single_candidate"]
-    assert item["indicative_ask_median_usd"] == 20
+    assert item["indicative_ask_median_usd"] == 19
     assert "supplier_shipping_usd" in item["unknown_fields"]
     assert "sale_total_usd" in item["unknown_fields"]
     assert item["assessment"]["evaluation"]["profit_usd"] is None
