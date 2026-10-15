@@ -71,7 +71,7 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
     return {
         "version": "7.0",
         "mode": "read_only_research",
-        "milestones": {
+        "research_components_implemented": {
             "v6.12_source_collection": True,
             "v6.13_fee_return_gap_report": True,
             "v6.14_fail_closed_economics": True,
@@ -86,6 +86,7 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
         "proposed_single_candidate": selected,
         "next_evidence_actions": selected["assessment"]["next_evidence_actions"] if selected else [],
         "evidence_ready": False,
+        "acceptance_status": "pending_actual_data_and_shadow_validation",
         "shadow_observation_only": True,
         "external_commerce_write": False,
         "human_gate_required": True,
