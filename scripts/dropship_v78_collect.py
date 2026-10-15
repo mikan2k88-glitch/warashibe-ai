@@ -32,11 +32,10 @@ def collect(repository, token, *, max_runs=20):
             zip_data=_get(f"{API}/repos/{repository}/actions/artifacts/{int(a['id'])}/zip",token,binary=True)
             with ZipFile(io.BytesIO(zip_data)) as archive:
                 names=archive.namelist()
-                if len(names)!=1 or not names[0].endswith("v70-shadow-observation.json"):
+                matching=[name for name in names if name.endswith("v70-shadow-observation.json")]
+                if len(matching)!=1 or archive.getinfo(matching[0]).file_size>20000:
                     continue
-                if archive.getinfo(names[0]).file_size>20000:
-                    continue
-                record=json.loads(archive.read(names[0]))
+                record=json.loads(archive.read(matching[0]))
             observations.append(record)
             break
     return summarize_observations(observations)
