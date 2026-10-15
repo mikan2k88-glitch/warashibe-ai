@@ -35,6 +35,7 @@ from dropship.ebay_user_oauth_v68 import oauth_bp
 from dropship.privacy_policy import privacy_bp
 from dropship.v69_api import v69_bp
 from dropship.v610_api import v610_bp
+from dropship.v611_api import v611_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
@@ -43,6 +44,7 @@ app.register_blueprint(oauth_bp)
 app.register_blueprint(privacy_bp)
 app.register_blueprint(v69_bp)
 app.register_blueprint(v610_bp)
+app.register_blueprint(v611_bp)
 
 
 # ============================================================
