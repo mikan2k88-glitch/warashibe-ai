@@ -2,7 +2,7 @@ name: Dropshipping v7 Shadow Evidence
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/dropshipping-v70-shadow.yml']
+    paths: ['.github/workflows/dropshipping-v70-shadow.yml', 'scripts/dropship_v70_research.py', 'dropship/v70_research_orchestrator.py']
   workflow_dispatch:
   schedule:
     - cron: '23 2 * * *'
