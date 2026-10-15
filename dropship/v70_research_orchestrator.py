@@ -1,0 +1,94 @@
+"""Warashibe v7.0: read-only research orchestration.
+
+Uses bounded real provider reads when invoked by an operator. eBay Browse
+asking prices are comparative signals, never a verified sale price.
+Every unresolved evidence field blocks the economic promotion gate.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from .v611_evidence_mapping import assess_observed_candidate
+
+def _observed_at():
+    return datetime.now(timezone.utc).isoformat()
+
+def _known(value, source, timestamp):
+    return {"status": "known", "value": value, "currency": "USD",
+            "source": source, "observed_at": timestamp}
+
+def research_v70(supplier_provider, market_provider, *, max_candidates=5,
+                 max_market_queries=5, max_quotes=10, capital_usd=None):
+    limits = (max_candidates, max_market_queries, max_quotes)
+    if any(not isinstance(x, int) or not 1 <= x <= 20 for x in limits):
+        raise ValueError("research_limits_must_be_between_1_and_20")
+    timestamp = _observed_at()
+    offers = supplier_provider.fetch_offers()[:max_candidates]
+    report = []
+    for index, offer in enumerate(offers):
+        if not isinstance(offer, dict):
+            continue
+        name = str(offer.get("name") or "")[:100]
+        quote_rows = []
+        error_kind = None
+        if index < max_market_queries and name:
+            try:
+                quote_rows = market_provider.search(name)[:max_quotes]
+            except Exception as exc:
+                error_kind = type(exc).__name__
+        prices = sorted([
+            float(q["price"]) for q in quote_rows
+            if isinstance(q, dict) and q.get("currency") == "USD"
+            and isinstance(q.get("price"), (float, int))
+            and 0 < q["price"] < 100000
+        ])
+        market_median = prices[len(prices)//2] if prices else None
+        evidence = {}
+        cost = offer.get("supplier_cost")
+        cost_status = (offer.get("cost_evidence") or {}).get("supplier_cost") or {}
+        if (isinstance(cost, (float, int)) and not isinstance(cost, bool) and cost > 0
+                and cost_status.get("status") == "known"):
+            evidence["supplier_cost_usd"] = _known(cost, "cj_api", timestamp)
+        # Freight must be independently quoted for the exact variant, region and quantity.
+        # Never turn a legacy zero shipping placeholder into a known value.
+        observation = {"candidate_id": str(offer.get("product_key") or ""),
+                       "evidence": evidence}
+        assessed = assess_observed_candidate(observation, capital_usd=capital_usd)
+        report.append({
+            "candidate_id": observation["candidate_id"],
+            "name": name,
+            "market_quote_count": len(prices),
+            "indicative_ask_median_usd": market_median,
+            "market_error_kind": error_kind,
+            "assessment": assessed,
+            "unknown_fields": assessed["unknown_fields"],
+            "live_execution_allowed": False,
+        })
+    # Missing evidence is prioritized; quote medians never count as proven profit.
+    report.sort(key=lambda row: (len(row["unknown_fields"]),
+                                  -(row["market_quote_count"]),
+                                  row["candidate_id"]))
+    selected = report[0] if report else None
+    return {
+        "version": "7.0",
+        "mode": "read_only_research",
+        "milestones": {
+            "v6.12_source_collection": True,
+            "v6.13_fee_return_gap_report": True,
+            "v6.14_fail_closed_economics": True,
+            "v6.15_bounded_candidate_ranking": True,
+            "v6.16_human_gate_package": True,
+            "v6.17_shadow_observation": True,
+            "v7.0_research_orchestrator": True,
+        },
+        "observed_at": timestamp,
+        "candidate_count": len(report),
+        "candidates": report,
+        "proposed_single_candidate": selected,
+        "next_evidence_actions": selected["assessment"]["next_evidence_actions"] if selected else [],
+        "evidence_ready": False,
+        "shadow_observation_only": True,
+        "external_commerce_write": False,
+        "human_gate_required": True,
+        "human_gate_ready": False,
+        "live_execution_allowed": False,
+    }
