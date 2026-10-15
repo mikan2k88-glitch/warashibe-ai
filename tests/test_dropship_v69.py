@@ -52,3 +52,14 @@ def test_invalid_rates_fail_closed():
     })
     assert result["platform_fee"]["status"] == "unknown"
     assert result["expected_return_cost"]["status"] == "unknown"
+
+def test_v69_http_endpoint_read_only():
+    from app import app
+    with app.test_client() as client:
+        status = client.get("/dropship/v6.9/status")
+        assert status.status_code == 200
+        assert status.json["live_execution_allowed"] is False
+        result = client.post("/dropship/v6.9/estimate", json={"candidate": {}})
+        assert result.status_code == 200
+        assert result.json["complete"] is False
+        assert result.json["live_execution_allowed"] is False
