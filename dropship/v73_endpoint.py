@@ -35,7 +35,8 @@ def evaluate():
     else:
         allowed={"available_jpy","usd_jpy_rate","rate_source","rate_observed_at",
                  "item_usd","freight_usd","reserve_usd"}
-        funding=assess_funding_jpy(available_jpy=fx.get("available_jpy"),\n                                   **{k:v for k,v in fx.items() if k in allowed and k != "available_jpy"})
+        funding=assess_funding_jpy(available_jpy=fx.get("available_jpy"),
+                                   **{k:v for k,v in fx.items() if k in allowed and k != "available_jpy"})
     return jsonify({"version":"7.3","research":report,"funding":funding,
                     "acceptance":"pending_actual_fee_returns_and_shadow_evidence",
                     "one_item_only":True,"human_gate_required":True,
