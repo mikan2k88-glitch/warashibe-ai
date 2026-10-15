@@ -1,0 +1,16 @@
+name: Dropshipping v7.2 Capital Gate CI
+on:
+  push:
+    branches: [feature/v72-capital-fx-gate]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements.txt pytest
+      - run: PYTHONPATH=. python -m pytest -q tests/test_dropship_v72_capital.py tests/test_dropship_v69.py
