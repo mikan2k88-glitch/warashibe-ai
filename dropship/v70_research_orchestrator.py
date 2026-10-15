@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from .v611_evidence_mapping import assess_observed_candidate
+from .cost_evidence_acquisition import acquire_cost_evidence
 
 def _observed_at():
     return datetime.now(timezone.utc).isoformat()
@@ -17,16 +18,24 @@ def _known(value, source, timestamp):
             "source": source, "observed_at": timestamp}
 
 def research_v70(supplier_provider, market_provider, *, max_candidates=5,
-                 max_market_queries=5, max_quotes=10, capital_usd=None):
+                 max_market_queries=5, max_quotes=10, capital_usd=None,
+                 freight_provider=None, max_freight_quotes=1):
     limits = (max_candidates, max_market_queries, max_quotes)
     if any(not isinstance(x, int) or not 1 <= x <= 20 for x in limits):
         raise ValueError("research_limits_must_be_between_1_and_20")
+    if not isinstance(max_freight_quotes, int) or not 0 <= max_freight_quotes <= 20:
+        raise ValueError('invalid_freight_quote_limit')
     timestamp = _observed_at()
     offers = supplier_provider.fetch_offers()[:max_candidates]
     report = []
+    freight_attempts = 0
     for index, offer in enumerate(offers):
         if not isinstance(offer, dict):
             continue
+        if freight_provider is not None and freight_attempts < max_freight_quotes:
+            freight_attempts += 1
+            offer = acquire_cost_evidence(offer, freight_provider=freight_provider,
+                                          destination_country='US', quantity=1)['candidate']
         name = str(offer.get("name") or "")[:100]
         quote_rows = []
         error_kind = None
@@ -48,6 +57,14 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
         if (isinstance(cost, (float, int)) and not isinstance(cost, bool) and cost > 0
                 and cost_status.get("status") == "known"):
             evidence["supplier_cost_usd"] = _known(cost, "cj_api", timestamp)
+        shipping = (offer.get('cost_evidence') or {}).get('supplier_shipping') or {}
+        quoted = offer.get('supplier_shipping')
+        if (shipping.get('status') == 'known' and shipping.get('currency') == 'USD'
+                and shipping.get('variant_id') and shipping.get('destination_country') == 'US'
+                and shipping.get('source') == 'cj-freight-calculate'
+                and isinstance(quoted, (int, float)) and not isinstance(quoted, bool)
+                and quoted >= 0):
+            evidence['supplier_shipping_usd'] = _known(quoted, 'cj_api', timestamp)
         # Freight must be independently quoted for the exact variant, region and quantity.
         # Never turn a legacy zero shipping placeholder into a known value.
         observation = {"candidate_id": str(offer.get("product_key") or ""),
@@ -82,6 +99,7 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
         },
         "observed_at": timestamp,
         "candidate_count": len(report),
+        "freight_quote_attempts": freight_attempts,
         "candidates": report,
         "proposed_single_candidate": selected,
         "next_evidence_actions": selected["assessment"]["next_evidence_actions"] if selected else [],
