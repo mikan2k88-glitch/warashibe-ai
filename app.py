@@ -32,11 +32,13 @@ from candidate_api import candidate_bp
 from strategy_api import strategy_bp
 from dropship.api import dropship_bp
 from dropship.ebay_user_oauth_v68 import oauth_bp
+from dropship.privacy_policy import privacy_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
 app.register_blueprint(dropship_bp)
 app.register_blueprint(oauth_bp)
+app.register_blueprint(privacy_bp)
 
 
 # ============================================================
