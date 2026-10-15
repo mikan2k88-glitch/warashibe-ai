@@ -2,12 +2,13 @@ name: Dropshipping v7 Shadow Evidence
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/dropshipping-v70-shadow.yml', 'scripts/dropship_v70_research.py', 'dropship/v70_research_orchestrator.py']
+    paths: ['.github/workflows/dropshipping-v70-shadow.yml', 'scripts/dropship_v70_research.py', 'dropship/v70_research_orchestrator.py', 'scripts/dropship_v78_collect.py']
   workflow_dispatch:
   schedule:
     - cron: '23 2 * * *'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: dropship-v70-shadow
   cancel-in-progress: false
@@ -31,11 +32,19 @@ jobs:
         run: pip install -r requirements.txt
       - name: Capture read-only research observation
         run: PYTHONPATH=. python -m scripts.dropship_v70_research
+      - name: Aggregate past sanitized observations
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DROPSHIP_SHADOW_AUDIT_PATH: artifacts/v78-shadow-audit.json
+        run: PYTHONPATH=. python -m scripts.dropship_v78_collect
       - name: Upload sanitized observation
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v70-shadow-observation
-          path: artifacts/v70-shadow-observation.json
+          path: |
+            artifacts/v70-shadow-observation.json
+            artifacts/v78-shadow-audit.json
           if-no-files-found: warn
           retention-days: 30
