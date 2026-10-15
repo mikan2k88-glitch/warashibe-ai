@@ -96,6 +96,30 @@ class EbayAccountPolicyProvider:
                 "secret_values_exposed": False,
                 "live_execution_allowed": False,
             }
+        except requests.HTTPError as exc:
+            response = exc.response
+            status_code = response.status_code if response is not None else None
+            # Whitelist only non-sensitive numeric eBay error identifiers.
+            error_ids = []
+            if response is not None:
+                try:
+                    body = response.json()
+                    if isinstance(body, dict):
+                        for item in body.get("errors", [])[:5]:
+                            if isinstance(item, dict) and isinstance(item.get("errorId"), int):
+                                error_ids.append(item["errorId"])
+                except (ValueError, TypeError, AttributeError):
+                    pass
+            return {
+                "status": "unknown",
+                "reason": "ebay_return_policy_http_error",
+                "http_status": status_code,
+                "ebay_error_ids": error_ids,
+                "required_scope": SELL_ACCOUNT_READONLY_SCOPE,
+                "marketplace": self.marketplace_id,
+                "secret_values_exposed": False,
+                "live_execution_allowed": False,
+            }
         except Exception as exc:
             return {
                 "status": "unknown",
