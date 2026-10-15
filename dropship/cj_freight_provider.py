@@ -169,6 +169,8 @@ class CJFreightEvidenceProvider:
                 "shipping_cost": round(best["total"], 2),
                 "currency": "USD",
                 "variant_id": variant_id,
+                "variant_sell_price": _number(variant.get("variantSellPrice")) if _number(variant.get("variantSellPrice")) > 0 else None,
+                "variant_price_source": "cj-variant-query",
                 "origin_country": origin,
                 "destination_country": str(destination_country),
                 "quantity": max(1, int(quantity)),

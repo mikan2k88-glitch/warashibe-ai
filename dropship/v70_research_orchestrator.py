@@ -58,6 +58,16 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
                 and cost_status.get("status") == "known"):
             evidence["supplier_cost_usd"] = _known(cost, "cj_api", timestamp)
         shipping = (offer.get('cost_evidence') or {}).get('supplier_shipping') or {}
+        freight_meta = (offer.get('metadata') or {}).get('shipping_evidence') or {}
+        variant_price = freight_meta.get('variant_sell_price')
+        if (freight_meta.get('status') == 'known'
+                and freight_meta.get('variant_id')
+                and freight_meta.get('variant_id') == shipping.get('variant_id')
+                and freight_meta.get('currency') == 'USD'
+                and freight_meta.get('variant_price_source') == 'cj-variant-query'
+                and isinstance(variant_price, (int, float))
+                and not isinstance(variant_price, bool) and 0 < variant_price < 100000):
+            evidence['supplier_cost_usd'] = _known(variant_price, 'cj_api', timestamp)
         quoted = offer.get('supplier_shipping')
         if (shipping.get('status') == 'known' and shipping.get('currency') == 'USD'
                 and shipping.get('variant_id') and shipping.get('destination_country') == 'US'
