@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dropship.real_runtime_sources import build_real_runtime_sources
 from dropship.v70_research_orchestrator import research_v70
+from dropship.cj_freight_provider import CJFreightEvidenceProvider
 
 def sanitized_report(sources, *, capital_usd=None):
     if sources["status"] != "ready":
@@ -16,6 +17,8 @@ def sanitized_report(sources, *, capital_usd=None):
         sources["supplier_provider"], sources["market_provider"],
         max_candidates=5, max_market_queries=5, max_quotes=10,
         capital_usd=capital_usd,
+        freight_provider=CJFreightEvidenceProvider(token=getattr(sources["supplier_provider"], "token", "")),
+        max_freight_quotes=1,
     )
     selected = result["proposed_single_candidate"]
     return {
@@ -23,6 +26,7 @@ def sanitized_report(sources, *, capital_usd=None):
         "version": result["version"],
         "observed_at": result["observed_at"],
         "candidate_count": result["candidate_count"],
+        "freight_quote_attempts": result["freight_quote_attempts"],
         "selected_candidate_reference": selected["candidate_id"] if selected else None,
         "missing_evidence": selected["unknown_fields"] if selected else [],
         "next_evidence_actions": result["next_evidence_actions"],
