@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from .v69_cost_model import estimate_v69_costs
+from .v610_single_candidate import evaluate_one
 
 v69_bp = Blueprint("dropship_v69", __name__, url_prefix="/dropship/v6.9")
 
@@ -18,3 +19,12 @@ def estimate():
     if not isinstance(candidate, dict) or (policy is not None and not isinstance(policy, dict)):
         return jsonify({"status": "invalid_payload", "live_execution_allowed": False}), 400
     return jsonify(estimate_v69_costs(candidate, return_policy=policy))
+
+@v69_bp.post("/single-candidate")
+def single_candidate():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("candidate"), dict):
+        return jsonify({"status": "invalid_payload", "live_execution_allowed": False}), 400
+    return jsonify(evaluate_one(payload["candidate"],
+                               return_policy=payload.get("return_policy"),
+                               capital_usd=payload.get("capital_usd")))
