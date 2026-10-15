@@ -12,7 +12,7 @@ def test_collect_sanitized_history(monkeypatch):
         z.writestr("v78-shadow-audit.json","{}")
     def fake_get(url, token, binary=False):
         if url.endswith("/zip"): return stream.getvalue()
-        if "/workflows/" in url: return {"workflow_runs":[{"id":123,"conclusion":"success"}]}
+        if "/actions/runs?" in url: return {"workflow_runs":[{"id":123,"name":"Dropshipping v7 Shadow Evidence","conclusion":"success"}]}
         return {"artifacts":[{"id":456,"name":"v70-shadow-observation","expired":False,"size_in_bytes":500}]}
     monkeypatch.setattr(collector,"_get",fake_get)
     result=collector.collect("example/repo","safe-test-token")
