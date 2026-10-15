@@ -3,7 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from zipfile import ZipFile
 from dropship.v77_shadow_audit import summarize_observations
@@ -15,8 +15,24 @@ def _get(url, token, binary=False):
         "Accept": "application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28",
         "User-Agent":"warashibe-shadow-readonly"})
     try:
-        with urlopen(request, timeout=20) as response:
-            data=response.read(300000)
+        if binary and url.endswith("/zip"):
+            class NoRedirect(HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None
+            try:
+                with build_opener(NoRedirect).open(request,timeout=20) as response:
+                    data=response.read(300000)
+            except HTTPError as redirect:
+                if redirect.code not in (301,302,303,307,308):
+                    raise
+                target=redirect.headers.get("Location","")
+                if not target.startswith("https://") or "githubusercontent.com" not in target and "blob.core.windows.net" not in target:
+                    raise RuntimeError("invalid_artifact_redirect") from None
+                with urlopen(Request(target,headers={"User-Agent":"warashibe-shadow-readonly"}),timeout=20) as response:
+                    data=response.read(300000)
+        else:
+            with urlopen(request, timeout=20) as response:
+                data=response.read(300000)
     except HTTPError as error:
         stage = ("runs" if "/actions/runs?" in url else
                  "artifact_list" if "/artifacts?" in url else
