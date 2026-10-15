@@ -11,7 +11,7 @@ def test_missing_evidence_blocks_and_never_zeroes_cost():
 
 def test_read_only_endpoint():
     with app.test_client() as client:
-        response = client.post("/dropship/v6.9/single-candidate", json={"candidate": {}})
+        response = client.post("/dropship/v6.10/evaluate", json={"candidate": {}})
         assert response.status_code == 200
         assert response.json["profit_usd"] is None
         assert response.json["one_item_only"] is True
@@ -19,5 +19,5 @@ def test_read_only_endpoint():
 
 def test_invalid_candidate_rejected():
     with app.test_client() as client:
-        response = client.post("/dropship/v6.9/single-candidate", json={"candidate": []})
+        response = client.post("/dropship/v6.10/evaluate", json={"candidate": []})
         assert response.status_code == 400
