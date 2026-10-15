@@ -1,0 +1,38 @@
+name: Dropshipping v7 Shadow Evidence
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 2 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: dropship-v70-shadow
+  cancel-in-progress: false
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CJ_API_KEY: ${{ secrets.CJ_API_KEY }}
+      CJ_ACCESS_TOKEN: ${{ secrets.CJ_ACCESS_TOKEN }}
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      EBAY_ACCESS_TOKEN: ${{ secrets.EBAY_ACCESS_TOKEN }}
+      DROPSHIP_V70_EVIDENCE_PATH: artifacts/v70-shadow-observation.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Capture read-only research observation
+        run: PYTHONPATH=. python -m scripts.dropship_v70_research
+      - name: Upload sanitized observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v70-shadow-observation
+          path: artifacts/v70-shadow-observation.json
+          if-no-files-found: warn
+          retention-days: 30
