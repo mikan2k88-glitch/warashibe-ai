@@ -59,8 +59,7 @@ def research_v70(supplier_provider, market_provider, *, max_candidates=5,
             and isinstance(q.get("price"), (float, int))
             and isfinite(q["price"]) and 0 < q["price"] < 100000
         ])
-        market_median = ((prices[(len(prices)-1)//2] + prices[len(prices)//2]) / 2)
-                         if prices else None
+        market_median = (prices[(len(prices)-1)//2] + prices[len(prices)//2]) / 2 if prices else None
         evidence = {}
         cost = offer.get("supplier_cost")
         cost_status = (offer.get("cost_evidence") or {}).get("supplier_cost") or {}
