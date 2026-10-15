@@ -41,6 +41,7 @@ from dropship.v73_endpoint import v73_bp
 from dropship.v74_endpoint import v74_bp
 from dropship.v75_mvp import v75_bp
 from dropship.v77_api import v77_bp
+from dropship.v79_shadow_status import v79_bp
 
 app.register_blueprint(candidate_bp)
 app.register_blueprint(strategy_bp)
@@ -55,6 +56,7 @@ app.register_blueprint(v73_bp)
 app.register_blueprint(v74_bp)
 app.register_blueprint(v75_bp)
 app.register_blueprint(v77_bp)
+app.register_blueprint(v79_bp)
 
 
 # ============================================================

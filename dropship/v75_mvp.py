@@ -47,6 +47,7 @@ li{margin:9px 0}strong{color:#ba3d21}a{color:#1758a8}</style></head>
 <p>Human Gate：<strong>閉鎖</strong></p></section>
 <section><h2>研究結果の確認</h2><ul>
 <li><a href="/dropship/v7.5/endpoint">現在の受入ステータス（JSON）</a></li>
+<li><a href="/dropship/v7.9/status">最新のShadow稼働状況（自動取得）</a></li>
 <li><a href="/dropship/v7.4/endpoint">採算・資金評価API</a></li>
 <li><a href="https://github.com/mikan2k88-glitch/warashibe-ai/actions/workflows/dropshipping-v70-shadow.yml">日次Shadow研究の履歴・証拠</a></li>
 </ul></section>
