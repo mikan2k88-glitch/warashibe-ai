@@ -1,0 +1,18 @@
+name: Dropshipping v7 Shadow Evidence CI
+on:
+  push:
+    branches: [feature/dropshipping-v70-shadow-evidence-ci]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements.txt pytest
+      - run: PYTHONPATH=. python -m pytest -q tests/test_dropship_v70_shadow.py tests/test_dropship_v70.py tests/test_dropship_v611.py tests/test_dropship_v610.py
+      - run: python -m py_compile scripts/dropship_v70_research.py
