@@ -26,4 +26,4 @@ jobs:
         env:
           DROPSHIP_PROVIDER_URL: ${{ vars.DROPSHIP_PROVIDER_URL }}
           DROPSHIP_PROVIDER_NAME: ${{ vars.DROPSHIP_PROVIDER_NAME }}
-        run: python scripts/dropship_shadow_collect.py
+        run: PYTHONPATH=. python -m scripts.dropship_shadow_collect

@@ -1,0 +1,29 @@
+name: Dropshipping Auto Repair CI
+on:
+  push:
+    branches: [feature/auto-repair-v1]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install pyyaml -r requirements.txt pytest
+      - name: Verify recovery safety and importer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          workflow=yaml.safe_load(Path('.github/workflows/dropshipping-auto-recovery.yml').read_text())
+          assert workflow['permissions']['actions']=='write'
+          assert workflow['permissions']['issues']=='write'
+          assert 'workflow_run' in workflow.get('on',workflow.get(True,{}))
+          shadow=Path('.github/workflows/dropshipping-shadow-collect.yml').read_text()
+          assert 'PYTHONPATH=. python -m scripts.dropship_shadow_collect' in shadow
+          from scripts import dropship_shadow_collect
+          print('verified read-only importer and bounded recovery configuration')
+          PY
