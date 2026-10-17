@@ -1,0 +1,42 @@
+name: Dropshipping Auto Recovery Guard
+on:
+  workflow_run:
+    workflows:
+      - Dropshipping Shadow Collect
+      - Dropshipping Research Proof
+      - Dropshipping Actual Evidence
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  actions: write
+  issues: write
+  contents: read
+jobs:
+  recover:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bounded retry or issue escalation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$ATTEMPT" == "1" && "$NAME" == "Dropshipping Shadow Collect" ]]; then
+            gh api --method POST "repos/$REPO/actions/runs/$RUN_ID/rerun-failed-jobs"
+            echo "Requested one bounded retry: $RUN_URL"
+          else
+            TITLE="[dropship-auto-recovery] $NAME"
+            BODY="Automated recovery review required. Latest failure: $RUN_URL (attempt $ATTEMPT). Do not enable real commerce. Inspect sanitized CI logs; repair on a branch, run CI, merge only when green. For CJ HTTP 429, obey rate limit / token expiry; do not immediately retry."
+            EXISTING=$(gh issue list -R "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+            if [[ -n "$EXISTING" ]]; then
+              gh issue comment "$EXISTING" -R "$REPO" --body "$BODY"
+            else
+              gh issue create -R "$REPO" --title "$TITLE" --body "$BODY"
+            fi
+          fi
