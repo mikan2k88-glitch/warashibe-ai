@@ -16,6 +16,23 @@ jobs:
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Diagnose failed run without publishing logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: PYTHONPATH=. python -m scripts.dropship_auto_debug
+      - name: Upload sanitized diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropship-debug-diagnosis
+          path: dropship-debug-diagnosis.json
+          if-no-files-found: ignore
       - name: Bounded retry or issue escalation
         env:
           GH_TOKEN: ${{ github.token }}
