@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from dropship.economics import evaluate_dropship_economics
 from dropship.policy import evaluate_dropship_policy
 from dropship.sandbox import run_sandbox_cycle
@@ -577,7 +578,7 @@ def test_runtime_controller_filters_stale_offers():
         "name": "fresh",
         "supplier": "s1",
         "source": "fixture",
-        "observed_at": "2026-10-11T04:00:00+00:00",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     stale = sample_payload() | {
         "product_key": "stale",
@@ -675,7 +676,7 @@ def test_preflight_passes_safe_fresh_candidate():
         "name": "sample",
         "supplier": "supplier-a",
         "source": "fixture",
-        "observed_at": "2026-10-11T04:00:00+00:00",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     result = run_preflight(candidate, available_capital=3000, max_age_hours=48)
     assert result["passed"] is True
