@@ -26,6 +26,7 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: PYTHONPATH=. python -m scripts.dropship_auto_debug
+        continue-on-error: true
       - name: Upload sanitized diagnostic artifact
         if: always()
         uses: actions/upload-artifact@v4
