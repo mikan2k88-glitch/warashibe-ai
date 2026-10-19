@@ -1,0 +1,16 @@
+name: Dropshipping v8.4 Patch Validator CI
+on:
+  push:
+    branches: [feature/v84-repair-branch-validator]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements.txt pytest
+      - run: PYTHONPATH=. python -m pytest -q tests/test_dropship_v84.py tests/test_dropship_v83.py tests/test_dropship_v82_debug.py
