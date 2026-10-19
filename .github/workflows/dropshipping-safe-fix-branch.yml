@@ -1,0 +1,18 @@
+name: Dropshipping Safe Fix Branch
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Create review-only allowlisted branch if a known fix is applicable
+        run: PYTHONPATH=. python -m scripts.dropship_v84_create_fix_branch
