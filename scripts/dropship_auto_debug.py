@@ -6,6 +6,8 @@ import re
 import urllib.request
 from urllib.error import HTTPError
 from dropship.auto_debug_diagnose import diagnose
+from dropship.v83_repair_proposals import suggest_repair, ALLOWED_WORKFLOW
+from pathlib import Path
 
 API="https://api.github.com"
 def fetch(url,token):
@@ -36,5 +38,12 @@ def main():
         result={"status":"diagnosis_unavailable","findings":[], "live_execution_allowed":False}
     with open("dropship-debug-diagnosis.json","w",encoding="utf-8") as f:
         json.dump(result,f,ensure_ascii=False,indent=2)
+    workflow=Path(ALLOWED_WORKFLOW)
+    proposal=suggest_repair(result,{ALLOWED_WORKFLOW:workflow.read_text(encoding="utf-8")} if workflow.is_file() else {})
+    # No repository patches or raw workflow contents are included in public artifacts.
+    metadata={key:value for key,value in proposal.items() if key!="files"}
+    metadata["changed_paths"]=[entry["path"] for entry in proposal["files"]]
+    Path("dropship-debug-repair-proposal.json").write_text(json.dumps(metadata,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
     print(json.dumps(result,ensure_ascii=False))
+    print(json.dumps(metadata,ensure_ascii=False))
 if __name__=="__main__":main()
