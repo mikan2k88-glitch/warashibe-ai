@@ -32,7 +32,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dropship-debug-diagnosis
-          path: dropship-debug-diagnosis.json
+          path: |
+            dropship-debug-diagnosis.json
+            dropship-debug-repair-proposal.json
           if-no-files-found: ignore
       - name: Bounded retry or issue escalation
         env:
