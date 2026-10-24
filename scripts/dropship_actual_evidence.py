@@ -33,7 +33,19 @@ def main():
         }, ensure_ascii=False, sort_keys=True))
         return
 
-    handshake = run_provider_handshake()
+    # Reuse the CJ token already resolved by build_real_runtime_sources.
+    # A second token-provider instance would call the CJ authentication endpoint
+    # again for every scheduled evidence run and can trigger HTTP 429.
+    supplier_token = getattr(sources["supplier_provider"], "token", "")
+    class ExistingCJToken:
+        def configured(self):
+            return bool(supplier_token)
+        def get_token(self):
+            if not supplier_token:
+                raise RuntimeError("CJ supplier token not available")
+            return supplier_token
+
+    handshake = run_provider_handshake(cj_token_provider=ExistingCJToken())
     if handshake["status"] != "real_provider_handshake_ready":
         print(json.dumps({
             "status": "setup_required",
