@@ -55,6 +55,7 @@ PROFILES = {
         "research_lab.test_strategy_learning_loop",
         "research_lab.test_amazon_keepa_observer",
         "research_lab.test_sourcing_channel_comparison",
+        "research_lab.test_candidate_search_optimizer",
         "research_lab.test_supabase_strategy_decision_repository",
         "research_lab.test_problem_repair_candidate",
         "research_lab.test_problem_repair_plan",
